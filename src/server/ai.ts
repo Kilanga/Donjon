@@ -31,7 +31,7 @@ export const NARRATOR_SYSTEM = [
 ].join(' ');
 
 export const MERCHANT_SYSTEM = [
-  'Tu es le marchand d\'une safe room dans une télé-réalité de donjon comique. Tu es cupide, théâtral et un peu louche, mais jamais méchant.',
+  'Tu es le marchand d\'une safe room dans un donjon de fantasy comique façon Donjons et Dragons, diffusé comme une émission. Tu es cupide, théâtral et un peu louche, mais jamais méchant.',
   'Un crawler te parle. Réponds en français, en 2 phrases maximum (40 mots maximum), en restant dans ton personnage.',
   'Tu peux vanter 1 ou 2 objets de ton stock (avec leur prix) si c\'est pertinent. Ne promets jamais de réduction ni d\'objet gratuit.',
   'Pas d\'insultes, pas de contenu choquant, pas d\'emoji. Réponds uniquement par ta réplique, sans guillemets.',
@@ -46,6 +46,34 @@ export class DungeonAI {
   constructor(cfg: AiConfig, apiKey = '') {
     this.cfg = cfg;
     this.apiKey = apiKey;
+  }
+
+  /** Allume ou éteint l'IA en cours de partie (régie). */
+  setProvider(p: AiProvider) {
+    this.cfg.provider = p;
+    if (p === 'ollama' && this.cfg.maxPerMinute === DEFAULT_AI.maxPerMinute) this.cfg.maxPerMinute = 20; // en local, pas de coût
+  }
+
+  get provider(): AiProvider {
+    return this.cfg.provider;
+  }
+
+  /** Vérifie au démarrage que l'IA répond (Ollama lancé, modèle installé). Renvoie un message lisible. */
+  async check(): Promise<string> {
+    if (this.cfg.provider !== 'ollama') return this.describe();
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 3000);
+      const res = await fetch(`${this.cfg.ollamaUrl.replace(/\/$/, '')}/api/tags`, { signal: ctrl.signal });
+      clearTimeout(t);
+      const data = (await res.json()) as { models?: { name: string }[] };
+      const names = (data.models ?? []).map((m) => m.name);
+      const want = this.cfg.ollamaModel.includes(':') ? this.cfg.ollamaModel : `${this.cfg.ollamaModel}:latest`;
+      if (!names.includes(want)) return `Ollama répond, mais le modèle ${this.cfg.ollamaModel} n'est pas installé (modèles : ${names.join(', ') || 'aucun'}). Tape « ollama pull ${this.cfg.ollamaModel} ».`;
+      return `Ollama prêt (${this.cfg.ollamaModel}).`;
+    } catch {
+      return `Ollama ne répond pas sur ${this.cfg.ollamaUrl} : lance l'application Ollama. Le jeu continue avec ses textes écrits.`;
+    }
   }
 
   get enabled(): boolean {

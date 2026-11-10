@@ -33,6 +33,8 @@ export interface BotHooks {
   pos: (name: string, x: number, y: number) => void;
   /** Le joueur réel est-il actif (page ouverte, ou commande récente) ? */
   humanActive: (p: PlayerState) => boolean;
+  /** Avis d'un PNJ sur un joueur (−10 … +10), d'après sa mémoire. */
+  mood?: (pnj: string, playerKey: string) => number;
 }
 
 export class BotManager {
@@ -79,7 +81,7 @@ export class BotManager {
       if (this.game.joinBot(name, cls)) {
         const p = this.game.player(name)!;
         this.hooks.pos(name, 0.3 + Math.random() * 0.4, 0.5 + Math.random() * 0.4);
-        if (this.humans().some((h) => h.alive && h.floor === p.floor && h.roomId === p.roomId)) this.talk(p, 'welcome', 1);
+        if (this.humans().some((h) => h.alive && h.floor === p.floor && h.roomId === p.roomId)) this.talk(p, 'welcome', 0.25);
       }
     }
   }
@@ -121,6 +123,9 @@ export class BotManager {
     seen.add(`${f.n}:${r.id}`);
     this.visited.set(p.key, seen);
 
+    // Proposition d'alliance d'un joueur : acceptée si le PNJ ne lui en veut pas (et souvent si c'est un ami)
+    const offer = p.allyProposals.map((k) => g.state.players[k]).find((o) => o && !o.bot && (this.hooks.mood?.(p.name, o.key) ?? 0) >= 0);
+    if (offer && !p.allianceId) return `!alliance ${offer.name}`;
     if (p.statPoints > 0) return `!monte ${p.cls === 'mage' ? 'int' : p.cls === 'voleur' ? 'agi' : 'for'}`;
     const potion = p.items.find((i) => i.tpl === 'potion' || i.tpl === 'grande_potion');
     if (p.hp <= p.maxHp * 0.35 && potion) {

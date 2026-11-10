@@ -198,6 +198,19 @@ Sur la page joueur : ZQSD, flèches ou clic au sol pour marcher librement dans s
 entrer dans une porte programme le changement de salle ; clic sur un monstre = `!attaque` sur lui. `F` fouiller, `A` attaquer, `?` aide,
 flèches haut/bas dans le champ de commande pour l'historique.
 
+## PNJ qui se souviennent
+
+Chaque PNJ figurant a une personnalité (Brunhilde la guerrière tonitruante, Gorim le nain bougon, Morgane la sorcière
+sarcastique…) et une **mémoire des joueurs**, gardée d'une soirée à l'autre dans `data/pnj-memoire.json` :
+qui l'a aidé contre un monstre, qui l'a attaqué, trahi ou tué, avec qui il a fait alliance, qu'il a vu mourir.
+
+- En croisant un joueur dont il se souvient, le PNJ le salue en conséquence (rancune ou amitié).
+- Pour lui parler : écris son nom dans un message (« Salut Brunhilde, on fait équipe ? ») ou `!parle Brunhilde …`.
+  Hors safe room, `!parle` s'adresse au PNJ s'il est seul dans la salle ; en safe room, au marchand.
+- `!alliance <PNJ>` : il accepte, sauf s'il t'en veut.
+- Avec l'IA locale, ils improvisent leurs répliques à partir de leur personnalité et de leurs souvenirs ;
+  sans IA, ils ont des répliques écrites qui tiennent compte de leur humeur.
+
 ## IA du donjon (optionnel)
 
 Par défaut, le jeu n'appelle aucune IA : tous les textes drôles sont écrits à l'avance.
@@ -223,6 +236,10 @@ Puis dans `config.json` :
 Prends un modèle **généraliste** (`qwen2.5:14b`, `mistral-nemo`…) plutôt que Qwen2.5-Coder : un modèle de code
 est bon pour programmer, beaucoup moins pour faire de l'humour en français. Un modèle d'environ 14B tient dans les 12 Go
 de ta RTX 4070 Ti. Si le serveur affiche « délai dépassé », augmente `timeoutMs` ou prends un modèle plus petit.
+
+L'application Ollama doit tourner. Au démarrage, la fenêtre du jeu affiche `[ia] Ollama prêt (qwen2.5:14b)`, ou te dit
+ce qui manque. La régie a un bouton « IA du donjon : allumer / éteindre » pour la couper en cours de partie si ta carte
+graphique peine. Sans réponse de l'IA, le jeu continue avec ses textes écrits.
 
 ### Option 2 : l'API Claude
 

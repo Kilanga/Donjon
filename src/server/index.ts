@@ -14,6 +14,7 @@ import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
 import { BotManager } from './bots.js';
+import { NpcSociety } from './pnj.js';
 import { Journal, errInfo } from './journal.js';
 import { buildReport } from './report.js';
 
@@ -242,6 +243,11 @@ function sendState(c: Client) {
 }
 
 function deliver(events: GameEvent[]) {
+  try {
+    npcs.observe(events); // la mémoire des PNJ
+  } catch (e) {
+    console.error('[pnj] mémoire :', e);
+  }
   for (const e of events)
     journal.write('event', { id: e.id, kind: e.kind, scope: e.scope, floor: e.floor, roomId: e.roomId, to: e.to, drama: e.drama, fx: e.fx, narrator: e.narrator, text: e.text });
   for (const c of clients) {
@@ -263,6 +269,11 @@ function say(name: string, text: string) {
   journal.write('say', { name, text: clean });
   const p = game.player(name);
   for (const c of clients) send(c, { type: 'chat', from: name, text: clean, floor: p?.floor, roomId: p?.alive ? p.roomId : undefined });
+  // Un joueur interpelle un PNJ de sa salle par son nom : le PNJ répond
+  if (p && !p.bot && npcs) {
+    const pnj = npcs.addressedBy(p, clean);
+    if (pnj) npcs.speak(pnj, p, clean);
+  }
 }
 
 /** Traite une commande, qu'elle vienne de la page ou du chat Twitch. */
@@ -284,6 +295,15 @@ function command(name: string, text: string, from?: Client) {
   const talk = text.match(/^!(parle|talk)(?:\s+(.*))?$/i);
   if (talk) {
     let r;
+    const me = game.player(name);
+    const here = me && me.alive ? Object.values(game.state.players).filter((o) => o.bot && o.alive && o.floor === me.floor && o.roomId === me.roomId) : [];
+    const pnj = me ? (npcs.addressedBy(me, talk[2] ?? '') ?? (game.room(me).type !== 'safe' && here.length === 1 ? here[0] : null)) : null;
+    if (me && pnj) {
+      npcs.speak(pnj, me, talk[2] ?? 'Salut !');
+      if (from) send(from, { type: 'feedback', ok: true, text: `Tu t'adresses à ${pnj.name}.` });
+      for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
+      return { ok: true, text: '' };
+    }
     try {
       r = narrator.talk(name, talk[2] ?? '');
     } catch (e) {
@@ -453,6 +473,14 @@ function admin(c: Client, action: string, arg?: string | number) {
       game.adminHealAll();
       msg = 'Tout le monde est soigné.';
       break;
+    case 'ai': {
+      const on = ai.provider === 'off';
+      ai.setProvider(on ? (cfg.ai.provider !== 'off' ? cfg.ai.provider : 'ollama') : 'off');
+      if (on && cfg.ai.provider === 'off') cfg.ai.provider = 'ollama';
+      msg = on ? `IA du donjon allumée : ${ai.describe()}.` : 'IA du donjon éteinte (textes écrits).';
+      if (on) void ai.check().then((m) => send(c, { type: 'feedback', ok: !m.includes('ne répond pas') && !m.includes("n'est pas installé"), text: `IA : ${m}` }));
+      break;
+    }
     case 'bots': {
       bots.target = Math.max(0, Math.min(30, Math.round(Number(arg)) || 0));
       cfg.bots = bots.target;
@@ -503,8 +531,9 @@ function runTurn() {
   if (game.state.turn % 10 === 0) journal.write('snapshot', { leaderboard: game.leaderboard() });
   deliver(events);
   narrator.onTurn(events);
-  // Les PNJ figurants s'ajustent et choisissent leur action du prochain tour
+  // Les PNJ figurants s'ajustent, se souviennent, saluent, et choisissent leur action du prochain tour
   try {
+    npcs.greetings();
     const before = game.state.nextId;
     bots.afterTurn();
     deliver(game.state.events.filter((e) => e.id >= before));
@@ -540,6 +569,7 @@ function broadcastPos(name: string, x: number, y: number, except?: Client) {
     else if (o.name && game.player(o.name)?.floor === p.floor) send(o, out);
   }
 }
+const npcs = new NpcSociety(game, ai, path.join(root, 'data', 'pnj-memoire.json'), (name, text) => say(name, text));
 const bots: BotManager = new BotManager(
   game,
   {
@@ -557,6 +587,7 @@ const bots: BotManager = new BotManager(
     },
     say: (name, text) => say(name, text),
     pos: (name, x, y) => broadcastPos(name, x, y),
+    mood: (pnj, key) => npcs.mood(pnj, key),
     humanActive: (p): boolean => [...clients].some((c) => c.name && playerKey(c.name) === p.key) || bots.recentlyActive(p),
   },
   cfg.bots,
@@ -584,6 +615,7 @@ server.listen(cfg.port, () => {
   console.log(`  Régie (vue spectateur + maître du jeu, NE PAS PARTAGER) : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}`);
   console.log(`  IA du donjon : ${ai.describe()}`);
+  if (ai.provider === 'ollama') void ai.check().then((m) => console.log(`  [ia] ${m}`));
   console.log(`  Journaux de la soirée (à renvoyer à Claude) : http://localhost:${cfg.port}/journaux?cle=${cfg.spectatorKey}\n`);
 });
 
@@ -596,6 +628,7 @@ process.on('SIGINT', () => {
   try {
     journal.write('snapshot', { leaderboard: game.leaderboard() });
     journal.write('stop', { players: Object.keys(game.state.players).length });
+    npcs.save();
     save();
     console.log('\n[sauvegarde] partie enregistrée. À bientôt !');
   } finally {

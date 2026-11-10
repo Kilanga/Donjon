@@ -62,5 +62,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   if (env.AI_PROVIDER && ['off', 'ollama', 'anthropic'].includes(env.AI_PROVIDER)) cfg.ai.provider = env.AI_PROVIDER as AiProvider;
   if (env.OLLAMA_MODEL) cfg.ai.ollamaModel = env.OLLAMA_MODEL;
   if (env.OLLAMA_URL) cfg.ai.ollamaUrl = env.OLLAMA_URL;
+  // En local (Ollama), les appels ne coûtent rien : plus de répliques par minute, sauf réglage explicite
+  if (cfg.ai.provider === 'ollama' && cfg.ai.maxPerMinute === DEFAULT_AI.maxPerMinute) cfg.ai.maxPerMinute = 20;
   return cfg;
 }

@@ -60,7 +60,7 @@ export class Narrator {
 
     const floor = p.floor;
     const roomId = p.roomId;
-    const publish = (text: string) => this.deliver([this.game.narrate(text, floor, roomId, 'salle', [p.key])]);
+    const publish = (text: string) => this.deliver([this.game.merchantReply(floor, roomId, text)]);
     const fallback = () => publish(MERCHANT_FALLBACK[Math.floor(Math.random() * MERCHANT_FALLBACK.length)]);
 
     if (!this.ai.enabled || !this.ai.canCall()) {
@@ -72,7 +72,7 @@ export class Narrator {
     const prompt = `Le crawler ${p.name} (${CLASSES[p.cls].label} niveau ${p.level}, ${p.hp}/${p.maxHp} PV, ${p.gold} pièces d'or) te dit : ${msg}\nTon stock : ${stock}.`;
     void this.ai.ask(MERCHANT_SYSTEM, prompt).then((line) => {
       try {
-        if (line) publish(`Le marchand : ${line}`);
+        if (line) publish(line);
         else fallback();
       } catch (err) {
         console.warn('[ia] réponse du marchand perdue :', err);

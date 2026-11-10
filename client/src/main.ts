@@ -111,7 +111,7 @@ function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
   logLine(e.text, e.npc ? 'k-npc' : e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
-  if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, e.text.replace(/^Le marchand : « |»$/g, '').trim());
+  if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, (e.text.match(/«\s*([\s\S]+?)\s*»/)?.[1] ?? e.text).trim());
   stage.onEvent(e);
 }
 function chatLine(from: string, text: string, isCmd = false) {
@@ -306,6 +306,7 @@ function renderShared(s: PlayerViewMsg) {
       <button data-admin="next">Tour suivant</button>
       <button data-admin="vote">Lancer un vote</button>
       <button data-admin="healAll">Soigner tout le monde</button>
+      <button data-admin="ai">IA du donjon : allumer / éteindre</button>
       <button data-admin="collapse" class="danger">Effondrer l'étage affiché</button>
       <button data-admin="reset" class="danger">Nouvelle partie</button>
     </div>

@@ -65,6 +65,14 @@ export class Game {
     this.emit({ floor: p.floor, roomId: p.roomId, kind, text, scope: 'prive', to: p.key, drama: 0 });
   }
 
+  /** Réplique du marchand (IA ou écrite), pour toute la salle. */
+  merchantReply(floor: number, roomId: number, line: string): GameEvent {
+    this.out = [];
+    this.emit({ floor, roomId, kind: 'info', text: line.startsWith('Le marchand') ? line : `Le marchand : « ${line} »`, scope: 'salle', drama: 0, npc: 'marchand' });
+    this.sync();
+    return this.out[0];
+  }
+
   /** Réplique du marchand de la safe room : à un joueur (privé) ou à toute la salle. */
   private merchantSays(floor: number, roomId: number, line: string, to?: string) {
     this.emit({ floor, roomId, kind: 'info', text: `Le marchand : « ${line} »`, scope: to ? 'prive' : 'salle', ...(to ? { to } : {}), drama: 0, npc: 'marchand' });
