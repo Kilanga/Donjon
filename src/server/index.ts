@@ -693,6 +693,24 @@ function broadcastState() {
     }
   }
 }
+// Prévision pour la caméra du stream : quelques secondes avant la fin du tour (5 s, ou 40 % d'un tour court),
+// on dit à la vue 3D où l'action va se passer, pour qu'elle ait le temps d'y aller.
+let forecastTurn = -1;
+setInterval(() => {
+  if (pausedAt !== null || game.state.seasonOver || forecastTurn === game.state.turn) return;
+  const lead = Math.min(5000, cfg.turnSeconds * 400);
+  if (turnEndsAt - Date.now() > lead) return;
+  forecastTurn = game.state.turn;
+  let rooms;
+  try {
+    rooms = game.forecast();
+  } catch (e) {
+    console.error('[caméra] prévision impossible :', e);
+    return;
+  }
+  if (!rooms.length) return;
+  for (const c of clients) if (c.spectator) send(c, { type: 'forecast', turn: game.state.turn, rooms });
+}, 250);
 setInterval(() => {
   if (pausedAt === null && Date.now() >= turnEndsAt) runTurn();
 }, 250);

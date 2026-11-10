@@ -1,6 +1,6 @@
 // L'étage en 3D : décor, personnages animés, effets et caméra réalisateur.
 import * as THREE from 'three';
-import type { Dir, FloorView, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../../src/shared/types';
+import type { Dir, FloorView, ForecastRoom, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../../src/shared/types';
 import { Assets, InstancedBuilder, type CharName, type PieceName } from './assets';
 
 export const CELL = 16; // pas de la grille (salle 12 + couloir 4)
@@ -599,6 +599,18 @@ export class World {
   }
 
   // ------------------------------------------------------------- réalisateur
+
+  /** Prévision du serveur (quelques secondes avant la fin du tour) : la caméra part vers la salle qui va s'animer,
+   *  et y est quand le tour se résout. Les évènements réels prennent ensuite le relais. */
+  onForecast(rooms: ForecastRoom[]) {
+    if (!this.floor || this.followName) return;
+    const mine = rooms.filter((r) => r.floor === this.floor!.n);
+    if (!mine.length) return;
+    for (const r of mine) this.addHeat(r.roomId, r.score * 1.5);
+    // On autorise le changement de plan tout de suite, même si le plan actuel est récent
+    const best = mine[0];
+    if (best.roomId !== this.shot.roomId && best.score >= 12) this.shot.since = 0;
+  }
 
   private addHeat(roomId: number, v: number) {
     if (v <= 0) return;

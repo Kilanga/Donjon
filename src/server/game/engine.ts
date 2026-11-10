@@ -1,7 +1,7 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, suggestCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, EffectsView, FloorSummary, Legend, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
+  ClassId, Dir, EffectsView, FloorSummary, ForecastRoom, Legend, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
@@ -1489,6 +1489,59 @@ export class Game {
     if (e.actors?.includes(key)) return true;
     if (p.floor === e.floor && p.roomId === e.roomId) return true;
     return this.alliesOf(p).some((k) => e.actors?.includes(k));
+  }
+
+  /** Prévision du tour, pour la caméra du stream : d'après les commandes déjà tapées (et celles des PNJ, qui jouent
+   *  dès le début du tour), où l'action va-t-elle avoir lieu ? Les vrais joueurs comptent triple. Une commande tapée
+   *  après la prévision est simplement rattrapée par les évènements du tour. */
+  forecast(): ForecastRoom[] {
+    const acc = new Map<string, ForecastRoom>();
+    const add = (floor: number, roomId: number, v: number) => {
+      const k = `${floor}:${roomId}`;
+      const cur = acc.get(k) ?? { floor, roomId, score: 0 };
+      cur.score += v;
+      acc.set(k, cur);
+    };
+    for (const p of Object.values(this.state.players)) {
+      if (!p.alive || p.stunned) continue;
+      const f = this.state.floors[p.floor];
+      if (!f || f.collapsed) continue;
+      const r = f.rooms[p.roomId];
+      const w = p.bot ? 1 : 3;
+      const here = f.monsters.filter((m) => m.hp > 0 && m.roomId === r.id);
+      const boss = here.some((m) => m.boss);
+      const a = p.pending ?? (p.lastAction?.name === 'attack' ? p.lastAction : null);
+      if (!a) {
+        if (here.length && r.type !== 'safe') add(f.n, r.id, 4 * w); // les monstres frappent quand même
+        continue;
+      }
+      switch (a.name) {
+        case 'attack':
+          add(f.n, r.id, (boss ? 14 : here.length ? 8 : 10) * w); // sans monstre : un duel entre joueurs
+          break;
+        case 'move': {
+          const to = r.doors[a.arg as Dir];
+          if (to === undefined) break;
+          const danger = f.monsters.some((m) => m.hp > 0 && m.roomId === to);
+          add(f.n, to, (f.rooms[to].type === 'boss' && danger ? 12 : danger ? 6 : 2) * w);
+          break;
+        }
+        case 'descend':
+          add(f.n, r.id, 10 * w);
+          break;
+        case 'use':
+        case 'equip':
+          add(f.n, r.id, (here.length ? 5 : 1) * w);
+          break;
+        case 'search':
+        case 'pickup':
+          add(f.n, r.id, (r.chest === 'ferme' ? 5 : 2) * w);
+          break;
+        default:
+          add(f.n, r.id, w);
+      }
+    }
+    return [...acc.values()].filter((x) => x.score >= 4).sort((a, b) => b.score - a.score).slice(0, 8);
   }
 
   /** Étages debout, avec leurs occupants (pour le panneau « Les étages » du stream). */

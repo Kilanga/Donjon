@@ -91,6 +91,12 @@ function onMessage(m: ServerMsg) {
     world.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
     world.setPos(m.name, m.floor, m.roomId, m.x, m.y);
+  } else if (m.type === 'forecast') {
+    // Anticipation : la caméra part vers l'action avant la fin du tour, et l'étage le plus chaud peut être choisi d'avance
+    world.onForecast(m.rooms);
+    const now = performance.now();
+    for (const r of m.rooms) floorHeat.set(r.floor, { s: heatOf(r.floor, now) + r.score * 0.5, t: now });
+    if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
     showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
     if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();

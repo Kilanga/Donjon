@@ -209,6 +209,13 @@ export interface Legend {
   floor: number; // dernier étage
 }
 
+/** Prévision de la caméra : salle où l'action du tour va probablement se passer. */
+export interface ForecastRoom {
+  floor: number;
+  roomId: number;
+  score: number;
+}
+
 export interface FloorSummary {
   n: number;
   theme: string;
@@ -224,6 +231,7 @@ export type ServerMsg =
   | { type: 'feedback'; ok: boolean; text: string }
   | { type: 'link'; name: string; code: string } // pseudo d'un compte Twitch : écrire « !lien <code> » dans le chat pour le prendre
   | { type: 'linked'; name: string; token: string } // liaison réussie : jeton à garder
+  | { type: 'forecast'; turn: number; rooms: ForecastRoom[] } // quelques secondes avant la fin du tour : où placer la caméra
   | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number; ok?: boolean; reply?: string; src?: 'web' | 'twitch' }
   | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number }; // position libre d'un crawler dans sa salle
 
