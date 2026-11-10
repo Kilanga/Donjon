@@ -131,7 +131,7 @@ function tickHud() {
       const rest = Math.max(0, c - (now - state.serverNow) / 1000);
       $('collapse').textContent = `Effondrement dans ${fmt(rest)}`;
       $('collapse').classList.toggle('urgent', rest < 60);
-    } else $('collapse').textContent = '';
+    } else $('collapse').textContent = state.floor ? 'Chrono en attente d\'un aventurier' : '';
   }
 }
 

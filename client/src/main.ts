@@ -359,7 +359,7 @@ function tickHud() {
       const rest = Math.max(0, c - elapsed);
       el.textContent = `Effondrement dans ${fmtTime(rest)}`;
       el.classList.toggle('urgent', rest < 60);
-    } else el.textContent = '';
+    } else el.textContent = state.floor ? 'Chrono : en attente d\'un aventurier' : '';
   }
   requestAnimationFrame(tickHud);
 }

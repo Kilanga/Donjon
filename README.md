@@ -144,6 +144,7 @@ joueur, mais on peut les attaquer) et marqués **PNJ** partout.
 - Chaque vrai joueur actif (page ouverte, ou commande dans les 10 dernières minutes) fait partir un PNJ, un par tour.
 - Si un joueur choisit le pseudo d'un PNJ, le PNJ s'en va et lui laisse la place.
 - Réglage : `"bots": 10` dans `config.json`, variable `BOTS`, ou en direct dans la régie (0 pour les retirer).
+- Ils ne démarrent pas le chrono des étages : seul un vrai joueur le lance.
 - Ils sont exclus des statistiques de participation du rapport de session.
 
 ## Vue stream 3D (bonus, à tester)

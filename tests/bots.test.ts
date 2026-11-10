@@ -56,4 +56,17 @@ describe('PNJ figurants', () => {
     expect(Math.max(...all.map((b) => b.deepest))).toBeGreaterThanOrEqual(2);
     expect(pvp).toBe(0);
   });
+
+  it('ne démarrent pas le chrono des étages : seul un vrai joueur le fait', () => {
+    const humans = new Set<string>();
+    const { g, bots } = setup(10, humans);
+    let t = 1_000_000;
+    for (let i = 0; i < 40; i++) {
+      bots.afterTurn();
+      g.tick((t += 20_000));
+    }
+    expect(Object.values(g.state.floors).every((f) => f.collapseAt === null)).toBe(true);
+    g.submit('ana', '!join', t);
+    expect(g.floor(1)!.collapseAt).not.toBeNull();
+  });
 });

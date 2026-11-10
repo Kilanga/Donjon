@@ -133,7 +133,9 @@ export class Game {
     return f;
   }
 
-  private startTimer(f: FloorState) {
+  /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (les PNJ figurants ne le déclenchent pas). */
+  private startTimer(f: FloorState, p?: PlayerState) {
+    if (p?.bot) return;
     if (f.startedAt === null) {
       f.startedAt = this.now;
       f.collapseAt = this.now + this.cfg.floorMinutes * 60_000;
@@ -196,21 +198,21 @@ export class Game {
     return { ok: true, text: `Action prévue pour la fin du tour : ${cmd.raw}` };
   }
 
-  private join(name: string, arg: string): SubmitResult {
+  private join(name: string, arg: string, bot = false): SubmitResult {
     const key = playerKey(name);
     if (!key) return { ok: false, text: 'Pseudo invalide.' };
     if (this.state.players[key]) return { ok: false, text: 'Tu es déjà dans le donjon !' };
     const cls = parseClass(arg) ?? this.rng.pick(Object.keys(CLASSES) as ClassId[]);
     const def = CLASSES[cls];
     const f = this.entryFloor();
-    this.startTimer(f);
+    if (!bot) this.startTimer(f);
     const p: PlayerState = {
       key, name: name.trim().slice(0, 24), cls, level: 1, xp: 0, hp: def.hp, maxHp: def.hp, stats: { ...def.stats }, statPoints: 0, gold: 10,
       weapon: makeItem(def.startWeapon, this.nextId), armor: def.startArmor ? makeItem(def.startArmor, this.nextId) : null,
       items: [makeItem('potion', this.nextId), makeItem('potion', this.nextId)], floor: f.n, roomId: f.spawnRoom, alive: true, respawnIn: 0,
       immuneUntil: this.now + this.cfg.immunitySeconds * 1000, allianceId: null, allyProposals: [], traitorUntilTurn: 0,
       pending: null, lastAction: null, stunned: false, buffs: { cloakTurns: 0, mirror: false, smoke: false, coupon: false },
-      discovered: {}, kills: 0, deaths: 0, betrayals: 0, deepest: f.n, joinedTurn: this.state.turn,
+      discovered: {}, kills: 0, deaths: 0, betrayals: 0, deepest: f.n, joinedTurn: this.state.turn, ...(bot ? { bot: true } : {}),
     };
     this.state.players[key] = p;
     this.discover(p);
@@ -902,7 +904,7 @@ export class Game {
     if (!r.stairs) return this.say(p, 'Il n\'y a pas d\'escalier ici. Il est dans la salle du boss.');
     if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'Le boss bloque l\'escalier. Il faut d\'abord le vaincre.');
     const next = this.liveFloorFrom(f.n + 1);
-    this.startTimer(next);
+    this.startTimer(next, p);
     p.floor = next.n;
     p.roomId = next.spawnRoom;
     p.deepest = Math.max(p.deepest, next.n);
@@ -939,7 +941,7 @@ export class Game {
       p.respawnIn--;
       if (p.respawnIn > 0) continue;
       const f = this.liveFloorFrom(p.floor);
-      this.startTimer(f);
+      this.startTimer(f, p);
       p.floor = f.n;
       p.deepest = Math.max(p.deepest, f.n);
       p.roomId = f.spawnRoom;
@@ -1202,10 +1204,9 @@ export class Game {
   /** Un PNJ figurant entre dans le donjon (mêmes règles qu'un joueur, marqué PNJ). */
   joinBot(name: string, cls: string): boolean {
     if (this.player(name)) return false;
-    const r = this.join(name, cls);
+    const r = this.join(name, cls, true);
     const p = this.player(name);
     if (!r.ok || !p) return false;
-    p.bot = true;
     // Pas de discours d'accueil du marchand pour un figurant
     this.state.events = this.state.events.filter((e) => !(e.npc && e.to === p.key));
     this.out = this.out.filter((e) => !(e.npc && e.to === p.key));
