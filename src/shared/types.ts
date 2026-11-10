@@ -136,9 +136,10 @@ export type ServerMsg =
   | PlayerViewMsg
   | { type: 'events'; events: GameEvent[] }
   | { type: 'feedback'; ok: boolean; text: string }
-  | { type: 'chat'; from: string; text: string };
+  | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number };
 
 export type ClientMsg =
   | { type: 'hello'; name: string; spectatorKey?: string }
   | { type: 'cmd'; text: string }
+  | { type: 'say'; text: string } // message libre (bulle au-dessus du crawler)
   | { type: 'floor'; n: number }; // spectateur : changer d'étage affiché

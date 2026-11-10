@@ -55,7 +55,8 @@ function onMessage(m: ServerMsg) {
     logLine(m.text, m.ok ? 'k-prive' : 'k-feedback-ko');
     if (!m.ok && !state?.me) $('login-msg').textContent = m.text;
   } else if (m.type === 'chat') {
-    chatLine(m.from, m.text);
+    chatLine(m.from, m.text, !!m.cmd);
+    if (!m.cmd) map.bubble(m.from, m.text);
   }
 }
 
@@ -86,9 +87,10 @@ function logEvent(e: GameEvent) {
   logLine(e.text, e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
   if (e.drama >= 80) map.shake = Math.max(map.shake, 4);
 }
-function chatLine(from: string, text: string) {
+function chatLine(from: string, text: string, isCmd = false) {
   const box = $('chat');
   const div = document.createElement('div');
+  if (isCmd) div.className = 'cmdline';
   div.innerHTML = `<b style="color:${colorFor(from)}">${esc(from)}</b>${esc(text)}`;
   box.appendChild(div);
   while (box.children.length > 150) box.firstChild!.remove();
@@ -112,7 +114,13 @@ function render() {
 
   // Écran de connexion / choix de classe
   if (s.spectator) $('login').classList.add('hidden');
-  else if (me) $('login').classList.add('hidden');
+  else if (me) {
+    if (!$('login').classList.contains('hidden') && !localStorage.getItem('donjon-aide-vue')) {
+      localStorage.setItem('donjon-aide-vue', '1');
+      $('help').classList.remove('hidden');
+    }
+    $('login').classList.add('hidden');
+  }
   else {
     $('login').classList.remove('hidden');
     $('login-form').classList.add('hidden');
@@ -262,11 +270,29 @@ document.addEventListener('click', (e) => {
 $('cmd-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const input = $('cmd') as HTMLInputElement;
-  let text = input.value.trim();
+  const text = input.value.trim();
   if (!text) return;
-  if (!text.startsWith('!')) text = '!' + text;
-  cmd(text);
+  history.unshift(text);
+  history.length = Math.min(history.length, 30);
+  histIdx = -1;
+  if (text.startsWith('!')) cmd(text);
+  else send({ type: 'say', text });
   input.value = '';
+});
+// Historique des commandes avec les flèches haut/bas
+const history: string[] = [];
+let histIdx = -1;
+$('cmd').addEventListener('keydown', (e) => {
+  const input = e.target as HTMLInputElement;
+  if (e.key === 'ArrowUp' && history.length) {
+    histIdx = Math.min(history.length - 1, histIdx + 1);
+    input.value = history[histIdx];
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown') {
+    histIdx = Math.max(-1, histIdx - 1);
+    input.value = histIdx >= 0 ? history[histIdx] : '';
+    e.preventDefault();
+  }
 });
 $('login-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -275,8 +301,14 @@ $('login-form').addEventListener('submit', (e) => {
   localStorage.setItem('donjon-pseudo', myName);
   send({ type: 'hello', name: myName });
 });
+$('help-btn').addEventListener('click', () => $('help').classList.remove('hidden'));
+$('help').addEventListener('click', (e) => {
+  if (e.target === $('help') || (e.target as HTMLElement).closest('.close')) $('help').classList.add('hidden');
+});
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $('help').classList.add('hidden');
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
+  if (e.key === '?') return $('help').classList.remove('hidden');
   const k: Record<string, string> = { ArrowUp: '!nord', ArrowDown: '!sud', ArrowLeft: '!ouest', ArrowRight: '!est', z: '!nord', s: '!sud', q: '!ouest', d: '!est', f: '!fouille', a: '!attaque' };
   if (k[e.key]) {
     e.preventDefault();

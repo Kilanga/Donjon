@@ -32,6 +32,8 @@ function save() {
   const tmp = savePath + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(game.state));
   fs.renameSync(tmp, savePath);
+  // Sauvegarde de secours tous les 10 tours (3 fichiers en rotation)
+  if (game.state.turn % 10 === 0) fs.copyFileSync(savePath, savePath.replace(/\.json$/, `-secours-${(game.state.turn / 10) % 3}.json`));
 }
 
 const game = new Game(cfg, process.argv.includes('--nouvelle-partie') ? undefined : loadSave());
@@ -67,6 +69,7 @@ interface Client {
   name: string | null; // pseudo du joueur
   spectator: boolean;
   floor: number | null; // étage regardé (spectateur)
+  lastMsg: number;
 }
 const clients = new Set<Client>();
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -97,29 +100,51 @@ function deliver(events: GameEvent[]) {
   }
 }
 
+/** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
+function say(name: string, text: string) {
+  const clean = text.replace(/\s+/g, ' ').trim().slice(0, 140);
+  if (!clean) return;
+  const p = game.player(name);
+  for (const c of clients) send(c, { type: 'chat', from: name, text: clean, floor: p?.floor, roomId: p?.alive ? p.roomId : undefined });
+}
+
 /** Traite une commande, qu'elle vienne de la page ou du chat Twitch. */
 function command(name: string, text: string, from?: Client) {
-  const before = game.state.events.length ? game.state.events[game.state.events.length - 1].id : 0;
-  const res = game.submit(name, text);
-  const fresh = game.state.events.filter((e) => e.id > before);
+  const dis = text.match(/^!(dis|say|parler)\s+(.+)/i);
+  if (dis) return say(name, dis[2]);
+  if (!text.startsWith('!')) return say(name, text);
+  const before = game.state.nextId;
+  let res;
+  try {
+    res = game.submit(name, text);
+  } catch (e) {
+    console.error('[commande] erreur sur', name, text, e);
+    res = { ok: false, text: 'Oups, le donjon a eu un hoquet sur cette commande. Réessaie.' };
+  }
+  const fresh = game.state.events.filter((e) => e.id >= before);
   if (fresh.length) deliver(fresh);
   if (from) send(from, { type: 'feedback', ok: res.ok, text: res.text });
   // Les commandes affichées dans le faux chat, comme sur Twitch
-  for (const c of clients) send(c, { type: 'chat', from: name, text });
+  for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
   for (const c of clients) if (c.spectator || (c.name && playerKey(c.name) === playerKey(name))) sendState(c);
   return res;
 }
 
 wss.on('connection', (ws) => {
-  const c: Client = { ws, name: null, spectator: false, floor: null };
+  const c: Client = { ws, name: null, spectator: false, floor: null, lastMsg: 0 };
   clients.add(c);
   ws.on('message', (data) => {
-    let msg: ClientMsg;
     try {
-      msg = JSON.parse(String(data));
-    } catch {
-      return;
+      onClientMessage(c, JSON.parse(String(data)) as ClientMsg);
+    } catch (e) {
+      console.error('[ws] message ignoré :', e);
     }
+  });
+  ws.on('close', () => clients.delete(c));
+});
+
+function onClientMessage(c: Client, msg: ClientMsg) {
+  {
     if (msg.type === 'hello') {
       if (msg.spectatorKey !== undefined) {
         if (msg.spectatorKey !== cfg.spectatorKey) return send(c, { type: 'feedback', ok: false, text: 'Clé spectateur incorrecte.' });
@@ -132,20 +157,29 @@ wss.on('connection', (ws) => {
       const key = c.spectator ? null : playerKey(c.name!);
       send(c, { type: 'events', events: game.state.events.filter((e) => game.isRelevant(e, key)).slice(-40) });
       sendState(c);
-    } else if (msg.type === 'cmd' && c.name) {
-      command(c.name, String(msg.text ?? '').slice(0, 200), c);
+    } else if ((msg.type === 'cmd' || msg.type === 'say') && c.name) {
+      const now = Date.now();
+      if (now - c.lastMsg < 250) return; // anti-spam
+      c.lastMsg = now;
+      const text = String(msg.text ?? '').slice(0, 200);
+      if (msg.type === 'say') say(c.name, text);
+      else command(c.name, text, c);
     } else if (msg.type === 'floor' && c.spectator) {
       c.floor = Number(msg.n);
       sendState(c);
     }
-  });
-  ws.on('close', () => clients.delete(c));
-});
+  }
+}
 
 // ------------------------------------------------------------------ tours
 function runTurn() {
-  const events = game.tick(Date.now());
   turnEndsAt = Date.now() + cfg.turnSeconds * 1000;
+  let events: GameEvent[] = [];
+  try {
+    events = game.tick(Date.now());
+  } catch (e) {
+    console.error(`[tour ${game.state.turn}] erreur, la partie continue :`, e);
+  }
   deliver(events);
   for (const c of clients) sendState(c);
   try {
@@ -166,11 +200,15 @@ setInterval(() => {
 // ----------------------------------------------------------------- Twitch
 if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(user, text));
 
+
 server.listen(cfg.port, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
   console.log(`  Vue spectateur : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}\n`);
 });
+
+process.on('uncaughtException', (e) => console.error('[serveur] erreur inattendue (la partie continue) :', e));
+process.on('unhandledRejection', (e) => console.error('[serveur] promesse rejetée :', e));
 
 process.on('SIGINT', () => {
   try {

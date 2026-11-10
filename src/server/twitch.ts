@@ -1,4 +1,5 @@
 // Connexion au chat Twitch en lecture seule (anonyme, aucun jeton nécessaire).
+// Les messages en « ! » sont des commandes ; les autres s'affichent en bulle au-dessus du crawler.
 import tmi from 'tmi.js';
 
 export function connectTwitch(channel: string, onCommand: (user: string, text: string) => void): () => void {
@@ -9,7 +10,7 @@ export function connectTwitch(channel: string, onCommand: (user: string, text: s
   client.on('message', (_chan, tags, message, self) => {
     if (self) return;
     const text = message.trim();
-    if (!text.startsWith('!')) return;
+    if (!text) return;
     const user = tags['display-name'] || tags.username || 'anonyme';
     onCommand(user, text);
   });

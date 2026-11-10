@@ -42,8 +42,15 @@ export class MapRenderer {
   follow = true;
   shake = 0;
   private floaters: Floater[] = [];
+  private bubblePos: { text: string; x: number; y: number; t0: number }[] = [];
   private labels: { text: string; x: number; y: number; color: string; hp: number; maxHp: number }[] = [];
   spectator = false;
+  private bubbles = new Map<string, { text: string; t0: number }>();
+
+  /** Bulle de dialogue au-dessus d'un crawler (6 s). */
+  bubble(name: string, text: string) {
+    this.bubbles.set(name, { text, t0: performance.now() });
+  }
   private lastHp = new Map<string, number>();
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
 
@@ -331,6 +338,8 @@ export class MapRenderer {
       tiles.drawAnchored(ctx, CLASS_SPRITE[pl.cls], p.x, p.y, t + i * 0.29, i % 2 === 1);
       const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : '#ffffff';
       this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
+      const b = this.bubbles.get(pl.name);
+      if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0 });
     });
   }
 
@@ -363,7 +372,48 @@ export class MapRenderer {
       }
     }
     this.labels = [];
+    // Bulles de dialogue
+    const now = performance.now();
+    for (const [k, b] of this.bubbles) if (now - b.t0 > 6500) this.bubbles.delete(k);
+    ctx.font = `500 ${Math.round(12 * dpr)}px Inter, system-ui, sans-serif`;
+    for (const b of this.bubblePos) {
+      const [x, y] = toScreen(b.x, b.y);
+      const lines = wrap(b.text, 28).slice(0, 3);
+      const lh = 15 * dpr;
+      const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14 * dpr;
+      const bh = lines.length * lh + 8 * dpr;
+      const top = y - bh - 10 * dpr;
+      const fade = Math.min(1, (6500 - (now - b.t0)) / 500);
+      ctx.globalAlpha = Math.max(0, fade);
+      ctx.fillStyle = '#f6f1ff';
+      ctx.strokeStyle = '#2b2140';
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.roundRect(x - bw / 2, top, bw, bh, 6 * dpr);
+      ctx.moveTo(x - 5 * dpr, top + bh);
+      ctx.lineTo(x, top + bh + 7 * dpr);
+      ctx.lineTo(x + 5 * dpr, top + bh);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1b1426';
+      lines.forEach((l, i) => ctx.fillText(l, x, top + 4 * dpr + (i + 1) * lh - 3 * dpr));
+      ctx.globalAlpha = 1;
+    }
+    this.bubblePos = [];
   }
+}
+
+function wrap(text: string, max: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const w of text.split(' ')) {
+    if ((line + ' ' + w).trim().length > max && line) {
+      out.push(line);
+      line = w;
+    } else line = (line + ' ' + w).trim();
+  }
+  if (line) out.push(line);
+  return out;
 }
 
 /** Répartit n entités sur une rangée de la salle. */

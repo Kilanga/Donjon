@@ -17,6 +17,7 @@
       <span id="hud-collapse" class="collapse"></span>
       <span id="hud-online" class="muted"></span>
     </div>
+    <button id="help-btn" title="Comment jouer (?)">? Aide</button>
     <div class="turn">
       <span id="hud-turn">Tour —</span>
       <div class="bar"><i id="turn-bar"></i></div>
@@ -53,7 +54,7 @@
       <div class="card-title">Chat <span class="muted">(comme sur Twitch)</span></div>
       <div id="chat"></div>
       <form id="cmd-form" autocomplete="off">
-        <input id="cmd" placeholder="!attaque gobelin · !nord · !fouille · !aide" maxlength="200" />
+        <input id="cmd" placeholder="!attaque gobelin · !nord · !fouille · ou un message" maxlength="200" />
         <button type="submit">Envoyer</button>
       </form>
     </div>
@@ -73,6 +74,30 @@
         <div class="classes"></div>
       </div>
       <p id="login-msg" class="muted"></p>
+    </div>
+  </div>
+
+  <div id="help" class="overlay hidden">
+    <div class="help-box card">
+      <button class="close" title="Fermer">✕</button>
+      <h2>Comment jouer</h2>
+      <p><b>Le but :</b> survivre, devenir riche et célèbre, descendre le plus bas possible. Chaque étage s'effondre au bout de 15 minutes : trouve la salle du boss, bats-le et prends l'escalier avant la fin du chrono.</p>
+      <p><b>Les tours :</b> toutes les 20 secondes, tout le monde agit en même temps. Tu envoies <b>une</b> commande par tour (la dernière compte). Si tu ne fais rien, tu continues d'attaquer ta cible, ou tu ripostes si on t'attaque.</p>
+      <div class="help-grid">
+        <div><code>!nord !sud !est !ouest</code> changer de salle<br><small>fuir un monstre demande un jet d'Agilité</small></div>
+        <div><code>!attaque [cible]</code> monstre (nom ou n°) ou joueur (pseudo)</div>
+        <div><code>!fouille</code> trouver de l'or, ouvrir un coffre, désarmer un piège</div>
+        <div><code>!ramasse</code> prendre ce qui traîne (le loot des morts !)</div>
+        <div><code>!utilise</code> / <code>!equipe</code> potions, armes, objets bizarres</div>
+        <div><code>!achete</code> / <code>!vends</code> / <code>!repos</code> dans les safe rooms</div>
+        <div><code>!alliance pseudo</code> s'allier (XP et carte partagées)</div>
+        <div><code>!monte for|agi|int|cha</code> dépenser un point de stat</div>
+        <div><code>!descendre</code> prendre l'escalier, boss vaincu</div>
+        <div><code>!vote 1</code> voter pour l'événement de la production</div>
+      </div>
+      <p><b>À savoir :</b> les safe rooms (bannière bleue) sont protégées. En arrivant ou en réapparaissant, tu es immunisé 3 min contre les autres joueurs, et tu ne peux pas les attaquer non plus. Attaquer un allié est une <b>trahison</b> : gros bonus, vol d'or, et tout le monde le saura. À ta mort, ton loot reste au sol et tu reviens 5 tours plus tard.</p>
+      <p><b>Les dés :</b> chaque action = d20 + ta stat + la moitié de ton niveau. Un 20 naturel est un critique, un 1 naturel un gag. Tout s'affiche dans le journal.</p>
+      <p class="muted">Raccourcis : flèches ou ZQSD pour bouger, F fouiller, A attaquer, ? cette aide. Écris sans « ! » pour parler : ton message s'affiche en bulle.</p>
     </div>
   </div>
 
