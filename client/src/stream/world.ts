@@ -87,6 +87,7 @@ export class World {
   private shot: { roomId: number | null; since: number } = { roomId: null, since: 0 };
   private camPos = new THREE.Vector3(0, 40, 40);
   private camLook = new THREE.Vector3();
+  private cut = false; // le prochain plan est une coupe franche (si la salle est loin)
   private wantPos = new THREE.Vector3(0, 40, 40);
   private wantLook = new THREE.Vector3();
   followName: string | null = null;
@@ -545,11 +546,12 @@ export class World {
     }
     const curScore = this.shot.roomId !== null ? this.heatOf(this.shot.roomId, now) : 0;
     const elapsed = now - this.shot.since;
-    if (best !== null && bestScore >= 14 && best !== this.shot.roomId && (elapsed > 7000 || bestScore > curScore * 1.8 + 20)) {
+    if (best !== null && bestScore >= 14 && best !== this.shot.roomId && (elapsed > 3500 || bestScore > curScore * 1.8 + 20)) {
       this.shot = { roomId: best, since: now };
+      this.cut = true;
       const r = f.rooms.find((x) => x.id === best);
       this.onShot?.(r ? roomLabel(r) : '');
-    } else if (this.shot.roomId !== null && curScore < 8 && elapsed > 7000) {
+    } else if (this.shot.roomId !== null && curScore < 8 && elapsed > 6000) {
       this.shot = { roomId: null, since: now };
       this.onShot?.('Plan large');
     }
@@ -582,7 +584,15 @@ export class World {
 
   render(dt: number, now: number) {
     this.direct(now);
-    const k = 1 - Math.exp(-dt * 1.8);
+    // Nouveau plan sur une salle lointaine : on coupe au lieu de traverser toute la carte
+    if (this.cut) {
+      this.cut = false;
+      if (this.camLook.distanceTo(this.wantLook) > CELL * 1.6) {
+        this.camLook.copy(this.wantLook);
+        this.camPos.copy(this.wantPos);
+      }
+    }
+    const k = 1 - Math.exp(-dt * 3.2);
     this.camPos.lerp(this.wantPos, k);
     this.camLook.lerp(this.wantLook, k * 1.2);
     this.camera.position.copy(this.camPos);

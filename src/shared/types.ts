@@ -118,6 +118,7 @@ export interface GameEvent {
   actors?: string[]; // joueurs concernés (alliés de ces joueurs voient aussi l'évènement)
   drama: number; // score de drame (pour le futur réalisateur)
   narrator?: boolean; // commentaire généré par l'IA du donjon
+  npc?: 'marchand'; // réplique d'un PNJ (bulle au-dessus de lui)
   // Effet visuel/sonore : entités 'p:<nom affiché>' ou 'm:<id monstre>'
   fx?: GameFx;
 }

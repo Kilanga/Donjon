@@ -1,5 +1,5 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
-import { HELP_TEXT, normalize, parseCommand, type ParsedCommand } from '../../shared/commands.js';
+import { HELP_TEXT, normalize, parseCommand, suggestCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
   ClassId, Dir, EffectsView, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
@@ -8,7 +8,7 @@ import {
   CLASSES, CRIT_TEXTS, DEATH_TEXTS, FIASCO_TEXTS, GAG_TEXTS, RARITY_LABEL, SEARCH_FAIL_TEXTS, STAT_LABELS, TRAP_TEXTS,
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
-import { MONSTERS } from './data.js';
+import { MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
@@ -65,6 +65,11 @@ export class Game {
     this.emit({ floor: p.floor, roomId: p.roomId, kind, text, scope: 'prive', to: p.key, drama: 0 });
   }
 
+  /** Réplique du marchand de la safe room : à un joueur (privé) ou à toute la salle. */
+  private merchantSays(floor: number, roomId: number, line: string, to?: string) {
+    this.emit({ floor, roomId, kind: 'info', text: `Le marchand : « ${line} »`, scope: to ? 'prive' : 'salle', ...(to ? { to } : {}), drama: 0, npc: 'marchand' });
+  }
+
   private roomEvent(p: PlayerState | null, floor: number, roomId: number, kind: GameEvent['kind'], text: string, drama = 0, actors: string[] = [], fx?: GameFx) {
     this.emit({ floor, roomId, kind, text, scope: 'salle', actors: p ? [p.key, ...actors] : actors, drama, ...(fx ? { fx } : {}) });
   }
@@ -99,6 +104,11 @@ export class Game {
 
   private playersIn(floor: number, roomId: number, aliveOnly = true): PlayerState[] {
     return Object.values(this.state.players).filter((p) => p.floor === floor && p.roomId === roomId && (!aliveOnly || p.alive));
+  }
+
+  /** Pas d'embuscade à 4 monstres dans les premiers étages : 2 max aux étages 1-2, 3 ensuite. */
+  private maxMonstersPerRoom(floor: number): number {
+    return floor <= 2 ? 2 : 3;
   }
 
   private monstersIn(floor: number, roomId: number): MonsterState[] {
@@ -150,7 +160,10 @@ export class Game {
   submit(name: string, raw: string, now = Date.now()): SubmitResult {
     this.now = now;
     const cmd = parseCommand(raw);
-    if (!cmd) return { ok: false, text: 'Commande inconnue. Tape !aide pour la liste.' };
+    if (!cmd) {
+      const guess = suggestCommand(raw);
+      return { ok: false, text: guess ? `Commande inconnue. Tu voulais dire ${guess} ?` : 'Commande inconnue. Tape !aide pour la liste.' };
+    }
     const res = this.handle(name, cmd);
     this.sync();
     return res;
@@ -202,6 +215,7 @@ export class Game {
     this.state.players[key] = p;
     this.discover(p);
     this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} le ${def.label} entre dans le donjon (étage ${f.n}) !`, scope: 'global', actors: [key], drama: 5 });
+    this.merchantSays(f.n, p.roomId, MERCHANT_WELCOME, key);
     return { ok: true, text: `Bienvenue, ${def.label} ! Tu es dans la safe room de l'étage ${f.n}. Tu es immunisé contre les autres joueurs pendant ${Math.round(this.cfg.immunitySeconds / 60)} min.` };
   }
 
@@ -311,24 +325,17 @@ export class Game {
       actions.set(p.key, a);
     }
 
-    // 1. Actions utilitaires (objets, commerce, repos)
-    for (const p of players) {
-      const a = actions.get(p.key);
-      if (!a || !p.alive) continue;
-      if (a.name === 'use' || a.name === 'equip') this.doUse(p, a.arg, a.name === 'equip');
-      else if (a.name === 'buy') this.doBuy(p, a.arg);
-      else if (a.name === 'sell') this.doSell(p, a.arg);
-      else if (a.name === 'rest') this.doRest(p);
-      else if (a.name === 'pickup') this.doPickup(p, a.arg);
-    }
+    // Ordre du tour : 1. attaques (toujours en premier), 2. ripostes, 3. objets/commerce/ramassage,
+    // 4. fouilles, 5. déplacements. On ne peut donc pas fuir ni boire une potion avant d'avoir encaissé.
 
-    // 2. Combats : joueurs et monstres, par ordre d'initiative
+    // 1. Combats : joueurs et monstres, par ordre d'initiative
+    // Initiative = d20 + Agilité (joueur) ou d20 + attaque (monstre) ; égalité : la meilleure base, puis au hasard.
     const attackedBy = new Map<string, Fighter[]>();
-    type Intent = { init: number; attacker: Fighter; arg?: string };
+    type Intent = { init: number; base: number; tie: number; attacker: Fighter; arg?: string };
     const intents: Intent[] = [];
     for (const p of players) {
       const a = actions.get(p.key);
-      if (a?.name === 'attack' && p.alive) intents.push({ init: this.rng.die(20) + p.stats.agi, attacker: { kind: 'player', p }, arg: a.arg });
+      if (a?.name === 'attack' && p.alive) intents.push({ init: this.rng.die(20) + p.stats.agi, base: p.stats.agi, tie: this.rng.next(), attacker: { kind: 'player', p }, arg: a.arg });
     }
     for (const f of Object.values(this.state.floors)) {
       if (f.collapsed) continue;
@@ -337,10 +344,10 @@ export class Game {
         const r = f.rooms[m.roomId];
         if (r.type === 'safe') continue;
         if (this.playersIn(f.n, m.roomId).length === 0) continue;
-        intents.push({ init: this.rng.die(20) + m.atk, attacker: { kind: 'monster', m } });
+        intents.push({ init: this.rng.die(20) + m.atk, base: m.atk, tie: this.rng.next(), attacker: { kind: 'monster', m } });
       }
     }
-    intents.sort((a, b) => b.init - a.init);
+    intents.sort((a, b) => b.init - a.init || b.base - a.base || a.tie - b.tie);
     for (const it of intents) {
       if (it.attacker.kind === 'player') {
         const p = it.attacker.p;
@@ -363,7 +370,7 @@ export class Game {
       }
     }
 
-    // 3. Ripostes des joueurs inactifs attaqués
+    // 2. Ripostes des joueurs inactifs attaqués
     for (const p of players) {
       if (!idle.has(p.key) || !p.alive) continue;
       const attackers = attackedBy.get(p.key) ?? [];
@@ -379,6 +386,17 @@ export class Game {
           break;
         }
       }
+    }
+
+    // 3. Actions utilitaires (objets, commerce, repos, ramassage) : après les coups
+    for (const p of players) {
+      const a = actions.get(p.key);
+      if (!a || !p.alive) continue;
+      if (a.name === 'use' || a.name === 'equip') this.doUse(p, a.arg, a.name === 'equip');
+      else if (a.name === 'buy') this.doBuy(p, a.arg);
+      else if (a.name === 'sell') this.doSell(p, a.arg);
+      else if (a.name === 'rest') this.doRest(p);
+      else if (a.name === 'pickup') this.doPickup(p, a.arg);
     }
 
     // 4. Fouilles
@@ -402,7 +420,10 @@ export class Game {
         if (m.distracted > 0) m.distracted--;
         if (!m.wanderer || m.hp <= 0 || this.playersIn(f.n, m.roomId).length) continue;
         if (!this.rng.chance(0.35)) continue;
-        const exits = Object.values(f.rooms[m.roomId].doors).filter((id) => id !== undefined && f.rooms[id!].type !== 'safe' && f.rooms[id!].type !== 'boss') as number[];
+        const cap = this.maxMonstersPerRoom(f.n);
+        const exits = Object.values(f.rooms[m.roomId].doors).filter(
+          (id) => id !== undefined && f.rooms[id!].type !== 'safe' && f.rooms[id!].type !== 'boss' && this.monstersIn(f.n, id!).length < cap,
+        ) as number[];
         if (exits.length) m.roomId = this.rng.pick(exits);
       }
     }
@@ -446,8 +467,9 @@ export class Game {
   private pvpAllowed(a: PlayerState, b: PlayerState): string | null {
     const r = this.room(a);
     if (r.type === 'safe') return 'Pas de combat dans une safe room. Le marchand y tient.';
-    if (this.isImmune(a)) return 'Tu es encore immunisé : tu ne peux pas attaquer d\'autres joueurs.';
-    if (this.isImmune(b)) return `${b.name} est immunisé pour le moment.`;
+    const left = (q: PlayerState) => Math.max(1, Math.ceil((q.immuneUntil - this.now) / 1000));
+    if (this.isImmune(a)) return `Tu es encore immunisé ${left(a)} s : tu ne peux pas attaquer d'autres joueurs.`;
+    if (this.isImmune(b)) return `${b.name} est immunisé encore ${left(b)} s (il vient d'arriver ou de réapparaître).`;
     return null;
   }
 
@@ -592,12 +614,13 @@ export class Game {
     const base = this.rng.pick(DEATH_TEXTS).replace('{p}', p.name);
     this.emit({
       floor: p.floor, roomId: p.roomId, kind: 'mort', scope: 'global', actors: [p.key], fx: { kind: 'death', dst: `p:${p.name}` },
-      text: `${base} Cause : ${cause}. Son loot (${dropped.length} objet(s), ${goldLost} po) traîne au sol. −${xpLost} XP.`,
+      text: `${base} Cause : ${cause}. Son loot (${dropped.length} objet(s), ${goldLost} po) traîne au sol (!ramasse). −${xpLost} XP.`,
       drama: absurd ? 120 : 80,
     });
     if (killer?.kind === 'player') {
       const k = killer.p;
       k.kills++;
+      if (dropped.length || goldLost) this.say(k, `Le loot de ${p.name} est à tes pieds : !ramasse pour tout prendre.`);
       const arena = r.type === 'arene' ? 2 : 1;
       this.gainXp(k, 20 * p.level * arena);
     }
@@ -708,10 +731,10 @@ export class Game {
         return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} se regarde dans un miroir de poche. Confiance au maximum (+3 au prochain jet).`, 10);
       case 'duck':
         if (r.trapArmed) r.trapRevealed = true;
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} fait couiner un canard. ${r.trapArmed ? 'Un piège se trahit en couinant en retour !' : 'Rien ne se passe, mais tout le monde sourit.'}`, 10);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} pose un crapaud siffleur par terre. ${r.trapArmed ? 'Il siffle à s\'en décrocher la mâchoire : un piège se dévoile !' : 'Il bâille. Aucun piège ici.'}`, 10);
       case 'crown':
         this.gainXp(p, xpNext(p.level) - p.xp);
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} pose une couronne en carton sur sa tête. Le donjon reconnaît son autorité.`, 30);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} coiffe la couronne du Roi Gobelin. Le donjon reconnaît son autorité.`, 30);
       default:
         return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} utilise ${item.name}. Il ne se passe absolument rien.`, 15);
     }
@@ -782,6 +805,8 @@ export class Game {
   private doSearch(p: PlayerState) {
     const r = this.room(p);
     const f = this.state.floors[p.floor];
+    // Ce qui traîne au sol (loot d'un mort, pluie d'or) passe avant tout : fouiller le ramasse
+    if (r.ground.length || r.groundGold) return this.doPickup(p, '');
     if (r.type === 'tresor' && r.chest === 'ferme') {
       r.chest = 'ouvert';
       if (r.mimic) {
@@ -823,7 +848,8 @@ export class Game {
   }
 
   private springTrap(p: PlayerState, f: FloorState) {
-    const dmg = this.rng.die(6) + half(f.n);
+    // Étage 1 : 1-3 PV (on apprend), étage 2 : 1-5, ensuite d6 + moitié de l'étage
+    const dmg = f.n === 1 ? this.rng.die(3) : f.n === 2 ? this.rng.die(5) : this.rng.die(6) + half(f.n);
     const r = this.room(p);
     if (this.rng.chance(0.5)) r.trapArmed = false; // un piège sur deux ne se réarme pas
     const text = this.rng.pick(TRAP_TEXTS).replace('{p}', p.name) + ` (−${dmg} PV)`;
@@ -918,6 +944,15 @@ export class Game {
       if (!p.weapon) p.weapon = makeItem(CLASSES[p.cls].startWeapon, this.nextId);
       this.discover(p);
       this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} réapparaît dans la safe room de l'étage ${f.n}, l'air vexé. Immunisé ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
+      this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
+    }
+    // Le marchand rappelle une règle toutes les 4 tours, s'il a du public
+    if (this.state.turn % 4 === 0) {
+      const tip = MERCHANT_TIPS[(this.state.turn / 4) % MERCHANT_TIPS.length];
+      for (const f of Object.values(this.state.floors)) {
+        if (f.collapsed) continue;
+        for (const r of f.rooms) if (r.type === 'safe' && this.playersIn(f.n, r.id).length) this.merchantSays(f.n, r.id, tip);
+      }
     }
   }
 
@@ -1015,8 +1050,10 @@ export class Game {
         for (const f of occupied) {
           const n = Math.max(2, Math.ceil(Object.values(st.players).filter((p) => p.floor === f.n).length / 2));
           const pool = MONSTERS.filter((m) => m.minFloor <= f.n);
-          const rooms = f.rooms.filter((r) => r.type === 'normale' || r.type === 'piege' || r.type === 'tresor');
-          for (let i = 0; i < n && rooms.length; i++) {
+          const free = () => f.rooms.filter((r) => (r.type === 'normale' || r.type === 'piege' || r.type === 'tresor') && this.monstersIn(f.n, r.id).length < this.maxMonstersPerRoom(f.n));
+          for (let i = 0; i < n; i++) {
+            const rooms = free();
+            if (!rooms.length) break;
             const m = spawnMonster(this.rng.pick(pool), f.n, this.rng.pick(rooms).id, this.rng, this.nextId);
             m.wanderer = true;
             f.monsters.push(m);

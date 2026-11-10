@@ -16,7 +16,7 @@ const THEME_TINT: Record<string, string> = {
   'en feu': 'rgba(255,90,20,0.14)',
   'plongé dans le noir': 'rgba(0,0,0,0.35)',
   'moisi': 'rgba(90,160,40,0.14)',
-  'en promotion': 'rgba(255,60,180,0.10)',
+  'hanté': 'rgba(120,255,200,0.08)',
 };
 
 interface Floater {
@@ -44,18 +44,23 @@ export class MapRenderer {
   follow = true;
   shake = 0;
   private floaters: Floater[] = [];
-  private bubblePos: { text: string; x: number; y: number; t0: number }[] = [];
+  private bubblePos: { text: string; x: number; y: number; t0: number; dur: number; npc: boolean }[] = [];
   private labels: { text: string; x: number; y: number; color: string; hp: number; maxHp: number }[] = [];
   spectator = false;
   readonly fx = new FxLayer();
   zoomTarget: number | null = null;
   onManual?: () => void; // glisser/molette : la caméra auto se désactive
   private visibleKeys = new Set<string>();
-  private bubbles = new Map<string, { text: string; t0: number }>();
+  private bubbles = new Map<string, { text: string; t0: number; dur: number }>();
 
-  /** Bulle de dialogue au-dessus d'un crawler (6 s). */
+  /** Bulle de dialogue au-dessus d'un crawler (6,5 s). */
   bubble(name: string, text: string) {
-    this.bubbles.set(name, { text, t0: performance.now() });
+    this.bubbles.set(name, { text, t0: performance.now(), dur: 6500 });
+  }
+
+  /** Réplique du marchand d'une safe room : bulle plus large, qui reste plus longtemps. */
+  npcBubble(roomId: number, text: string) {
+    this.bubbles.set(`marchand:${roomId}`, { text, t0: performance.now(), dur: 4000 + Math.min(8000, text.length * 55) });
   }
   private lastHp = new Map<string, number>();
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
@@ -205,12 +210,14 @@ export class MapRenderer {
 
     // Caméra
     if (this.zoomTarget !== null) {
-      this.zoom += (this.zoomTarget - this.zoom) * 0.08;
+      this.zoom += (this.zoomTarget - this.zoom) * 0.12;
       if (Math.abs(this.zoomTarget - this.zoom) < 0.01) this.zoom = this.zoomTarget;
     }
     this.shake = Math.max(this.shake, this.fx.shake);
     this.fx.shake = 0;
-    const k = 0.12;
+    // Caméra plus vive ; au-delà d'environ 2 salles, on coupe direct (comme en régie télé)
+    const far = Math.hypot(this.target.x - this.cam.x, this.target.y - this.cam.y) > 2.2 * CW * PX;
+    const k = far ? 1 : 0.18;
     this.cam.x += (this.target.x - this.cam.x) * k;
     this.cam.y += (this.target.y - this.cam.y) * k;
     const s = this.zoom * devicePixelRatio;
@@ -363,7 +370,11 @@ export class MapRenderer {
     if (r.stairs) tiles.tile(ctx, 'floor_stairs', midCol, oy + 2);
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
     if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
-    if (r.merchant) tiles.drawAnchored(ctx, 'doc_idle_anim', (ox + 2.5) * PX, (oy + 3.2) * PX, t);
+    if (r.merchant) {
+      tiles.drawAnchored(ctx, 'doc_idle_anim', (ox + 2.5) * PX, (oy + 3.2) * PX, t);
+      const b = this.bubbles.get(`marchand:${r.id}`);
+      if (b) this.bubblePos.push({ text: b.text, x: (ox + 2.5) * PX, y: (oy + 3.2) * PX - 26, t0: b.t0, dur: b.dur, npc: true });
+    }
     if ((r.ground?.length ?? 0) > 0) tiles.drawAnchored(ctx, 'skull', (ox + IW - 0.2) * PX, (oy + IH + 1.6) * PX);
     if ((r.groundGold ?? 0) > 0) tiles.drawAnchored(ctx, 'coin_anim', (ox + IW - 0.9) * PX, (oy + IH + 1.6) * PX, t);
     if (r.type === 'normale' && hash(r.id * 7) % 5 === 0) tiles.drawAnchored(ctx, 'crate', (ox + 1.5) * PX, (oy + IH + 2) * PX);
@@ -418,7 +429,7 @@ export class MapRenderer {
       const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : '#ffffff';
       this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
       const b = this.bubbles.get(pl.name);
-      if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0 });
+      if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0, dur: b.dur, npc: false });
     });
   }
 
@@ -474,19 +485,19 @@ export class MapRenderer {
     this.labels = [];
     // Bulles de dialogue
     const now = performance.now();
-    for (const [k, b] of this.bubbles) if (now - b.t0 > 6500) this.bubbles.delete(k);
+    for (const [k, b] of this.bubbles) if (now - b.t0 > b.dur) this.bubbles.delete(k);
     ctx.font = `500 ${Math.round(12 * dpr)}px Inter, system-ui, sans-serif`;
     for (const b of this.bubblePos) {
       const [x, y] = toScreen(b.x, b.y);
-      const lines = wrap(b.text, 28).slice(0, 3);
+      const lines = b.npc ? wrap(b.text, 38).slice(0, 6) : wrap(b.text, 28).slice(0, 3);
       const lh = 15 * dpr;
       const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14 * dpr;
       const bh = lines.length * lh + 8 * dpr;
       const top = y - bh - 10 * dpr;
-      const fade = Math.min(1, (6500 - (now - b.t0)) / 500);
+      const fade = Math.min(1, (b.dur - (now - b.t0)) / 500);
       ctx.globalAlpha = Math.max(0, fade);
-      ctx.fillStyle = '#f6f1ff';
-      ctx.strokeStyle = '#2b2140';
+      ctx.fillStyle = b.npc ? '#fff4d6' : '#f6f1ff'; // le marchand parle sur parchemin
+      ctx.strokeStyle = b.npc ? '#7a5520' : '#2b2140';
       ctx.lineWidth = 2 * dpr;
       ctx.beginPath();
       ctx.roundRect(x - bw / 2, top, bw, bh, 6 * dpr);

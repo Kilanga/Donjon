@@ -45,7 +45,7 @@ Si quelqu'un ferme son onglet, son crawler reste dans le donjon (il riposte tout
 **La page joueur**
 - Carte pixel art avec brouillard de guerre, fiche perso, salle, inventaire, journal, chat.
 - Messages libres : tout ce qui ne commence pas par `!` s'affiche en bulle au-dessus de ton crawler (comme le chat Twitch).
-- Classement, titres (boucher, traître en chef…) et nécrologie ; bandeau de vote ; effets en cours (happy hour, inondation, prime).
+- Classement, titres (boucher, traître en chef…) et nécrologie ; bandeau de vote ; effets en cours (foire aux marchands, inondation, prime).
 - Utilisable sur téléphone ; raccourcis clavier sur PC.
 
 **La régie** (vue spectateur avec la clé)
@@ -105,12 +105,12 @@ La régie peut aussi lancer un vote ou déclencher un événement directement.
 | --- | --- |
 | Pluie d'or | Des tas d'or tombent dans des salles au hasard |
 | Lâcher de monstres | Une fournée de monstres errants |
-| Happy hour | Marchands à −50 % et réapprovisionnés pendant 10 tours |
+| Foire aux marchands | Marchands à −50 % et réapprovisionnés pendant 10 tours |
 | Résurrection générale | Tous les morts reviennent au tour suivant |
 | Prime sur le meilleur tueur | De l'or pour qui tue le crawler qui a le plus de kills (15 tours) |
 | Inondation | Pendant 5 tours, un déplacement sur trois échoue |
 | Festin | Tous les vivants récupèrent leurs PV |
-| Pièges en promo | Pièges réarmés, trois salles de plus piégées |
+| Pièges à foison | Pièges réarmés, trois salles de plus piégées |
 | Prolongation / Accélération | Les étages tiennent 3 min de plus / s'effondrent 2 min plus tôt |
 
 Les textes et la liste se règlent dans `src/server/game/production.ts` (et l'application dans `engine.ts`, `applyProduction`).
@@ -156,6 +156,11 @@ Un spectateur peut suivre son crawler sur la page web en entrant **le même pseu
 Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent sur la page.
 
 ## Commandes
+
+**Ordre d'un tour :** 1. les attaques, par initiative (d20 + Agilité pour les joueurs, d20 + attaque pour les monstres ;
+égalité : la meilleure base, puis le hasard) ; 2. les ripostes des joueurs attaqués sans ordre ; 3. objets, commerce, repos,
+ramassage ; 4. fouilles ; 5. déplacements. On ne peut donc pas fuir ni boire une potion avant d'avoir encaissé les coups du tour.
+
 
 | Commande | Alias anglais | Effet |
 | --- | --- | --- |

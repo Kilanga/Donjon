@@ -2,7 +2,7 @@
 import type { FloorView, GameEvent } from '../../src/shared/types';
 import type { MapRenderer } from './map';
 
-const MIN_SHOT = 7000; // durée minimale d'un plan (ms)
+const MIN_SHOT = 3500; // durée minimale d'un plan (ms), sauf si ça chauffe beaucoup plus ailleurs
 const HALF_LIFE = 9000; // demi-vie du score de drame d'une salle (ms)
 const THRESHOLD = 12; // en dessous : plan large
 const LOWER_THIRD_MIN = 60; // drame minimal pour le bandeau
@@ -93,7 +93,10 @@ export class Director {
       if (sc < 1) this.heat.delete(id);
       else if (!best || sc > best.score) best = { id, score: sc };
     }
-    const held = now - this.shot.since < MIN_SHOT;
+    const cur = this.shot.roomId !== null ? this.heat.get(this.shot.roomId) : undefined;
+    const curScore = cur ? decay(cur.score, now - cur.t) : 0;
+    const muchHotter = best !== null && best.id !== this.shot.roomId && best.score > curScore * 1.8 + 20;
+    const held = now - this.shot.since < MIN_SHOT && !muchHotter;
     if (held) return;
     if (best && best.score >= THRESHOLD) {
       if (best.id !== this.shot.roomId) {

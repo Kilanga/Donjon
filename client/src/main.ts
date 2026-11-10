@@ -92,7 +92,8 @@ const seen = new Set<number>();
 function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
-  logLine(e.text, e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
+  logLine(e.text, e.npc ? 'k-npc' : e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
+  if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, e.text.replace(/^Le marchand : « |»$/g, '').trim());
   stage.onEvent(e);
 }
 function chatLine(from: string, text: string, isCmd = false) {
@@ -239,7 +240,7 @@ function renderShared(s: PlayerViewMsg) {
   // Effets en cours
   const fx = s.effects;
   const chips: string[] = [];
-  if (fx.happyHourTurns) chips.push(`<span class="chip hh">Happy hour ${fx.happyHourTurns} tours</span>`);
+  if (fx.happyHourTurns) chips.push(`<span class="chip hh">Foire aux marchands ${fx.happyHourTurns} tours</span>`);
   if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
   if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
   if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
