@@ -1,5 +1,6 @@
 // Chargement des modèles KayKit (CC0) : pièces de donjon instanciées, personnages clonables, animations partagées.
 import * as THREE from 'three';
+import { reportError } from '../telemetry';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -115,6 +116,7 @@ export class InstancedBuilder {
       const src = this.assets.pieces.get(name);
       if (!src) {
         console.warn('Pièce de décor manquante :', name);
+        reportError(`pièce de décor 3D manquante : ${name}`, undefined, 'assets');
         continue;
       }
       src.updateMatrixWorld(true);

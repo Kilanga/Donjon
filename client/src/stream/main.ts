@@ -3,6 +3,7 @@
 import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../src/shared/types';
 import { Assets } from './assets';
 import { World } from './world';
+import { initTelemetry, telemetryReady } from '../telemetry';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -20,13 +21,19 @@ let clockOffset = 0;
 let wantedFloor: number | null = null;
 const seen = new Set<number>();
 
-function send(m: ClientMsg) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+function send(m: ClientMsg): boolean {
+  if (ws?.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(m));
+  return true;
 }
+initTelemetry(send, 'stream 3D');
 
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen = () => send({ type: 'hello', name: '', spectatorKey: key });
+  ws.onopen = () => {
+    send({ type: 'hello', name: '', spectatorKey: key });
+    telemetryReady();
+  };
   ws.onmessage = (e) => onMessage(JSON.parse(e.data) as ServerMsg);
   ws.onclose = () => setTimeout(connect, 2000);
 }
