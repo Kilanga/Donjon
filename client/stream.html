@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Le Donjon — stream 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="/src/stream/stream.css" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="labels"></div>
+  <div class="ui">
+    <div id="top" class="panel">
+      <div class="live"><i></i>EN DIRECT</div>
+      <div>
+        <div class="brand">LE DONJON</div>
+        <div class="meta" id="meta">—</div>
+      </div>
+    </div>
+    <div id="timers" class="panel">
+      <div id="collapse" class="collapse"></div>
+      <div class="turn"><span id="turn">Tour —</span><div class="bar"><i id="turn-bar"></i></div></div>
+    </div>
+    <div id="feed"></div>
+    <div id="lb" class="panel"></div>
+    <div id="vote" class="panel hidden"></div>
+    <div id="shot" class="muted"></div>
+    <div id="ia" class="panel hidden"><div class="orb"></div><div><div class="hl">L'IA DU DONJON</div><div id="ia-text"></div></div></div>
+    <div id="lt"><span class="lt-tag">EN DIRECT</span><span id="lt-text"></span></div>
+    <div id="cta" class="panel"></div>
+    <div id="pause" class="hidden">PAUSE</div>
+  </div>
+  <div id="load"><div class="brand big">LE DONJON</div><div class="bar wide"><i id="load-bar"></i></div><p id="load-msg">Chargement du donjon en 3D…</p></div>
+  <script type="module" src="/src/stream/main.ts"></script>
+</body>
+</html>
