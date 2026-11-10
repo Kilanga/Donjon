@@ -95,6 +95,7 @@ export interface FloorState {
   collapsed: boolean;
   warned5?: boolean;
   warned1?: boolean;
+  bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
 }
 
 export interface VoteState {
@@ -116,13 +117,14 @@ export interface GameState {
   nextVoteTurn: number;
   happyHourUntil: number; // tour de fin de l'happy hour des marchands
   floodUntil: number; // tour de fin de l'inondation
+  champions: import('../../shared/types.js').Legend[]; // sortis vainqueurs pendant cette partie
   bounty: { target: string; gold: number; untilTurn: number } | null;
 }
 
 export function emptyState(seed: number): GameState {
   return {
     version: 1, turn: 0, nextId: 1, rng: seed >>> 0, floors: {}, players: {}, alliances: {}, events: [],
-    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null,
+    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [],
   };
 }
 

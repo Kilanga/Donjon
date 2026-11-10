@@ -45,15 +45,18 @@ describe('PNJ figurants', () => {
     let t = 1_000_000;
     g.submit('ana', '!join chevalier', t);
     let pvp = 0;
+    let kills = 0;
+    let deepest = 1;
     for (let i = 0; i < 300; i++) {
       bots.afterTurn();
       const ev = g.tick((t += 20_000));
       pvp += ev.filter((e) => e.fx?.src?.startsWith('p:') && e.fx?.dst?.startsWith('p:') && e.fx.src !== e.fx.dst).length;
+      kills += ev.filter((e) => e.fx?.kind === 'kill' && e.fx.src?.startsWith('p:') && e.fx.src !== 'p:ana').length;
+      for (const b of bots.bots()) deepest = Math.max(deepest, b.deepest);
     }
-    const all = bots.bots();
-    expect(all.length).toBeGreaterThan(0);
-    expect(all.reduce((s, b) => s + b.kills, 0)).toBeGreaterThan(10);
-    expect(Math.max(...all.map((b) => b.deepest))).toBeGreaterThanOrEqual(2);
+    expect(bots.bots().length).toBeGreaterThan(0);
+    expect(kills).toBeGreaterThan(10);
+    expect(deepest).toBeGreaterThanOrEqual(2);
     expect(pvp).toBe(0);
   });
 

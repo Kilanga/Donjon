@@ -149,6 +149,19 @@ défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
   *hanté* (des fantômes volent un peu d'or et le cachent ailleurs). L'effet est annoncé à la création de l'étage
   et rappelé au survol du thème sur la page joueur.
 
+## Fin du donjon et Légendes
+
+Le **dernier étage** (6 par défaut, réglable : `"finalFloor": 5` dans `config.json` ou `FINAL_FLOOR=5`) ne s'effondre pas.
+Son boss garde la **sortie** : une fois vaincu, la sortie reste ouverte **6 tours** — `!descendre` dans sa salle fait sortir
+du donjon et entrer dans la **Légende** (carton « VICTOIRE ! » sur le stream). Ensuite le gardien se relève : les suivants
+devront le battre à leur tour, pas de passage gratuit.
+
+Les vainqueurs sont gardés dans `data/legendes.json` (d'une partie et d'une soirée à l'autre, même après « Nouvelle partie »)
+et affichés dans la page « Bilan de la soirée ». Les PNJ peuvent aussi gagner : ils sont marqués (PNJ).
+
+**Les nouveaux venus entrent toujours à l'étage 1** : un étage effondré est recreusé à neuf quand quelqu'un doit y aller.
+**Effondrement** : ceux qui sont restés tombent à l'étage suivant (−30 % PV, −40 % or, équipement gardé, sonnés un tour).
+
 ## PNJ figurants
 
 Pour qu'il y ait toujours de la vie dans le donjon, le serveur fait jouer jusqu'à **10 PNJ** (Brunhilde, Gorim Barbe-Grise,
@@ -185,6 +198,15 @@ avec le pseudo Twitch comme nom de joueur ; les autres messages s'affichent en b
 Un spectateur peut suivre son crawler sur la page web en entrant **le même pseudo** que sur Twitch.
 Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent sur la page.
 
+
+Le jeu lit le chat sans compte (anonymement) : il ne peut pas y écrire. Pour qu'un spectateur reçoive la liste des commandes
+directement dans le chat, crée une commande `!commandes` dans **Cloudbot** (Streamlabs Desktop → Cloudbot → Commandes) avec
+ce texte :
+
+> ⚔️ Le Donjon : !join [barbare|chevalier|voleur|mage] pour entrer · !nord !sud !est !ouest · !attaque [cible] · !fouille ·
+> !ramasse · !utilise <objet> · !equipe <objet> · !repos (safe room) · !achete <n°> · !alliance <pseudo> ·
+> !monte <for|agi|int|cha> · !descendre (après le boss) · !vote <n°> · !bug <souci>. Une commande par tour, la dernière compte !
+
 ## Commandes
 
 **Ordre d'un tour :** 1. potions et objets utilisés ou équipés ; 2. les attaques, par initiative (d20 + Agilité pour les
@@ -207,7 +229,7 @@ sans ordre ; 4. commerce, repos, ramassage ; 5. fouilles ; 6. déplacements. On 
 | `!monte <for/agi/int/cha>` | `!levelup` | Dépenser un point de stat (immédiat) |
 | `!descendre` | `!down` | Prendre l'escalier une fois le boss vaincu |
 | `!vote <n°>` | `!vote` | Voter pour l'événement de la production (immédiat) |
-| `!statut`, `!aide` | `!status`, `!help` | Infos |
+| `!statut`, `!aide`, `!commandes` | `!status`, `!help`, `!commands` | Infos ; `!commandes` ou `!aide` dans le chat affiche aussi le panneau des commandes 20 s sur le stream |
 | `!bug <description>` / `!avis <message>` | `!feedback` | Signaler un souci ou donner son avis (noté dans le journal, visible en régie) |
 | un message sans `!` ou `!dis …` | `!say` | Parler : bulle au-dessus de ton crawler |
 

@@ -17,6 +17,7 @@ export interface GameConfig {
   voteEveryMinutes: number; // fréquence des votes de la production (0 = jamais)
   voteTurns: number; // durée d'un vote en tours
   bots: number; // PNJ figurants quand il n'y a pas assez de vrais joueurs (0 = aucun)
+  finalFloor: number; // dernier étage : son escalier est la sortie du donjon (victoire)
   ai: AiConfig; // IA du donjon (optionnelle) ; la clé API reste dans ANTHROPIC_API_KEY
   seed?: number;
 }
@@ -36,6 +37,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   voteEveryMinutes: 4,
   voteTurns: 3,
   bots: 10,
+  finalFloor: 6,
   ai: { ...DEFAULT_AI },
 };
 
@@ -58,6 +60,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   cfg.immunitySeconds = num(env.IMMUNITY_SECONDS) ?? cfg.immunitySeconds;
   cfg.spectatorKey = env.SPECTATOR_KEY ?? cfg.spectatorKey;
   cfg.twitchChannel = env.TWITCH_CHANNEL ?? cfg.twitchChannel;
+  if (env.FINAL_FLOOR) cfg.finalFloor = Math.max(1, Number(env.FINAL_FLOOR) || cfg.finalFloor);
   if (env.BOTS !== undefined && env.BOTS !== '') cfg.bots = Math.max(0, Math.min(30, Number(env.BOTS) || 0));
   if (env.AI_PROVIDER && ['off', 'ollama', 'anthropic'].includes(env.AI_PROVIDER)) cfg.ai.provider = env.AI_PROVIDER as AiProvider;
   if (env.OLLAMA_MODEL) cfg.ai.ollamaModel = env.OLLAMA_MODEL;

@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import util from 'node:util';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { ClientMsg, GameEvent, ServerMsg } from '../shared/types.js';
+import type { ClientMsg, GameEvent, Legend, ServerMsg } from '../shared/types.js';
 import { loadConfig } from './config.js';
 import { Game, playerKey } from './game/engine.js';
 import type { GameState } from './game/state.js';
@@ -116,7 +116,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
       return;
     }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(recapHtml(game, cfg.turnSeconds));
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(recapHtml(game, cfg.turnSeconds, readLegends()));
     return;
   }
   let file = path.normalize(path.join(staticDir, decodeURIComponent(url.pathname)));
@@ -243,7 +243,35 @@ function sendState(c: Client) {
   }
 }
 
+// Légendes : tous ceux qui sont sortis par le dernier escalier, gardés d'une partie à l'autre (data/legendes.json)
+const legendsFile = path.join(root, 'data', 'legendes.json');
+function readLegends(): Legend[] {
+  try {
+    return fs.existsSync(legendsFile) ? (JSON.parse(fs.readFileSync(legendsFile, 'utf8')) as Legend[]) : [];
+  } catch {
+    return [];
+  }
+}
+const legendsSeen = new Set<number>();
+function recordLegends(events: GameEvent[]) {
+  const fresh = events.filter((e) => e.victory && !legendsSeen.has(e.id));
+  if (!fresh.length) return;
+  const all = readLegends();
+  for (const e of fresh) {
+    legendsSeen.add(e.id);
+    all.push(e.victory!);
+    journal.write('admin', { action: 'victoire', arg: e.victory!.name, msg: e.text });
+  }
+  try {
+    fs.mkdirSync(path.dirname(legendsFile), { recursive: true });
+    fs.writeFileSync(legendsFile, JSON.stringify(all, null, 1));
+  } catch (err) {
+    console.error('[légendes] non enregistrées :', err);
+  }
+}
+
 function deliver(events: GameEvent[]) {
+  recordLegends(events);
   try {
     npcs.observe(events); // la mémoire des PNJ
   } catch (e) {

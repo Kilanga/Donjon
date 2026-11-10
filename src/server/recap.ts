@@ -1,10 +1,11 @@
 // Page « Bilan de la soirée » : classement, titres et moments forts, à capturer en fin de session.
 import { CLASSES } from './game/data.js';
 import type { Game } from './game/engine.js';
+import type { Legend } from '../shared/types.js';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export function recapHtml(game: Game, turnSeconds: number): string {
+export function recapHtml(game: Game, turnSeconds: number, legends: Legend[] = []): string {
   const st = game.state;
   const rows = game.leaderboard();
   const top = (k: 'kills' | 'deaths' | 'betrayals' | 'gold' | 'deepest' | 'level', label: string, unit: string) => {
@@ -55,6 +56,7 @@ tr:first-child td{color:#ffd65a;font-weight:600}
 ${top('deepest', 'Le plus profond', 'étages')}${top('level', 'Le plus fort', 'niveaux')}${top('kills', 'Boucher', 'kills')}
 ${top('deaths', 'Abonné à la mort', 'morts')}${top('betrayals', 'Traître en chef', 'trahisons')}${top('gold', 'Le plus riche', 'po')}
 </div>
+${legends.length ? `<h2>Légendes du Donjon</h2><table><tr><th>Date</th><th>Crawler</th><th>Classe</th><th>Niv.</th><th>Kills</th><th>Morts</th><th>Étage</th></tr>${[...legends].reverse().map((l) => `<tr><td>${new Date(l.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(l.name)}${l.bot ? ' <small>(PNJ)</small>' : ''}</td><td>${CLASSES[l.cls].label}</td><td>${l.level}</td><td>${l.kills}</td><td>${l.deaths}</td><td>${l.floor}</td></tr>`).join('')}</table>` : ''}
 <h2>Classement</h2>
 <table><tr><th>#</th><th>Crawler</th><th>Classe</th><th>Niv.</th><th>Étage max</th><th>Kills</th><th>Morts</th><th>Trahisons</th><th>Or</th></tr>
 ${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${CLASSES[r.cls].label}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td><td>${r.betrayals}</td><td>${r.gold}</td></tr>`).join('')}

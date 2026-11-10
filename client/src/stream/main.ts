@@ -3,6 +3,7 @@
 import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../src/shared/types';
 import { Assets } from './assets';
 import { World } from './world';
+import { HELP_TEXT } from '../../../src/shared/commands';
 import { initTelemetry, telemetryReady } from '../telemetry';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -51,15 +52,30 @@ function onMessage(m: ServerMsg) {
     world.onEvents(fresh);
     for (const e of fresh) onEvent(e);
     for (const e of fresh) heatFloor(e);
+    const win = fresh.find((e) => e.victory);
+    if (win?.victory) showCard('VICTOIRE !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
   } else if (m.type === 'chat' && !m.cmd) {
     world.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
     world.setPos(m.name, m.floor, m.roomId, m.x, m.y);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
     showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
+    if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();
   } else if (m.type === 'feedback' && !m.ok) {
     $('load-msg').textContent = m.text + ' Ajoute ?cle=<clé de la régie> à l\'adresse.';
   }
+}
+
+/** !commandes ou !aide dans le chat : le panneau des commandes s'affiche 20 s sur le stream. */
+let helpTimer = 0;
+function showHelp() {
+  $('helpp-list').innerHTML = HELP_TEXT.map((l) => {
+    const [cmd, what] = l.split(' — ');
+    return `<div class="l"><code>${esc(cmd)}</code> — ${esc(what ?? '')}</div>`;
+  }).join('');
+  $('helpp').classList.remove('hidden');
+  clearTimeout(helpTimer);
+  helpTimer = window.setTimeout(() => $('helpp').classList.add('hidden'), 20000);
 }
 
 /** Bandeau des commandes du chat : le joueur Twitch voit si sa commande est passée (✓) ou pourquoi elle a échoué (✗). */
@@ -88,9 +104,9 @@ function heatFloor(e: GameEvent) {
   floorHeat.set(e.floor, { s: heatOf(e.floor, now) + e.drama + 4, t: now });
 }
 
-function showCard(n: number, sub: string) {
+function showCard(n: number | string, sub: string) {
   const card = $('card');
-  card.querySelector('.c1')!.textContent = `ÉTAGE ${n}`;
+  card.querySelector('.c1')!.textContent = typeof n === 'number' ? `ÉTAGE ${n}` : n;
   card.querySelector('.c2')!.textContent = sub;
   card.classList.remove('hidden');
   card.style.animation = 'none';

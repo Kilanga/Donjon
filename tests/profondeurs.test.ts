@@ -83,3 +83,23 @@ describe('thèmes d\'étage', () => {
     expect(thefts).toBeGreaterThan(3);
   });
 });
+
+describe('dernier étage et légendes', () => {
+  it('le dernier étage ne s\'effondre pas, et son escalier fait entrer dans la Légende', () => {
+    const g = new Game({ ...DEFAULT_CONFIG, seed: 4, finalFloor: 2 });
+    g.submit('ana', '!join barbare', T0);
+    const p = g.player('ana')!;
+    const f2 = g.freshFloor(2);
+    p.floor = 2;
+    p.roomId = f2.bossRoom;
+    for (const m of f2.monsters) if (m.roomId === f2.bossRoom) m.hp = 0;
+    expect(f2.collapseAt).toBeNull();
+    g.submit('ana', '!descendre', T0 + 1);
+    const ev = g.tick(T0 + 20_000);
+    const win = ev.find((e) => e.victory);
+    expect(win?.victory?.name).toBe('ana');
+    expect(g.state.champions).toHaveLength(1);
+    expect(g.player('ana')).toBeUndefined(); // sorti de la partie
+    expect(g.floor(3)).toBeUndefined(); // pas d'étage au-delà
+  });
+});

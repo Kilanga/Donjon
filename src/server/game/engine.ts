@@ -1,14 +1,14 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, suggestCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, EffectsView, FloorSummary, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
+  ClassId, Dir, EffectsView, FloorSummary, Legend, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
   CLASSES, CRIT_TEXTS, DEATH_TEXTS, FIASCO_TEXTS, GAG_TEXTS, RARITY_LABEL, SEARCH_FAIL_TEXTS, STAT_LABELS, TRAP_TEXTS,
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
-import { MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
+import { BOSSES, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
 import { THEME_EFFECTS } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
@@ -137,7 +137,7 @@ export class Game {
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
       f = generateFloor(n, rooms, this.rng, this.nextId);
       this.state.floors[n] = f;
-      const effect = THEME_EFFECTS[f.theme];
+      const effect = (n >= this.cfg.finalFloor ? 'DERNIER ÉTAGE : battez le boss et prenez la sortie pour entrer dans la Légende. ' : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} vient d'être creusé (${f.rooms.length} salles, thème : ${f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
@@ -146,6 +146,7 @@ export class Game {
   /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (les PNJ figurants ne le déclenchent pas). */
   private startTimer(f: FloorState, p?: PlayerState) {
     if (p?.bot) return;
+    if (f.n >= this.cfg.finalFloor) return; // le dernier étage ne s'effondre pas : on y gagne ou on y reste
     if (f.startedAt === null) {
       f.startedAt = this.now;
       f.collapseAt = this.now + this.cfg.floorMinutes * 60_000;
@@ -664,7 +665,11 @@ export class Game {
     for (const s of sharers) this.gainXp(s, share);
     const shareTxt = sharers.length > 1 ? ` (XP partagée : ${share} chacun)` : ` (+${m.xp} XP)`;
     this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} terrasse ${m.name} et récupère ${m.gold} po${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
-    if (m.boss) this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`, scope: 'global', actors: [killer.key], drama: 80 });
+    if (m.boss && floorN >= this.cfg.finalFloor) {
+      // Dernier étage : la sortie n'est ouverte que quelques tours, pour ceux qui ont mené le combat
+      f.bossBackTurn = this.state.turn + 6;
+      this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! LA SORTIE EST OUVERTE pendant 6 tours : !descendre dans la salle du boss pour entrer dans la Légende.`, scope: 'global', actors: [killer.key], drama: 100 });
+    } else if (m.boss) this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`, scope: 'global', actors: [killer.key], drama: 80 });
   }
 
   gainXp(p: PlayerState, amount: number) {
@@ -918,6 +923,7 @@ export class Game {
     const r = f.rooms[p.roomId];
     if (!r.stairs) return this.say(p, 'Il n\'y a pas d\'escalier ici. Il est dans la salle du boss.');
     if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'Le boss bloque l\'escalier. Il faut d\'abord le vaincre.');
+    if (f.n >= this.cfg.finalFloor) return this.finish(p);
     const next = this.freshFloor(f.n + 1);
     this.startTimer(next, p);
     p.floor = next.n;
@@ -971,6 +977,16 @@ export class Game {
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
     this.themeEffects(players);
+    // Le gardien du dernier étage se relève : la sortie se referme
+    for (const f of Object.values(this.state.floors)) {
+      if (f.bossBackTurn === undefined || this.state.turn < f.bossBackTurn) continue;
+      f.bossBackTurn = undefined;
+      if (f.monsters.some((m) => m.boss && m.hp > 0)) continue;
+      const pool = BOSSES.filter((b) => b.minFloor <= f.n && b.minFloor >= Math.max(1, f.n - 2));
+      const boss = spawnMonster(this.rng.pick(pool.length ? pool : BOSSES), f.n, f.bossRoom, this.rng, this.nextId);
+      f.monsters.push(boss);
+      this.emit({ floor: f.n, roomId: f.bossRoom, kind: 'systeme', text: `${boss.name} se relève et garde à nouveau la sortie. Il faudra le mériter.`, scope: 'global', drama: 60 });
+    }
     // Le marchand rappelle une règle toutes les 4 tours, s'il a du public
     if (this.state.turn % 4 === 0) {
       const tip = MERCHANT_TIPS[(this.state.turn / 4) % MERCHANT_TIPS.length];
@@ -1007,6 +1023,24 @@ export class Game {
         }
       }
     }
+  }
+
+  /** Sortie du donjon par l'escalier du dernier étage : le crawler entre dans la Légende et quitte la partie. */
+  private finish(p: PlayerState) {
+    const legend: Legend = {
+      name: p.name, cls: p.cls, level: p.level, kills: p.kills, deaths: p.deaths, betrayals: p.betrayals, gold: p.gold,
+      bot: !!p.bot, date: new Date(this.now).toISOString(), turn: this.state.turn, floor: p.floor,
+    };
+    this.state.champions.push(legend);
+    this.emit({
+      floor: p.floor, roomId: p.roomId, kind: 'niveau', scope: 'global', actors: [p.key], drama: 150, victory: legend, fx: { kind: 'levelup', src: `p:${p.name}` },
+      text: `VICTOIRE ! ${p.name}${p.bot ? ' (PNJ)' : ''} sort du Donjon par la grande porte, niveau ${p.level}, ${p.kills} monstres terrassés. Son nom entre dans la Légende.`,
+    });
+    this.leaveAlliance(p, false);
+    p.alive = false; // la suite du tour (thèmes, réapparitions) l'ignore
+    p.pending = null;
+    delete this.state.players[p.key];
+    for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
   }
 
   /** Effondrement : ceux qui sont restés tombent à l'étage suivant (PV et or perdus, équipement gardé). */

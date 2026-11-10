@@ -121,6 +121,7 @@ export interface GameEvent {
   drama: number; // score de drame (pour le futur réalisateur)
   narrator?: boolean; // commentaire généré par l'IA du donjon
   npc?: 'marchand'; // réplique d'un PNJ (bulle au-dessus de lui)
+  victory?: Legend; // un crawler sort du donjon par le dernier escalier
   // Effet visuel/sonore : entités 'p:<nom affiché>' ou 'm:<id monstre>'
   fx?: GameFx;
 }
@@ -186,6 +187,21 @@ export interface PlayerViewMsg {
   effects: EffectsView;
   obituary: { turn: number; text: string }[];
   floors?: FloorSummary[]; // étages debout et qui y est (vue stream, régie)
+}
+
+/** Un crawler sorti vivant par l'escalier du dernier étage. */
+export interface Legend {
+  name: string;
+  cls: ClassId;
+  level: number;
+  kills: number;
+  deaths: number;
+  betrayals: number;
+  gold: number;
+  bot: boolean;
+  date: string; // ISO
+  turn: number;
+  floor: number; // dernier étage
 }
 
 export interface FloorSummary {

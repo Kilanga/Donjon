@@ -47,7 +47,7 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   quitte: { name: 'leave' }, quitter: { name: 'leave' }, leave: { name: 'leave' },
   monte: { name: 'levelup' }, levelup: { name: 'levelup' }, up: { name: 'levelup' },
   statut: { name: 'status' }, status: { name: 'status' }, stats: { name: 'status' },
-  aide: { name: 'help' }, help: { name: 'help' },
+  aide: { name: 'help' }, help: { name: 'help' }, commandes: { name: 'help' }, commands: { name: 'help' }, regles: { name: 'help' },
   vote: { name: 'vote' }, voter: { name: 'vote' },
 };
 
@@ -120,4 +120,5 @@ export const HELP_TEXT = [
   '!descendre — prendre l\'escalier (salle du boss vaincu)',
   '!vote <n°> — voter pour l\'événement proposé par la production',
   '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',
+  '!commandes ou !aide — afficher cette liste',
 ];
