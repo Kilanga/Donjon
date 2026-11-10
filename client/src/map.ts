@@ -63,7 +63,42 @@ export class MapRenderer {
     this.bubbles.set(`marchand:${roomId}`, { text, t0: performance.now(), dur: 4000 + Math.min(8000, text.length * 55) });
   }
   private lastHp = new Map<string, number>();
-  private drag: { x: number; y: number; cx: number; cy: number } | null = null;
+  private drag: { x: number; y: number; cx: number; cy: number; moved: boolean } | null = null;
+
+  // ------------------------------------------------ déplacement libre dans la salle (page joueur)
+  walkEnabled = false;
+  onDoor?: (dir: Dir) => void; // le crawler entre dans une porte : changement de salle à la fin du tour
+  onAttackMonster?: (index: number, name: string) => void; // clic sur un monstre
+  onWalk?: (nx: number, ny: number) => void; // position (0..1 dans la salle) à relayer aux autres
+  private keys = new Set<Dir>();
+  private me: { roomKey: string; x: number; y: number; tx: number | null; ty: number | null; door: Dir | null; flip: boolean } | null = null;
+  private remote = new Map<string, { roomKey: string; x: number; y: number; dx: number; dy: number; t: number }>();
+  private lastWalkSent = { t: 0, x: -1, y: -1 };
+  private lastFrame = 0;
+
+  /** Touche de déplacement enfoncée ou relâchée (ZQSD / flèches). */
+  setKey(dir: Dir, down: boolean) {
+    if (down) {
+      this.keys.add(dir);
+      if (this.me) this.me.tx = this.me.ty = null;
+    } else this.keys.delete(dir);
+  }
+  clearKeys() {
+    this.keys.clear();
+  }
+
+  /** Position libre d'un autre crawler (reçue du serveur). */
+  remotePos(name: string, floor: number, roomId: number, nx: number, ny: number) {
+    const r = this.floor?.n === floor ? this.floor.rooms.find((x) => x.id === roomId) : undefined;
+    if (!r) return;
+    const b = interior(r);
+    const dx = b.x0 + nx * (b.x1 - b.x0);
+    const dy = b.y0 + ny * (b.y1 - b.y0);
+    const key = `${floor}:${roomId}`;
+    const cur = this.remote.get(name);
+    if (cur && cur.roomKey === key) Object.assign(cur, { dx, dy, t: performance.now() });
+    else this.remote.set(name, { roomKey: key, x: dx, y: dy, dx, dy, t: performance.now() });
+  }
 
   constructor(canvas: HTMLCanvasElement, tiles: Tiles) {
     this.canvas = canvas;
@@ -76,7 +111,7 @@ export class MapRenderer {
       this.onManual?.();
     }, { passive: false });
     canvas.addEventListener('pointerdown', (e) => {
-      this.drag = { x: e.clientX, y: e.clientY, cx: this.cam.x, cy: this.cam.y };
+      this.drag = { x: e.clientX, y: e.clientY, cx: this.cam.x, cy: this.cam.y, moved: false };
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove', (e) => {
@@ -84,6 +119,7 @@ export class MapRenderer {
       const dx = e.clientX - this.drag.x;
       const dy = e.clientY - this.drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 6) {
+        this.drag.moved = true;
         if (this.follow || this.zoomTarget !== null) this.onManual?.();
         this.follow = false;
         this.zoomTarget = null;
@@ -92,7 +128,11 @@ export class MapRenderer {
       this.cam.x = this.target.x = this.drag.cx - (dx * devicePixelRatio) / s;
       this.cam.y = this.target.y = this.drag.cy - (dy * devicePixelRatio) / s;
     });
-    canvas.addEventListener('pointerup', () => (this.drag = null));
+    canvas.addEventListener('pointerup', (e) => {
+      const click = this.drag && !this.drag.moved;
+      this.drag = null;
+      if (click && this.walkEnabled) this.click(e);
+    });
     canvas.addEventListener('dblclick', () => (this.follow = true));
   }
 
@@ -195,7 +235,116 @@ export class MapRenderer {
     const list = r.players ?? [];
     const i = list.findIndex((p) => `p:${p.name}` === key);
     if (i < 0) return null;
-    return slot(ox, oy, i, list.length, 4.6);
+    return this.playerSpot(r, list[i], i, list.length);
+  }
+
+  /** Où dessiner un crawler : sa position libre (moi, ou relayée) sinon sa place par défaut. */
+  private playerSpot(r: RoomView, pl: PlayerPublic, i: number, n: number): { x: number; y: number } {
+    const key = `${this.floor?.n}:${r.id}`;
+    if (pl.alive && pl.me && this.me && this.me.roomKey === key) return { x: this.me.x, y: this.me.y };
+    const rp = this.remote.get(pl.name);
+    if (pl.alive && rp && rp.roomKey === key && performance.now() - rp.t < 120_000) return { x: rp.x, y: rp.y };
+    return slot((r.x * CW + 1) * PX, (r.y * CH + 2) * PX, i, n, 4.6);
+  }
+
+  /** Avance mon crawler (touches ou clic), gère les portes et relaie la position. */
+  private stepWalk(dt: number) {
+    const f = this.floor;
+    if (!f || !this.walkEnabled) return;
+    let mine: { r: RoomView; pl: PlayerPublic; i: number; n: number } | null = null;
+    for (const r of f.rooms) {
+      const ps = r.players ?? [];
+      const i = ps.findIndex((p) => p.me);
+      if (i >= 0) mine = { r, pl: ps[i], i, n: ps.length };
+    }
+    if (!mine || !mine.pl.alive) {
+      this.me = null;
+      return;
+    }
+    const { r } = mine;
+    const key = `${f.n}:${r.id}`;
+    const b = interior(r);
+    if (!this.me || this.me.roomKey !== key) {
+      // Nouvelle salle : on entre par la porte d'où l'on vient (si on la connaît)
+      const prev = this.me ? f.rooms.find((x) => `${f.n}:${x.id}` === this.me!.roomKey) : undefined;
+      let start = slot(b.x0, b.y0, mine.i, mine.n, 4.6);
+      if (prev && Math.abs(prev.x - r.x) + Math.abs(prev.y - r.y) === 1) {
+        const d = doorPoints(r);
+        start = prev.y < r.y ? d.n : prev.y > r.y ? d.s : prev.x < r.x ? d.o : d.e;
+        start = { x: Math.min(b.x1 - 8, Math.max(b.x0 + 8, start.x)), y: Math.min(b.y1 - 2, Math.max(b.y0 + 12, start.y)) };
+      }
+      this.me = { roomKey: key, x: start.x, y: start.y, tx: null, ty: null, door: null, flip: false };
+    }
+    const me = this.me;
+    const speed = 80; // pixels monde par seconde
+    let vx = 0;
+    let vy = 0;
+    if (this.keys.size) {
+      if (this.keys.has('n')) vy -= 1;
+      if (this.keys.has('s')) vy += 1;
+      if (this.keys.has('o')) vx -= 1;
+      if (this.keys.has('e')) vx += 1;
+    } else if (me.tx !== null && me.ty !== null) {
+      vx = me.tx - me.x;
+      vy = me.ty - me.y;
+      if (Math.hypot(vx, vy) < 1.5) {
+        me.tx = me.ty = null;
+        vx = vy = 0;
+      }
+    }
+    const len = Math.hypot(vx, vy);
+    if (len > 0) {
+      const step = Math.min(len, speed * dt);
+      const nx = me.x + (vx / len) * step;
+      const ny = me.y + (vy / len) * step;
+      if (vx < -0.1) me.flip = true;
+      else if (vx > 0.1) me.flip = false;
+      const c = clampWalk(r, nx, ny);
+      if (me.tx !== null && Math.hypot(c.x - me.x, c.y - me.y) < 0.05) me.tx = me.ty = null; // bloqué contre un mur
+      me.x = c.x;
+      me.y = c.y;
+    }
+    // Porte franchie : on programme le changement de salle (une fois par passage)
+    const dir = doorReached(r, me.x, me.y);
+    if (dir && me.door !== dir) {
+      me.door = dir;
+      this.onDoor?.(dir);
+    } else if (!dir) me.door = null;
+    // Relais de la position (au plus ~8 fois par seconde)
+    const now = performance.now();
+    if (now - this.lastWalkSent.t > 120 && (Math.abs(me.x - this.lastWalkSent.x) > 0.5 || Math.abs(me.y - this.lastWalkSent.y) > 0.5)) {
+      this.lastWalkSent = { t: now, x: me.x, y: me.y };
+      this.onWalk?.((me.x - b.x0) / (b.x1 - b.x0), (me.y - b.y0) / (b.y1 - b.y0));
+    }
+  }
+
+  /** Clic sur la carte : sur un monstre = l'attaquer, au sol = y aller. */
+  private click(e: PointerEvent) {
+    const f = this.floor;
+    if (!f || !this.me) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const s = this.zoom * devicePixelRatio;
+    const wx = ((e.clientX - rect.left) * devicePixelRatio - this.canvas.width / 2) / s + this.cam.x;
+    const wy = ((e.clientY - rect.top) * devicePixelRatio - this.canvas.height / 2) / s + this.cam.y;
+    const r = f.rooms.find((x) => `${f.n}:${x.id}` === this.me!.roomKey);
+    if (!r) return;
+    const ox = (r.x * CW + 1) * PX;
+    const oy = (r.y * CH + 2) * PX;
+    const ms = r.monsters ?? [];
+    for (let i = 0; i < ms.length; i++) {
+      const p = slot(ox, oy, i, ms.length, ms[i].boss ? 2.6 : 1.9);
+      const h = ms[i].boss ? 40 : 26;
+      if (Math.abs(wx - p.x) < (ms[i].boss ? 18 : 11) && wy > p.y - h && wy < p.y + 5) {
+        this.onAttackMonster?.(i + 1, ms[i].name);
+        this.me.tx = p.x;
+        this.me.ty = p.y + 14;
+        return;
+      }
+    }
+    const b = interior(r);
+    if (wx < b.x0 - 24 || wx > b.x1 + 24 || wy < b.y0 - 36 || wy > b.y1 + 30) return; // clic hors de ma salle
+    this.me.tx = wx;
+    this.me.ty = wy;
   }
 
   draw(t: number) {
@@ -207,6 +356,16 @@ export class MapRenderer {
     ctx.fillRect(0, 0, w, h);
     const f = this.floor;
     if (!f || !this.tiles.img) return;
+
+    const nowF = performance.now();
+    const dtF = this.lastFrame ? Math.min(0.1, (nowF - this.lastFrame) / 1000) : 0;
+    this.lastFrame = nowF;
+    this.stepWalk(dtF);
+    for (const rp of this.remote.values()) {
+      const k2 = Math.min(1, dtF * 10);
+      rp.x += (rp.dx - rp.x) * k2;
+      rp.y += (rp.dy - rp.y) * k2;
+    }
 
     // Caméra
     if (this.zoomTarget !== null) {
@@ -410,7 +569,7 @@ export class MapRenderer {
     });
     ps.forEach((pl, i) => {
       const key = `p:${pl.name}`;
-      const p = slot(ox, oy, i, ps.length, 4.6);
+      const p = this.playerSpot(r, pl, i, ps.length);
       this.fx.lastPos.set(key, p);
       this.visibleKeys.add(key);
       if (!pl.alive) {
@@ -425,7 +584,8 @@ export class MapRenderer {
         ctx.fill();
       }
       const o = this.fx.offset(key, now);
-      this.drawFlashing(key, CLASS_SPRITE[pl.cls], p.x + o.x, p.y + o.y, t + i * 0.29, i % 2 === 1, now);
+      const flip = pl.me && this.me ? this.me.flip : i % 2 === 1;
+      this.drawFlashing(key, CLASS_SPRITE[pl.cls], p.x + o.x, p.y + o.y, t + i * 0.29, flip, now);
       const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : '#ffffff';
       this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
       const b = this.bubbles.get(pl.name);
@@ -525,6 +685,43 @@ function wrap(text: string, max: number): string[] {
   }
   if (line) out.push(line);
   return out;
+}
+
+/** Intérieur d'une salle en pixels monde (position des pieds). */
+function interior(r: RoomView) {
+  const x0 = (r.x * CW + 1) * PX;
+  const y0 = (r.y * CH + 2) * PX;
+  return { x0, y0, x1: x0 + IW * PX, y1: y0 + IH * PX };
+}
+
+/** Centre de chaque porte (pieds d'un crawler qui s'y tient). */
+function doorPoints(r: RoomView) {
+  const b = interior(r);
+  const cx = (r.x * CW + 1 + Math.floor(IW / 2) + 0.5) * PX;
+  const cy = (r.y * CH + 2 + Math.floor(IH / 2) + 0.9) * PX;
+  return { n: { x: cx, y: b.y0 - 6 }, s: { x: cx, y: b.y1 + 14 }, o: { x: b.x0 - 10, y: cy }, e: { x: b.x1 + 10, y: cy } };
+}
+
+/** Garde les pieds dans la salle, sauf dans l'embrasure d'une porte ouverte. */
+function clampWalk(r: RoomView, x: number, y: number) {
+  const b = interior(r);
+  const d = doorPoints(r);
+  let x0 = b.x0 + 7, x1 = b.x1 - 7, y0 = b.y0 + 12, y1 = b.y1 - 2;
+  if (r.doors.n !== undefined && Math.abs(x - d.n.x) < 7) y0 = d.n.y;
+  if (r.doors.s !== undefined && Math.abs(x - d.s.x) < 7) y1 = d.s.y;
+  if (r.doors.o !== undefined && Math.abs(y - d.o.y) < 7) x0 = d.o.x;
+  if (r.doors.e !== undefined && Math.abs(y - d.e.y) < 7) x1 = d.e.x;
+  return { x: Math.max(x0, Math.min(x1, x)), y: Math.max(y0, Math.min(y1, y)) };
+}
+
+/** La porte dans laquelle se tient le crawler, s'il en franchit une. */
+function doorReached(r: RoomView, x: number, y: number): Dir | null {
+  const b = interior(r);
+  if (r.doors.n !== undefined && y < b.y0 + 2) return 'n';
+  if (r.doors.s !== undefined && y > b.y1 + 6) return 's';
+  if (r.doors.o !== undefined && x < b.x0 - 2) return 'o';
+  if (r.doors.e !== undefined && x > b.x1 + 2) return 'e';
+  return null;
 }
 
 /** Répartit n entités sur une rangée de la salle. */

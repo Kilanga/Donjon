@@ -22,6 +22,21 @@ const spectatorKey = params.get('spectateur');
 const tiles = new Tiles();
 const map = new MapRenderer($('map') as HTMLCanvasElement, tiles);
 const stage = new Stage(map, $('map-wrap'), spectatorKey !== null);
+// Déplacement libre dans la salle (page joueur) : ZQSD/flèches ou clic ; une porte franchie = changement de salle
+const DIR_CMD: Record<string, string> = { n: '!nord', s: '!sud', e: '!est', o: '!ouest' };
+const DIR_LABEL: Record<string, string> = { n: 'au nord', s: 'au sud', e: 'à l\'est', o: 'à l\'ouest' };
+if (spectatorKey === null) {
+  map.walkEnabled = true;
+  map.onDoor = (dir) => {
+    cmd(DIR_CMD[dir]);
+    logLine(`Tu te places devant la porte ${DIR_LABEL[dir]} : tu changeras de salle à la fin du tour.`, 'k-prive');
+  };
+  map.onAttackMonster = (i, name) => {
+    cmd(`!attaque ${i}`);
+    logLine(`Tu vises ${name}.`, 'k-prive');
+  };
+  map.onWalk = (x, y) => send({ type: 'pos', x, y });
+}
 let ws: WebSocket | null = null;
 let state: PlayerViewMsg | null = null;
 let clockOffset = 0;
@@ -65,6 +80,8 @@ function onMessage(m: ServerMsg) {
   } else if (m.type === 'chat') {
     chatLine(m.from, m.text, !!m.cmd);
     if (!m.cmd) map.bubble(m.from, m.text);
+  } else if (m.type === 'pos') {
+    map.remotePos(m.name, m.floor, m.roomId, m.x, m.y);
   }
 }
 
@@ -395,12 +412,29 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') $('help').classList.add('hidden');
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   if (e.key === '?') return $('help').classList.remove('hidden');
-  const k: Record<string, string> = { ArrowUp: '!nord', ArrowDown: '!sud', ArrowLeft: '!ouest', ArrowRight: '!est', z: '!nord', s: '!sud', q: '!ouest', d: '!est', f: '!fouille', a: '!attaque' };
-  if (k[e.key]) {
+  const walk = walkDir(e);
+  if (walk && spectatorKey === null) {
+    e.preventDefault();
+    map.setKey(walk, true);
+    return;
+  }
+  const k: Record<string, string> = { f: '!fouille', a: '!attaque' };
+  if (k[e.key] && !e.repeat) {
     e.preventDefault();
     cmd(k[e.key]);
   }
 });
+document.addEventListener('keyup', (e) => {
+  const walk = walkDir(e);
+  if (walk) map.setKey(walk, false);
+});
+addEventListener('blur', () => map.clearKeys());
+/** ZQSD (AZERTY), WASD sans le A (pris par l'attaque) et les flèches : marcher dans la salle. */
+function walkDir(e: KeyboardEvent): 'n' | 's' | 'e' | 'o' | null {
+  if ((e.target as HTMLElement).tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return null;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  return ({ z: 'n', w: 'n', ArrowUp: 'n', s: 's', ArrowDown: 's', q: 'o', ArrowLeft: 'o', d: 'e', ArrowRight: 'e' } as const)[key as 'z'] ?? null;
+}
 
 // ---------------------------------------------------------------- démarrage
 (async () => {

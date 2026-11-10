@@ -384,6 +384,18 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         cid: c.id, name: c.name, spectator: c.spectator, ua: c.ua, page: String(msg.page ?? '').slice(0, 100),
         message: String(msg.message ?? '').slice(0, 500), stack: String(msg.stack ?? '').slice(0, 1500), where: String(msg.where ?? '').slice(0, 200),
       });
+    } else if (msg.type === 'pos' && c.name) {
+      // Déplacement libre dans la salle : purement visuel, relayé aux autres pages de l'étage
+      const p = game.player(c.name);
+      const x = Number(msg.x);
+      const y = Number(msg.y);
+      if (!p || !p.alive || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      const out: ServerMsg = { type: 'pos', name: p.name, floor: p.floor, roomId: p.roomId, x: Math.max(-0.3, Math.min(1.3, x)), y: Math.max(-0.3, Math.min(1.3, y)) };
+      for (const o of clients) {
+        if (o === c) continue;
+        if (o.spectator) send(o, out);
+        else if (o.name && game.player(o.name)?.floor === p.floor) send(o, out);
+      }
     } else if (msg.type === 'clientPerf') {
       journal.write('clientPerf', { cid: c.id, name: c.name, spectator: c.spectator, page: String(msg.page ?? '').slice(0, 100), fps: Number(msg.fps) || 0, w: Number(msg.w) || 0, h: Number(msg.h) || 0, mobile: c.mobile });
     }

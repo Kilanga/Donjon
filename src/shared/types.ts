@@ -188,7 +188,8 @@ export type ServerMsg =
   | PlayerViewMsg
   | { type: 'events'; events: GameEvent[] }
   | { type: 'feedback'; ok: boolean; text: string }
-  | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number };
+  | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number }
+  | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number }; // position libre d'un crawler dans sa salle
 
 export type ClientMsg =
   | { type: 'hello'; name: string; spectatorKey?: string }
@@ -197,6 +198,7 @@ export type ClientMsg =
   | { type: 'floor'; n: number } // spectateur : changer d'étage affiché
   | { type: 'admin'; action: AdminAction; arg?: string | number }
   | { type: 'clientError'; message: string; stack?: string; where?: string; page?: string } // erreur JS de la page (journal)
-  | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string }; // images/seconde (journal)
+  | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string } // images/seconde (journal)
+  | { type: 'pos'; x: number; y: number }; // déplacement libre dans la salle (0..1, purement visuel)
 
 export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick';

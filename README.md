@@ -181,7 +181,8 @@ sans ordre ; 4. commerce, repos, ramassage ; 5. fouilles ; 6. déplacements. On 
 | `!bug <description>` / `!avis <message>` | `!feedback` | Signaler un souci ou donner son avis (noté dans le journal, visible en régie) |
 | un message sans `!` ou `!dis …` | `!say` | Parler : bulle au-dessus de ton crawler |
 
-Raccourcis clavier sur la page : flèches ou ZQSD pour se déplacer, `F` fouiller, `A` attaquer, `?` aide,
+Sur la page joueur : ZQSD, flèches ou clic au sol pour marcher librement dans sa salle (visuel, vu par les autres) ;
+entrer dans une porte programme le changement de salle ; clic sur un monstre = `!attaque` sur lui. `F` fouiller, `A` attaquer, `?` aide,
 flèches haut/bas dans le champ de commande pour l'historique.
 
 ## IA du donjon (optionnel)
