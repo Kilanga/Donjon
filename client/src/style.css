@@ -170,3 +170,5 @@ input:focus { outline: none; border-color: var(--violet); }
 .admin-grid button { font-size: 12px; padding: 6px; }
 .admin-row { display: flex; gap: 6px; margin-top: 6px; }
 .admin-row select, .admin-row input { flex: 1; min-width: 0; font: inherit; font-size: 12px; color: var(--text); background: #0f0c17; border: 1px solid var(--line); border-radius: 6px; padding: 5px; }
+#log .k-ia { color: #ffc46b; font-style: italic; }
+#log .k-ia::before { content: 'IA du donjon'; font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: #1b1100; background: linear-gradient(90deg, #ffd65a, #ff8a3d); border-radius: 999px; padding: 1px 7px; margin-right: 6px; vertical-align: 1px; }

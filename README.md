@@ -72,6 +72,7 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | `deathXpLoss` | 0.25 | Part de l'XP du niveau perdue à la mort |
 | `spectatorKey` | `regie` | Clé de la vue spectateur — change-la si tu partages l'adresse |
 | `twitchChannel` | vide | Nom de ta chaîne Twitch pour lire les commandes du chat |
+| `ai` | désactivée | IA du donjon, voir plus bas |
 
 Pour tester vite seul, mets par exemple `"turnSeconds": 5` et `"floorMinutes": 5`.
 
@@ -94,12 +95,67 @@ avec le pseudo Twitch comme nom de joueur. Un spectateur peut suivre son crawler
 | `!utilise <objet>` / `!equipe <objet>` | `!use` / `!equip` | Utiliser ou équiper (nom ou numéro dans le sac) |
 | `!marchand`, `!achete <n°>`, `!vends <objet>` | `!shop`, `!buy`, `!sell` | Commerce en safe room |
 | `!repos` | `!rest` | Récupérer des PV en safe room |
+| `!parle <message>` | `!talk` | Discuter avec le marchand (safe room ; réponse de l'IA si activée) |
 | `!alliance <joueur>` / `!quitte` | `!ally` / `!leave` | Proposer/accepter une alliance, ou la quitter |
 | `!monte <for/agi/int/cha>` | `!levelup` | Dépenser un point de stat (immédiat) |
 | `!descendre` | `!down` | Prendre l'escalier une fois le boss vaincu |
 | `!statut`, `!aide` | `!status`, `!help` | Infos |
 
 Raccourcis clavier sur la page : flèches ou ZQSD pour se déplacer, `F` fouiller, `A` attaquer.
+
+## IA du donjon (optionnel)
+
+Par défaut, le jeu n'appelle aucune IA : tous les textes drôles sont écrits à l'avance.
+Tu peux activer une « IA du donjon » qui commente les grands moments (morts, trahisons, boss vaincu)
+d'une phrase sarcastique dans le journal, et qui fait parler le marchand quand un joueur tape `!parle <message>` en safe room.
+Si l'IA ne répond pas (éteinte, trop lente, erreur), le jeu continue normalement avec ses textes habituels.
+
+> Non testé en conditions réelles : le réseau de l'environnement de développement bloquait Ollama et l'API.
+> Les appels sont couverts par des tests automatiques avec des réponses simulées.
+
+### Option 1 : ton IA locale avec Ollama (gratuit)
+
+```powershell
+ollama pull qwen2.5:14b
+```
+
+Puis dans `config.json` :
+
+```json
+"ai": { "provider": "ollama", "ollamaModel": "qwen2.5:14b" }
+```
+
+Prends un modèle **généraliste** (`qwen2.5:14b`, `mistral-nemo`…) plutôt que Qwen2.5-Coder : un modèle de code
+est bon pour programmer, beaucoup moins pour faire de l'humour en français. Un modèle d'environ 14B tient dans les 12 Go
+de ta RTX 4070 Ti. Si le serveur affiche « délai dépassé », augmente `timeoutMs` ou prends un modèle plus petit.
+
+### Option 2 : l'API Claude
+
+Mets `"ai": { "provider": "anthropic" }` dans `config.json`, puis lance le serveur avec ta clé dans une variable
+d'environnement (**jamais dans config.json**, qui pourrait finir sur GitHub) :
+
+```powershell
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+npm start
+```
+
+Le modèle par défaut est `claude-haiku-5-5` (rapide et peu cher), réglable avec `anthropicModel`.
+L'API est facturée à part de l'abonnement Claude : les crédits API inclus dans l'abonnement Max doivent d'abord être
+réclamés dans la Console (<https://platform.claude.com>, page Billing), en y liant une organisation. Le coût reste faible :
+l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable avec `maxPerMinute`, 8 par défaut).
+
+### Réglages
+
+| Réglage (`ai`) | Défaut | Rôle |
+| --- | --- | --- |
+| `provider` | `off` | `off`, `ollama` ou `anthropic` |
+| `ollamaUrl` / `ollamaModel` | `http://localhost:11434` / `qwen2.5:14b` | Adresse et modèle Ollama |
+| `anthropicModel` | `claude-haiku-5-5` | Modèle de l'API Claude |
+| `timeoutMs` | 12000 | Au-delà, la réponse est abandonnée |
+| `maxPerMinute` | 8 | Nombre maximum d'appels par minute |
+
+Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
+Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
 
 ## Tests et outils
 
@@ -128,4 +184,5 @@ Presque tout l'équilibrage se règle dans `src/server/game/data.ts` (stats des 
 - L'équilibrage n'a été testé qu'avec des bots : à ajuster après la première vraie session.
 - La lecture du chat Twitch n'a pas pu être testée en conditions réelles.
 - Pas de comptes : n'importe qui peut prendre un pseudo sur la page. Suffisant entre amis, à revoir pour Twitch.
-- Hors périmètre de la phase 1 : stream 3D, réalisateur, IA, points de chaîne.
+- L'IA du donjon (Ollama ou API Claude) n'a pas pu être testée en conditions réelles.
+- Hors périmètre de la phase 1 : stream 3D, réalisateur, IA des PNJ, points de chaîne.

@@ -117,6 +117,7 @@ export interface GameEvent {
   to?: string; // joueur destinataire pour 'prive'
   actors?: string[]; // joueurs concernés (alliés de ces joueurs voient aussi l'évènement)
   drama: number; // score de drame (pour le futur réalisateur)
+  narrator?: boolean; // commentaire généré par l'IA du donjon
 }
 
 export interface LeaderRow {

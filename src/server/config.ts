@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_AI, type AiConfig, type AiProvider } from './ai.js';
 
 export interface GameConfig {
   port: number;
@@ -15,6 +16,7 @@ export interface GameConfig {
   savePath: string;
   voteEveryMinutes: number; // fréquence des votes de la production (0 = jamais)
   voteTurns: number; // durée d'un vote en tours
+  ai: AiConfig; // IA du donjon (optionnelle) ; la clé API reste dans ANTHROPIC_API_KEY
   seed?: number;
 }
 
@@ -32,6 +34,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   savePath: 'data/save.json',
   voteEveryMinutes: 4,
   voteTurns: 3,
+  ai: { ...DEFAULT_AI },
 };
 
 /** Charge config.json (s'il existe) puis les variables d'environnement. */
@@ -39,7 +42,10 @@ export function loadConfig(root = process.cwd()): GameConfig {
   const cfg: GameConfig = { ...DEFAULT_CONFIG };
   const file = path.join(root, 'config.json');
   if (fs.existsSync(file)) {
-    Object.assign(cfg, JSON.parse(fs.readFileSync(file, 'utf8')));
+    const fromFile = JSON.parse(fs.readFileSync(file, 'utf8'));
+    Object.assign(cfg, fromFile);
+    cfg.ai = { ...DEFAULT_AI, ...(fromFile.ai ?? {}) };
+    delete (cfg.ai as unknown as Record<string, unknown>).anthropicKey; // la clé ne se met jamais dans config.json
   }
   const env = process.env;
   const num = (v: string | undefined) => (v !== undefined && v !== '' ? Number(v) : undefined);
@@ -50,5 +56,8 @@ export function loadConfig(root = process.cwd()): GameConfig {
   cfg.immunitySeconds = num(env.IMMUNITY_SECONDS) ?? cfg.immunitySeconds;
   cfg.spectatorKey = env.SPECTATOR_KEY ?? cfg.spectatorKey;
   cfg.twitchChannel = env.TWITCH_CHANNEL ?? cfg.twitchChannel;
+  if (env.AI_PROVIDER && ['off', 'ollama', 'anthropic'].includes(env.AI_PROVIDER)) cfg.ai.provider = env.AI_PROVIDER as AiProvider;
+  if (env.OLLAMA_MODEL) cfg.ai.ollamaModel = env.OLLAMA_MODEL;
+  if (env.OLLAMA_URL) cfg.ai.ollamaUrl = env.OLLAMA_URL;
   return cfg;
 }
