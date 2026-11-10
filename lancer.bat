@@ -8,9 +8,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist node_modules (
-  echo Installation des dependances, une seule fois...
-  call npm install
+rem Installe (ou complete) les dependances si besoin : premiere fois, ou apres un git pull qui en ajoute
+call npm ls --depth=0 >nul 2>nul
+if errorlevel 1 (
+  echo Installation des dependances...
+  call npm install --no-audit --no-fund
   if errorlevel 1 ( pause & exit /b 1 )
 )
 echo Construction de la page...
