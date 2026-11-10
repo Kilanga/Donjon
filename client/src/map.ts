@@ -38,7 +38,7 @@ export class MapRenderer {
   ctx: CanvasRenderingContext2D;
   tiles: Tiles;
   floor: FloorView | null = null;
-  zoom = 3;
+  zoom = typeof window !== 'undefined' && window.innerWidth < 700 ? 2 : 3; // téléphone : on voit les salles voisines
   cam = { x: 0, y: 0 }; // centre de la caméra en pixels monde
   target = { x: 0, y: 0 };
   follow = true;
