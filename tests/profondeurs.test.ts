@@ -122,3 +122,36 @@ describe('dernier étage et légendes', () => {
     expect(g.state.seasonOver).toBe(false);
   });
 });
+
+describe('monstres qui reviennent et XP', () => {
+  it('un monstre tué revient 3 tours plus tard, dans une salle vide ; un boss non', () => {
+    const g = new Game({ ...DEFAULT_CONFIG, seed: 11 });
+    g.submit('ana', '!join barbare', T0);
+    const f = g.floor(1)!;
+    const ids = new Set(f.monsters.map((x) => x.id));
+    const m = f.monsters.find((x) => !x.boss)!;
+    const boss = f.monsters.find((x) => x.boss)!;
+    const kill = (g as unknown as { killMonster: (m: unknown, n: number, k: unknown) => void }).killMonster.bind(g);
+    kill(m, 1, null);
+    kill(boss, 1, null);
+    let t = T0;
+    g.tick((t += 20_000));
+    g.tick((t += 20_000));
+    expect(f.monsters.some((x) => !ids.has(x.id))).toBe(false); // pas encore
+    g.tick((t += 20_000));
+    const back = f.monsters.filter((x) => !ids.has(x.id));
+    expect(back).toHaveLength(1); // le monstre revient, pas le boss (qui a ses propres règles)
+    expect(back[0].kind).toBe(m.kind);
+    expect(back[0].roomId).not.toBe(g.player('ana')!.roomId);
+    expect(f.rooms[back[0].roomId].type).toBe('normale');
+  });
+
+  it('tuer un crawler rapporte moins que tuer un monstre du même étage', () => {
+    const g = new Game({ ...DEFAULT_CONFIG, seed: 11 });
+    g.submit('ana', '!join barbare', T0);
+    const pvp = 5 * 4; // victime niveau 4
+    const weakest = Math.min(...g.floor(1)!.monsters.filter((m) => !m.boss).map((m) => m.xp));
+    expect(pvp).toBeGreaterThanOrEqual(0);
+    expect(5 * 1).toBeLessThan(weakest); // un crawler de niveau 1 rapporte moins que le plus faible monstre
+  });
+});

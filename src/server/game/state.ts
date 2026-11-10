@@ -96,7 +96,8 @@ export interface FloorState {
   collapsed: boolean;
   warned5?: boolean;
   warned1?: boolean;
-  stairsOpened?: boolean; // l'annonce « l'escalier se descelle » a été faite
+  stairsOpened?: boolean;
+  respawns?: { turn: number; kind: string }[]; // monstres tués, qui reviennent au tour indiqué // l'annonce « l'escalier se descelle » a été faite
   bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
 }
 

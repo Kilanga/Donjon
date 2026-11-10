@@ -41,3 +41,14 @@ describe('modération de ce qui passe à l\'antenne', () => {
     expect(quoteForPrompt('a'.repeat(500))).toHaveLength(200);
   });
 });
+
+describe('tics de langage de la narratrice', () => {
+  it('retire les interjections d\'ouverture, sans abîmer une phrase normale', () => {
+    expect(clean('Ah ben dis donc, le seigneur des abysses a dû être déçu.')).toBe('Le seigneur des abysses a dû être déçu.');
+    expect(clean('Ah bah super, on ramasse les cendres de Ysolde.')).toBe('Super, on ramasse les cendres de Ysolde.');
+    expect(clean('Ah ben ça alors, le feu a fait ses premières victimes.')).toBe('Le feu a fait ses premières victimes.');
+    expect(clean('Alors que la salle brûle, Krag fait la sieste.')).toBe('Alors que la salle brûle, Krag fait la sieste.');
+    expect(clean('Bien joué, Pippa, ce coffre mordait.')).toBe('Bien joué, Pippa, ce coffre mordait.');
+    expect(clean('Ah !')).toBe('Ah !'); // trop court pour être nettoyé
+  });
+});

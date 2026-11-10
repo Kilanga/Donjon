@@ -680,7 +680,7 @@ export class Game {
       k.kills++;
       if (dropped.length || goldLost) this.say(k, `Le loot de ${p.name} est à tes pieds : !ramasse pour tout prendre.`);
       const arena = r.type === 'arene' ? 2 : 1;
-      this.gainXp(k, 20 * p.level * arena);
+      this.gainXp(k, 5 * p.level * arena); // tuer un crawler rapporte moins qu'un monstre : son loot est la vraie tentation
     }
     if (killer?.kind === 'monster') killer.m.aggro = null;
     this.onPlayerKilled(p, killer);
@@ -690,6 +690,8 @@ export class Game {
     const f = this.state.floors[floorN];
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
+    // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
+    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 3, kind: m.kind });
     if (!killer) return;
     killer.kills++;
     killer.gold += m.gold;
@@ -1037,6 +1039,7 @@ export class Game {
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
     this.themeEffects(players.filter((p) => this.state.players[p.key]));
+    this.respawnMonsters();
     // Le gardien du dernier étage se relève : la sortie se referme
     for (const f of Object.values(this.state.floors)) {
       if (f.bossBackTurn === undefined || this.state.turn < f.bossBackTurn) continue;
@@ -1489,6 +1492,26 @@ export class Game {
     if (e.actors?.includes(key)) return true;
     if (p.floor === e.floor && p.roomId === e.roomId) return true;
     return this.alliesOf(p).some((k) => e.actors?.includes(k));
+  }
+
+  /** Monstres tués il y a 3 tours : ils réapparaissent dans une salle ordinaire vide (jamais sous le nez d'un joueur). */
+  private respawnMonsters() {
+    for (const f of Object.values(this.state.floors)) {
+      if (f.collapsed || !f.respawns?.length) continue;
+      const due = f.respawns.filter((x) => x.turn <= this.state.turn);
+      if (!due.length) continue;
+      f.respawns = f.respawns.filter((x) => x.turn > this.state.turn);
+      const occupied = new Set(Object.values(this.state.players).filter((p) => p.alive && p.floor === f.n).map((p) => p.roomId));
+      const rooms = f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom && !occupied.has(r.id));
+      if (!rooms.length) {
+        f.respawns.push(...due.map((x) => ({ ...x, turn: this.state.turn + 1 }))); // tout est occupé : au tour suivant
+        continue;
+      }
+      for (const x of due) {
+        const tpl = MONSTERS.find((t) => t.kind === x.kind) ?? this.rng.pick(MONSTERS.filter((t) => t.minFloor <= f.n));
+        f.monsters.push(spawnMonster(tpl, f.n, this.rng.pick(rooms).id, this.rng, this.nextId));
+      }
+    }
   }
 
   /** Prévision du tour, pour la caméra du stream : d'après les commandes déjà tapées (et celles des PNJ, qui jouent

@@ -564,7 +564,18 @@ export class MapRenderer {
 
     // Objets de la salle
     if (r.stairs) {
+      // La sortie de l'étage : des marches qui descendent, encadrées de deux colonnes, fermées par une grille
+      // tant que l'escalier est scellé ou gardé par le boss
       for (let dy = 0; dy < 2; dy++) for (let dx = -1; dx <= 1; dx++) tiles.tile(ctx, 'floor_stairs', midCol + dx, oy + 2 + dy);
+      const seal = Math.max(0, (this.floor?.stairsInSec ?? 0) - (performance.now() - this.floorAt) / 1000);
+      const closed = !!r.bossAlive || this.floor?.stairsInSec === null || seal > 0;
+      if (closed) this.drawStretched('doors_leaf_closed', (midCol - 1) * PX, (oy + 2) * PX, 3 * PX, 2 * PX);
+      else {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; // l'ombre de la descente
+        ctx.fillRect((midCol - 1) * PX + 3, (oy + 3) * PX + 4, 3 * PX - 6, PX - 4);
+      }
+      tiles.drawAnchored(ctx, 'column', (midCol - 1.5) * PX, (oy + 4) * PX);
+      tiles.drawAnchored(ctx, 'column', (midCol + 2.5) * PX, (oy + 4) * PX);
       this.stairsMark = { x: (midCol + 0.5) * PX, y: (oy + 3) * PX, bossAlive: !!r.bossAlive };
     }
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
@@ -656,6 +667,13 @@ export class MapRenderer {
 
   private label(text: string, x: number, y: number, color: string, hp: number, maxHp: number) {
     this.labels.push({ text: text.length > 18 ? text.slice(0, 17) + '…' : text, x, y, color, hp, maxHp });
+  }
+
+  /** Sprite étiré à une taille donnée (la grille de l'escalier couvre les 3 marches). */
+  private drawStretched(name: string, x: number, y: number, w: number, h: number) {
+    const r = this.tiles.resolve(name);
+    if (!r) return;
+    this.ctx.drawImage(this.tiles.img, r.x, r.y, r.w, r.h, Math.round(x), Math.round(y), w, h);
   }
 
   /** Panneau « ESCALIER » bien visible au-dessus des marches, avec son état ; flèche au bord de l'écran s'il est hors champ. */

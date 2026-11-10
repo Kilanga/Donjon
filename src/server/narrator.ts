@@ -5,7 +5,26 @@ import { BoundedQueue, DungeonAI, MERCHANT_FALLBACK, MERCHANT_SYSTEM, NARRATOR_S
 import { CLASSES } from './game/data.js';
 import type { Game } from './game/engine.js';
 
+/** Tons de la narratrice, tirés au hasard à chaque prise de parole (pour qu'elle ne parle jamais deux fois pareil). */
+const ANGLES = [
+  'commentateur sportif survolté, comme pour un but en finale',
+  'voix off de documentaire animalier, calme et fascinée par le comportement de l\'espèce',
+  'flash info d\'urgence, ton de présentateur de journal télévisé',
+  'annonce en gare, voix monocorde de haut-parleur (« La SNCF vous informe… » version donjon)',
+  'barde emphatique qui en fait un vers de chanson de geste',
+  'statisticienne glaciale qui cite un chiffre absurde et précis',
+  'expert en assurances qui évalue froidement les dégâts',
+  'guide touristique enthousiaste qui vante l\'attraction',
+  'coach en développement personnel faussement bienveillant',
+  'présentatrice de télé-réalité qui tease la suite après la pub',
+  'historienne du donjon qui compare à un précédent tragique inventé',
+  'critique gastronomique qui note la scène comme un plat',
+  'agent immobilier qui présente la salle à vendre malgré le drame',
+  'arbitre qui annonce une décision officielle',
+];
+
 export class Narrator {
+  private recent: string[] = []; // dernières répliques, pour ne pas se répéter
   private queue = new BoundedQueue<GameEvent>(4);
   private pumping = false;
   private lastTalk = new Map<string, number>();
@@ -36,9 +55,12 @@ export class Narrator {
         const e = this.queue.shift()!;
         if (this.game.state.turn - e.turn > 2) continue; // trop vieux, plus personne ne s'en souvient
         const f = this.game.floor(e.floor);
-        const prompt = `Étage ${e.floor} (thème : ${f?.theme ?? 'inconnu'}). Évènement : ${e.text}`;
+        const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+        const before = this.recent.length ? `\nTes dernières répliques (ne reprends ni leur début ni leurs tournures) : ${this.recent.map((r) => `« ${r} »`).join(' / ')}` : '';
+        const prompt = `Étage ${e.floor} (thème : ${f?.theme ?? 'inconnu'}). Évènement : ${e.text}\nTon à adopter : ${angle}.${before}`;
         const line = await this.ai.ask(NARRATOR_SYSTEM, prompt);
         if (!line) continue;
+        this.recent = [...this.recent, line].slice(-4);
         this.deliver([this.game.narrate(line, e.floor, e.roomId)]);
       }
     } catch (err) {
