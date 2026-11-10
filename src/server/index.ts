@@ -38,6 +38,21 @@ function save() {
   if (game.state.turn % 10 === 0) fs.copyFileSync(savePath, savePath.replace(/\.json$/, `-secours-${(game.state.turn / 10) % 3}.json`));
 }
 
+// Clé de la régie : si elle n'est pas personnalisée, on en génère une aléatoire (gardée dans data/)
+if (cfg.spectatorKey === 'regie' && !process.env.SPECTATOR_KEY) {
+  const keyFile = path.join(root, 'data', 'cle-regie.txt');
+  try {
+    if (fs.existsSync(keyFile)) cfg.spectatorKey = fs.readFileSync(keyFile, 'utf8').trim();
+    else {
+      cfg.spectatorKey = Math.random().toString(36).slice(2, 10);
+      fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+      fs.writeFileSync(keyFile, cfg.spectatorKey);
+    }
+  } catch {
+    /* on garde la clé par défaut */
+  }
+}
+
 const game = new Game(cfg, process.argv.includes('--nouvelle-partie') ? undefined : loadSave());
 game.ensureFloor(1);
 
@@ -301,7 +316,7 @@ if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(
 
 server.listen(cfg.port, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
-  console.log(`  Vue spectateur : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
+  console.log(`  Régie (vue spectateur + maître du jeu, NE PAS PARTAGER) : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}`);
   console.log(`  IA du donjon : ${ai.describe()}\n`);
 });

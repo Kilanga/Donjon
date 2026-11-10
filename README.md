@@ -1,25 +1,56 @@
 # Le Donjon — prototype (phase 1)
 
 Jeu de donjon multijoueur au tour par tour, piloté par des commandes de chat (`!attaque`, `!nord`…).
-Chaque joueur suit son crawler sur une page web en pixel art. Le but de cette phase : vérifier qu'on s'amuse
-à 5–10 joueurs pendant 30 minutes, avant d'ajouter le stream, l'IA et la 3D.
+Chaque joueur suit son crawler sur une page web en pixel art ; le maître du jeu pilote la partie depuis la régie.
+Le but de cette phase : vérifier qu'on s'amuse à 5–10 joueurs pendant 30 minutes, avant d'ajouter le stream et la 3D.
 
 Spécifications complètes : doc « Le Donjon — architecture du stream interactif » (section *Cahier des charges du prototype*).
 
+## Pour la session de ce soir
+
+1. **Mets à jour** (si tu as déjà cloné) : `git pull` puis `npm install`.
+2. **Lance le jeu** : double-clic sur `lancer.bat`. La première fois, il installe tout ; ensuite il construit la page,
+   ouvre <http://localhost:3000> et démarre le serveur. Garde la fenêtre ouverte.
+3. **Repère l'adresse de la régie** affichée dans la fenêtre : `http://localhost:3000/?spectateur=xxxxxxxx`.
+   La clé est générée au premier lancement (fichier `data/cle-regie.txt`). **Ne la partage pas** : la régie peut tout faire, y compris effacer la partie.
+4. **Ouvre le tunnel** : double-clic sur `tunnel.bat` (installe `cloudflared` la première fois, relance ensuite).
+   Envoie à tes amis l'adresse `https://….trycloudflare.com` qui s'affiche.
+5. **Chaque ami** ouvre l'adresse sur PC ou téléphone, choisit un pseudo, puis une classe. L'aide s'ouvre au premier passage (bouton « ? Aide » ensuite).
+6. **Pendant la partie**, depuis la régie : pause si quelqu'un décroche, « Tour suivant » si ça traîne, lancer un vote,
+   déclencher un événement pour relancer l'action, régler la durée du tour (15 s si tout le monde suit bien, 25–30 s sinon).
+7. **À la fin**, fais une capture du classement, puis pose trois questions : qu'est-ce qui vous a fait rire ?
+   À quel moment vous vous êtes ennuyés ? Vous rejoueriez ?
+
+Pour une partie toute neuve : bouton « Nouvelle partie » de la régie, ou supprime `data/save.json` avant de lancer.
+Si quelqu'un ferme son onglet, son crawler reste dans le donjon (il riposte tout seul) : il le retrouve en revenant avec le même pseudo.
+
 ## Ce qui est en place
 
-- Tours de 20 s (réglables) ; une seule commande par tour, la dernière envoyée compte.
-- Étages générés à la demande (≈ 2 salles par joueur, 20 minimum), avec safe rooms, marchand, pièges, trésors (et mimiques), arène et boss qui garde l'escalier.
+**Le jeu**
+- Tours de 20 s (réglables, y compris en cours de partie) ; une seule commande par tour, la dernière envoyée compte.
+- Étages générés à la demande (≈ 2 salles par joueur, 20 minimum), avec safe rooms et marchand, pièges, trésors (et mimiques), arène et boss qui garde l'escalier.
 - Chaque étage s'effondre au bout de 15 min : ceux qui restent dessus meurent et réapparaissent à l'étage suivant.
 - 4 classes (Barbare, Chevalier, Voleur, Mage), 4 stats, jets `d20 + stat + niveau/2`, critiques, fiascos et gags.
 - Niveaux, XP, points de stat (`!monte`), loot à 4 raretés avec objets absurdes, or, achat/vente.
 - Combat entre joueurs partout sauf en safe room ; alliances (XP et carte partagées) ; trahisons (bonus au jet, vol d'or, marque de traître).
 - Mort : réapparition après 5 tours en safe room, loot laissé au sol, −25 % de l'XP du niveau, puis 3 min d'immunité JvJ.
 - Joueur inactif : continue d'attaquer s'il attaquait, sinon riposte s'il est attaqué.
-- Page joueur 2D pixel art avec brouillard de guerre, faux chat, boutons d'action, journal.
-- Vue spectateur sans brouillard (pour toi, et plus tard pour le stream).
-- Lecture du vrai chat Twitch en option (sans jeton).
-- Sauvegarde automatique à chaque tour (`data/save.json`).
+- **Votes de la production** toutes les 4 min (voir plus bas) et **prime** sur le meilleur tueur.
+
+**La page joueur**
+- Carte pixel art avec brouillard de guerre, fiche perso, salle, inventaire, journal, chat.
+- Messages libres : tout ce qui ne commence pas par `!` s'affiche en bulle au-dessus de ton crawler (comme le chat Twitch).
+- Classement, titres (boucher, traître en chef…) et nécrologie ; bandeau de vote ; effets en cours (happy hour, inondation, prime).
+- Utilisable sur téléphone ; raccourcis clavier sur PC.
+
+**La régie** (vue spectateur avec la clé)
+- Toute la carte sans brouillard, liste des crawlers, classement.
+- Pause/reprise (les chronos sont gelés), tour suivant, lancer un vote, déclencher un événement, effondrer l'étage affiché,
+  soigner tout le monde, changer la durée du tour, expulser un joueur, nouvelle partie.
+
+**Technique**
+- Sauvegarde à chaque tour (`data/save.json`) + 3 sauvegardes de secours en rotation ; une erreur ne fait pas tomber la partie.
+- Lecture du vrai chat Twitch en option (sans jeton) ; IA du donjon en option (Ollama ou API Claude).
 
 ## Installation (Windows)
 
@@ -34,21 +65,22 @@ npm install
 
 ## Lancer une partie
 
+Double-clic sur `lancer.bat`, ou en ligne de commande :
+
 ```powershell
-npm run dev
+npm run dev        # construit la page puis démarre le serveur
+npm start          # démarre sans reconstruire la page
+npm start -- --nouvelle-partie   # repart de zéro
 ```
 
-Cette commande construit la page puis démarre le serveur. Ensuite :
-
 - **Jouer** : <http://localhost:3000> — choisis un pseudo puis une classe.
-- **Vue spectateur** (toute la carte, sans brouillard) : <http://localhost:3000/?spectateur=regie>
+- **Régie** : l'adresse avec la clé s'affiche au démarrage.
 
-Pour relancer sans reconstruire la page : `npm start`. Pour repartir de zéro : `npm start -- --nouvelle-partie`
-(ou supprime `data/save.json`). `Ctrl+C` arrête le serveur et sauvegarde la partie.
+`Ctrl+C` arrête le serveur et sauvegarde la partie. Après un `git pull`, relance `lancer.bat` (ou `npm install` puis `npm run dev`).
 
 ## Faire jouer des amis à distance
 
-Le serveur tourne sur ton PC ; un tunnel gratuit Cloudflare lui donne une adresse publique.
+Le serveur tourne sur ton PC ; un tunnel gratuit Cloudflare lui donne une adresse publique. Double-clic sur `tunnel.bat`, ou :
 
 ```powershell
 winget install --id Cloudflare.cloudflared
@@ -58,30 +90,52 @@ cloudflared tunnel --url http://localhost:3000
 `cloudflared` affiche une adresse en `https://….trycloudflare.com` : envoie-la à tes amis.
 Elle change à chaque lancement, et ton PC doit rester allumé pendant la session.
 
+## Votes de la production
+
+Toutes les 4 minutes, la production propose 3 événements tirés au hasard. Les joueurs votent pendant 3 tours avec
+`!vote 1`, `!vote 2` ou `!vote 3` (ou en cliquant dans le bandeau). Sans vote, la production choisit seule.
+La régie peut aussi lancer un vote ou déclencher un événement directement.
+
+| Événement | Effet |
+| --- | --- |
+| Pluie d'or | Des tas d'or tombent dans des salles au hasard |
+| Lâcher de monstres | Une fournée de monstres errants |
+| Happy hour | Marchands à −50 % et réapprovisionnés pendant 10 tours |
+| Résurrection générale | Tous les morts reviennent au tour suivant |
+| Prime sur le meilleur tueur | De l'or pour qui tue le crawler qui a le plus de kills (15 tours) |
+| Inondation | Pendant 5 tours, un déplacement sur trois échoue |
+| Festin | Tous les vivants récupèrent leurs PV |
+| Pièges en promo | Pièges réarmés, trois salles de plus piégées |
+| Prolongation / Accélération | Les étages tiennent 3 min de plus / s'effondrent 2 min plus tôt |
+
+Les textes et la liste se règlent dans `src/server/game/production.ts` (et l'application dans `engine.ts`, `applyProduction`).
+
 ## Réglages
 
 Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 
 | Réglage | Défaut | Rôle |
 | --- | --- | --- |
-| `turnSeconds` | 20 | Durée d'un tour (s) |
+| `turnSeconds` | 20 | Durée d'un tour (s) ; modifiable aussi depuis la régie |
 | `floorMinutes` | 15 | Durée de vie d'un étage avant effondrement (min) |
 | `respawnTurns` | 5 | Tours avant réapparition |
 | `immunitySeconds` | 180 | Immunité JvJ après arrivée ou réapparition (s) |
 | `roomsPerPlayer` / `minRooms` | 2 / 20 | Taille des étages |
 | `deathXpLoss` | 0.25 | Part de l'XP du niveau perdue à la mort |
-| `spectatorKey` | `regie` | Clé de la vue spectateur — change-la si tu partages l'adresse |
+| `voteEveryMinutes` / `voteTurns` | 4 / 3 | Fréquence des votes (0 = jamais) / durée d'un vote en tours |
+| `spectatorKey` | `regie` | Clé de la régie ; `regie` = clé aléatoire générée dans `data/cle-regie.txt` |
 | `twitchChannel` | vide | Nom de ta chaîne Twitch pour lire les commandes du chat |
 | `ai` | désactivée | IA du donjon, voir plus bas |
 
-Pour tester vite seul, mets par exemple `"turnSeconds": 5` et `"floorMinutes": 5`.
+Pour tester vite seul : `"turnSeconds": 5`, `"floorMinutes": 5`, puis `npm run bots -- 6` dans un second terminal.
 
 ## Brancher le vrai chat Twitch
 
 Mets ton nom de chaîne dans `config.json` (`"twitchChannel": "tachaine"`) et relance.
 Le serveur lit le chat en anonyme (aucun jeton nécessaire) : chaque message qui commence par `!` est une commande,
-avec le pseudo Twitch comme nom de joueur. Un spectateur peut suivre son crawler sur la page web en entrant
-**le même pseudo** que sur Twitch. Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent sur la page.
+avec le pseudo Twitch comme nom de joueur ; les autres messages s'affichent en bulle au-dessus du crawler.
+Un spectateur peut suivre son crawler sur la page web en entrant **le même pseudo** que sur Twitch.
+Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent sur la page.
 
 ## Commandes
 
@@ -89,19 +143,22 @@ avec le pseudo Twitch comme nom de joueur. Un spectateur peut suivre son crawler
 | --- | --- | --- |
 | `!join [classe]` | `!join` | Entrer dans le donjon (`barbare`, `chevalier`, `voleur`, `mage`) |
 | `!nord` `!sud` `!est` `!ouest` | `!north` `!south` `!east` `!west` | Changer de salle (fuir un monstre demande un jet d'Agilité) |
-| `!attaque [cible]` | `!attack` | Attaquer un monstre (nom ou numéro) ou un joueur (pseudo) |
+| `!attaque [cible]` | `!attack` | Attaquer un monstre (nom ou numéro) ou un joueur (pseudo) ; un allié = trahison |
 | `!fouille` | `!search` | Fouiller, ouvrir un coffre, désarmer un piège |
 | `!ramasse [objet]` | `!pickup` | Ramasser l'or et les objets au sol |
 | `!utilise <objet>` / `!equipe <objet>` | `!use` / `!equip` | Utiliser ou équiper (nom ou numéro dans le sac) |
 | `!marchand`, `!achete <n°>`, `!vends <objet>` | `!shop`, `!buy`, `!sell` | Commerce en safe room |
+| `!parle <message>` | `!talk` | Parler au marchand (safe room) |
 | `!repos` | `!rest` | Récupérer des PV en safe room |
-| `!parle <message>` | `!talk` | Discuter avec le marchand (safe room ; réponse de l'IA si activée) |
 | `!alliance <joueur>` / `!quitte` | `!ally` / `!leave` | Proposer/accepter une alliance, ou la quitter |
 | `!monte <for/agi/int/cha>` | `!levelup` | Dépenser un point de stat (immédiat) |
 | `!descendre` | `!down` | Prendre l'escalier une fois le boss vaincu |
+| `!vote <n°>` | `!vote` | Voter pour l'événement de la production (immédiat) |
 | `!statut`, `!aide` | `!status`, `!help` | Infos |
+| un message sans `!` ou `!dis …` | `!say` | Parler : bulle au-dessus de ton crawler |
 
-Raccourcis clavier sur la page : flèches ou ZQSD pour se déplacer, `F` fouiller, `A` attaquer.
+Raccourcis clavier sur la page : flèches ou ZQSD pour se déplacer, `F` fouiller, `A` attaquer, `?` aide,
+flèches haut/bas dans le champ de commande pour l'historique.
 
 ## IA du donjon (optionnel)
 
@@ -160,7 +217,7 @@ Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirm
 ## Tests et outils
 
 ```powershell
-npm test               # tests du moteur (règles, génération, mort, alliances, effondrement)
+npm test               # tests (règles, génération, mort, alliances, effondrement, votes, régie, IA simulée)
 npm run simulate       # simule une session de 10 bots pendant 1 h de jeu et affiche un bilan
 npm run bots -- 6      # connecte 6 bots au serveur lancé, pour voir la page s'animer
 npm run typecheck      # vérification TypeScript
@@ -171,7 +228,9 @@ npm run typecheck      # vérification TypeScript
 ```
 src/shared/        types et analyse des commandes, partagés serveur/page
 src/server/        serveur HTTP + WebSocket, sauvegarde, Twitch
-src/server/game/   moteur : engine.ts (tours, combats…), dungeon.ts (génération), data.ts (classes, objets, monstres, textes)
+src/server/game/   moteur : engine.ts (tours, combats, votes…), dungeon.ts (génération), data.ts (classes, objets,
+                   monstres, textes), production.ts (événements soumis au vote)
+src/server/ai.ts   appels à l'IA (Ollama / API Claude) ; narrator.ts : narration et marchand
 client/            page joueur (Vite) : main.ts (interface), map.ts (rendu pixel art), tiles.ts (planche de sprites)
 scripts/           simulation et bots de test
 tests/             tests Vitest
@@ -185,4 +244,5 @@ Presque tout l'équilibrage se règle dans `src/server/game/data.ts` (stats des 
 - La lecture du chat Twitch n'a pas pu être testée en conditions réelles.
 - Pas de comptes : n'importe qui peut prendre un pseudo sur la page. Suffisant entre amis, à revoir pour Twitch.
 - L'IA du donjon (Ollama ou API Claude) n'a pas pu être testée en conditions réelles.
-- Hors périmètre de la phase 1 : stream 3D, réalisateur, IA des PNJ, points de chaîne.
+- La régie est protégée par une simple clé dans l'adresse : ne la partage pas.
+- Hors périmètre de la phase 1 : stream 3D, IA des PNJ, points de chaîne.

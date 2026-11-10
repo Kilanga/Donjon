@@ -11,7 +11,7 @@ export interface GameConfig {
   roomsPerPlayer: number; // taille d'étage : salles par joueur actif
   minRooms: number; // taille minimale d'un étage
   deathXpLoss: number; // part de l'XP du niveau en cours perdue à la mort (0-1)
-  spectatorKey: string; // clé pour la vue spectateur (sans brouillard)
+  spectatorKey: string; // clé de la régie (vue sans brouillard + commandes MJ) ; 'regie' = clé aléatoire générée
   twitchChannel: string; // chaîne Twitch à écouter ('' = désactivé)
   savePath: string;
   voteEveryMinutes: number; // fréquence des votes de la production (0 = jamais)
