@@ -368,7 +368,9 @@ function tickHud() {
     if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
-      el.textContent = `Effondrement dans ${fmtTime(rest)}`;
+      const st = state.floor?.stairsInSec;
+      const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
+      el.textContent = seal > 0 ? `🔒 Escalier scellé encore ${fmtTime(seal)} · effondrement dans ${fmtTime(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmtTime(rest)}`;
       el.classList.toggle('urgent', rest < 60);
     } else el.textContent = state.floor ? 'Chrono : en attente d\'un aventurier' : '';
   }

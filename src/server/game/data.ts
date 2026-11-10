@@ -106,6 +106,9 @@ export const MONSTERS: MonsterTpl[] = [
   { kind: 'marais', names: ['Horreur des marais', 'Crapaud des tourbières'], sprite: 'swampy_anim', hp: 22, atk: 4, def: 4, dmg: 8, xp: 65, gold: [8, 20], minFloor: 5 },
   { kind: 'golem', names: ['Golem de boue', 'Colosse de vase'], sprite: 'muddy_anim', hp: 28, atk: 3, def: 6, dmg: 10, xp: 70, gold: [10, 22], minFloor: 5 },
   { kind: 'lezard', names: ['Homme-lézard assassin', 'Lézard des profondeurs'], sprite: 'lizard_m_idle_anim', hp: 16, atk: 7, def: 4, dmg: 10, xp: 80, gold: [12, 26], minFloor: 6, wanderer: true },
+  { kind: 'gargouille', names: ['Gargouille sculptée', 'Gargouille de l\'ancienne voûte'], sprite: 'muddy_anim', hp: 30, atk: 5, def: 8, dmg: 10, xp: 90, gold: [14, 28], minFloor: 7 },
+  { kind: 'chevalier_noir', names: ['Chevalier déchu', 'Garde noir sans visage'], sprite: 'orc_warrior_idle_anim', hp: 24, atk: 8, def: 6, dmg: 12, xp: 100, gold: [16, 32], minFloor: 7, wanderer: true },
+  { kind: 'wyrm', names: ['Wyrmling des abîmes', 'Jeune vouivre'], sprite: 'big_demon_idle_anim', hp: 26, atk: 9, def: 5, dmg: 12, xp: 115, gold: [18, 36], minFloor: 8, wanderer: true },
 ];
 
 export const MIMIC: MonsterTpl = { kind: 'mimique', names: ['Mimique (ce n\'était pas un coffre)'], sprite: 'chest_mimic_open_anim', hp: 16, atk: 4, def: 2, dmg: 8, xp: 50, gold: [15, 40], minFloor: 1 };
@@ -116,6 +119,8 @@ export const BOSSES: MonsterTpl[] = [
   { kind: 'yeti_ancien', names: ['Grimfrost, le Yéti Ancien'], sprite: 'ogre_idle_anim', hp: 48, atk: 7, def: 5, dmg: 12, xp: 350, gold: [80, 140], minFloor: 4, boss: true },
   { kind: 'dragon', names: ['Vorthrax, dragon des profondeurs'], sprite: 'big_demon_idle_anim', hp: 52, atk: 8, def: 6, dmg: 14, xp: 450, gold: [100, 180], minFloor: 5, boss: true },
   { kind: 'crapaud_roi', names: ['Gorgoth, le Crapaud-Roi'], sprite: 'big_zombie_idle_anim', hp: 56, atk: 7, def: 7, dmg: 12, xp: 500, gold: [120, 200], minFloor: 6, boss: true },
+  { kind: 'liche', names: ['Malzeth, la Liche aux Mille Noms'], sprite: 'necromancer_anim', hp: 60, atk: 9, def: 7, dmg: 14, xp: 600, gold: [140, 220], minFloor: 7, boss: true },
+  { kind: 'dragon_ancien', names: ['Nyxareth, Dévoreuse d\'Étages'], sprite: 'big_demon_idle_anim', hp: 70, atk: 10, def: 8, dmg: 15, xp: 800, gold: [180, 300], minFloor: 8, boss: true },
   { kind: 'gros_demon', names: ['Baal-Zéphor, seigneur des abysses'], sprite: 'big_demon_idle_anim', hp: 36, atk: 6, def: 4, dmg: 10, xp: 220, gold: [50, 90], minFloor: 1, boss: true },
 ];
 
@@ -185,6 +190,7 @@ export const MERCHANT_TIPS = [
   "!fouille ramasse ce qui traîne, ouvre les coffres et désarme les pièges. Mon outil préféré.",
   "Un mort laisse tout son loot au sol. !ramasse. Je ne juge pas.",
   "Chaque étage s'effondre au bout du chrono. Trouve le boss, bats-le, puis !descendre.",
+  "L'escalier reste scellé pendant la première moitié de l'étage. Profites-en pour piller et prendre des niveaux : en bas, ça cogne.",
   "Ici, personne ne se bat. En arrivant ou en revenant d'entre les morts, tu es intouchable 3 minutes, et tu ne peux toucher personne.",
   "Attaquer un allié, c'est une trahison : gros bonus, et tout le monde le saura.",
   "!repos te soigne, mais seulement ici. !marchand pour voir mon stock. Les prix sont honnêtes. Presque.",

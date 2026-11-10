@@ -99,7 +99,7 @@ describe('PNJ figurants', () => {
     }
     expect(bots.bots().every((b) => b.closer)).toBe(true);
     expect(descents).toHaveLength(0);
-    expect(Math.max(...bots.bots().map((b) => b.deepest))).toBe(4);
+    expect(Math.max(...bots.bots().map((b) => b.deepest))).toBe(4); // jamais au-delà du dernier étage
     expect(g.state.seasonOver).toBe(true);
     expect(Object.values(g.state.floors).filter((f) => f.n > 1 && f.collapsed).length).toBeGreaterThanOrEqual(3);
   });

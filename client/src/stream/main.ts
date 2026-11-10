@@ -166,7 +166,7 @@ function renderHud(s: PlayerViewMsg) {
     $('floors').classList.remove('hidden');
     $('floors').innerHTML = '<h3>Les étages</h3>' + s.floors.map((x) => {
       const who = [x.humans ? `${x.humans} ⚔` : '', x.bots ? `${x.bots} PNJ` : ''].filter(Boolean).join(' · ') || 'vide';
-      const t = x.collapseInSec === null ? '—' : fmt(x.collapseInSec);
+      const t = x.collapseInSec === null ? '—' : `${x.stairsInSec ? '🔒' : '🔓'} ${fmt(x.collapseInSec)}`;
       return `<div class="f ${x.n === f?.n ? 'on' : ''}"><span class="n">Étage ${x.n}</span><span class="w">${who}</span><span class="t ${x.collapseInSec !== null && x.collapseInSec < 60 ? 'urgent' : ''}">${t}</span></div>`;
     }).join('');
   } else $('floors').classList.add('hidden');
@@ -221,8 +221,11 @@ function tickHud() {
     $('turn-bar').style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = state.floor?.collapseInSec;
     if (c !== null && c !== undefined) {
-      const rest = Math.max(0, c - (now - state.serverNow) / 1000);
-      $('collapse').textContent = `Effondrement dans ${fmt(rest)}`;
+      const elapsed = (now - state.serverNow) / 1000;
+      const rest = Math.max(0, c - elapsed);
+      const st = state.floor?.stairsInSec;
+      const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
+      $('collapse').textContent = seal > 0 ? `🔒 Escalier scellé ${fmt(seal)} · effondrement ${fmt(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmt(rest)}`;
       $('collapse').classList.toggle('urgent', rest < 60);
     } else $('collapse').textContent = state.floor ? 'Chrono en attente d\'un aventurier' : '';
   }

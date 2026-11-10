@@ -105,6 +105,7 @@ export interface FloorView {
   uid?: string; // change quand l'étage est recreusé
   theme: string;
   collapseInSec: number | null;
+  stairsInSec?: number | null; // escalier scellé : secondes avant qu'il s'ouvre (0 = ouvert, null = saison pas commencée)
   rooms: RoomView[];
 }
 
@@ -213,6 +214,7 @@ export interface FloorSummary {
   humans: number; // vrais joueurs vivants
   bots: number; // PNJ figurants vivants
   collapseInSec: number | null;
+  stairsInSec?: number | null;
 }
 
 export type ServerMsg =

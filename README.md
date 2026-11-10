@@ -122,7 +122,8 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | Réglage | Défaut | Rôle |
 | --- | --- | --- |
 | `turnSeconds` | 20 | Durée d'un tour (s) ; modifiable aussi depuis la régie |
-| `floorMinutes` | 15 | Durée de vie d'un étage avant effondrement (min) |
+| `floorMinutes` | 20 | L'étage n s'effondre n × floorMinutes après le début de la saison (min) |
+| `stairsOpenMinutes` | 10 | L'escalier n'est descellé que pendant ces dernières minutes de l'étage |
 | `respawnTurns` | 5 | Tours avant réapparition |
 | `immunitySeconds` | 180 | Immunité JvJ après arrivée ou réapparition (s) |
 | `roomsPerPlayer` / `minRooms` | 2 / 20 | Taille des étages |
@@ -143,15 +144,29 @@ défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
 - **Nouvelles créatures en profondeur :** orques (étage 2), chefs de guerre et nécromanciens (3), yétis et chamans (4),
   horreurs des marais et golems de boue (5), hommes-lézards assassins (6). Plus on descend, plus les monstres faibles disparaissent.
 - **Boss :** Grondak, Moragh et Baal-Zéphor aux étages 1 à 3, puis Grimfrost le Yéti Ancien (4), Vorthrax le dragon (5)
-  et Gorgoth le Crapaud-Roi (6).
+  Gorgoth le Crapaud-Roi (6), Malzeth la Liche (7) et Nyxareth, Dévoreuse d'Étages (8). Gargouilles et chevaliers déchus
+  à partir du 7, wyrmlings au 8.
 - **Thèmes avec effets :** *inondé* (un déplacement sur trois glisse), *en feu* (braises : −2 PV de temps en temps hors safe room),
   *plongé dans le noir* (−2 pour toucher, mais fuir est plus facile), *moisi* (les monstres regagnent 1 PV par tour),
   *hanté* (des fantômes volent un peu d'or et le cachent ailleurs). L'effet est annoncé à la création de l'étage
   et rappelé au survol du thème sur la page joueur.
 
+## Rythme d'une saison (≈ 2 h 40)
+
+La saison démarre quand le premier vrai joueur entre. Ensuite tout est **à heure fixe** : l'étage *n* s'effondre
+*n* × 20 min plus tard, quel que soit le rythme du chat. Sur chaque étage :
+
+1. **Escalier scellé** (10 premières minutes) : on explore, on pille, on prend des niveaux. `!descendre` répond dans combien
+   de temps il s'ouvre. Il faut vraiment ce temps : les étages profonds cognent fort.
+2. **« L'escalier se descelle ! »** (10 dernières minutes) : on bat le boss et on descend avant l'effondrement.
+
+Avec 8 étages, la saison dure 2 h 40 : la sortie finale s'ouvre vers 2 h 30, la fin tombe à 2 h 40. Pour plus court ou plus
+long : `floorMinutes` (ex. 22 → ~2 h 55) ou `finalFloor`. Les retardataires arrivés en cours de route trouvent un étage 1
+recreusé qui garde au moins `floorMinutes` de vie.
+
 ## Fin du donjon et Légendes
 
-Le **dernier étage** (6 par défaut, réglable : `"finalFloor": 5` dans `config.json` ou `FINAL_FLOOR=5`) a son chrono
+Le **dernier étage** (8 par défaut, réglable : `"finalFloor": 6` dans `config.json` ou `FINAL_FLOOR=6`) a son chrono
 comme les autres, mais **son effondrement termine la saison** : la partie se fige, le stream affiche « FIN DE LA SAISON »
 avec les Légendes, et les commandes répondent que la saison est finie (« Nouvelle partie » dans la régie pour recommencer).
 Son boss garde la **sortie** : une fois vaincu, la sortie reste ouverte **6 tours** — `!descendre` dans sa salle fait sortir
@@ -180,8 +195,8 @@ joueur, mais on peut les attaquer) et marqués **PNJ** partout.
 
 En plus, **4 retardataires** (Gaspard le Traînard, Mamie Odette, Firmin, Hubert le Lent…) entrent juste après le premier
 vrai joueur. Ils ne prennent **jamais** l'escalier : ils explorent, tapent, et tombent avec chaque étage qui s'effondre.
-Comme ils lancent le chrono des étages où ils atterrissent, la saison va toujours jusqu'à l'effondrement du dernier étage,
-même si le chat ralentit : environ 1 h 30 au maximum avec `"floorMinutes": 15` (moins si des joueurs foncent au 6e).
+Ils assurent qu'il y a toujours du monde sur chaque étage jusqu'à son effondrement, et que la saison va jusqu'au bout
+même si le chat se vide.
 Réglage : `"closers": 4` dans `config.json` ou variable `CLOSERS`.
 - Ils sont exclus des statistiques de participation du rapport de session.
 

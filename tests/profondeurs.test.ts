@@ -90,6 +90,7 @@ describe('dernier étage et légendes', () => {
     g.submit('ana', '!join barbare', T0);
     const p = g.player('ana')!;
     const f2 = g.freshFloor(2);
+    f2.collapseAt = T0 + 5 * 60_000; // escalier descellé (dernières minutes de l'étage)
     p.floor = 2;
     p.roomId = f2.bossRoom;
     for (const m of f2.monsters) if (m.roomId === f2.bossRoom) m.hp = 0;

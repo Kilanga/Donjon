@@ -38,6 +38,11 @@ const MONSTER_LOOK: Record<string, Look> = {
   yeti_ancien: { model: 'q_yeti', scale: 1.6, tint: 0xd8ecff, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xd0e8ff } },
   dragon: { model: 'q_dragon', scale: 1.5, emissive: 0x301000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff8040, emissive: 0x401000 } },
   crapaud_roi: { model: 'q_crapaud', scale: 1.6, tint: 0xc0e090, repli: { model: 'sk_minion', scale: 1.8, tint: 0x90c070 } },
+  gargouille: { model: 'q_golem', scale: 1.0, tint: 0x9098a8, repli: { model: 'sk_warrior', scale: 1.3, tint: 0x8890a0 } },
+  chevalier_noir: { model: 'sk_warrior', scale: 1.2, tint: 0x505068, emissive: 0x100020 },
+  wyrm: { model: 'q_dragon', scale: 0.95, tint: 0xb090ff, repli: { model: 'sk_rogue', scale: 1.1, tint: 0xa080ff } },
+  liche: { model: 'sk_mage', scale: 1.8, tint: 0xc0b0ff, emissive: 0x200040 },
+  dragon_ancien: { model: 'q_dragon', scale: 1.9, tint: 0x8a3030, emissive: 0x400000, repli: { model: 'sk_rogue', scale: 2, tint: 0xff4040, emissive: 0x400000 } },
   gros_demon: { model: 'q_diablotin', scale: 1.3, emissive: 0x501000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff5050, emissive: 0x400000 } },
 };
 

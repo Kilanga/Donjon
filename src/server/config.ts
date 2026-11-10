@@ -5,7 +5,8 @@ import { DEFAULT_AI, type AiConfig, type AiProvider } from './ai.js';
 export interface GameConfig {
   port: number;
   turnSeconds: number; // durée d'un tour
-  floorMinutes: number; // durée de vie d'un étage avant effondrement
+  floorMinutes: number; // durée de vie d'un étage avant effondrement (l'étage n tombe n × floorMinutes après le début de la saison)
+  stairsOpenMinutes: number; // l'escalier n'est descellé que pendant les N dernières minutes de l'étage
   respawnTurns: number; // tours avant réapparition
   immunitySeconds: number; // immunité JvJ après réapparition
   roomsPerPlayer: number; // taille d'étage : salles par joueur actif
@@ -26,7 +27,8 @@ export interface GameConfig {
 export const DEFAULT_CONFIG: GameConfig = {
   port: 3000,
   turnSeconds: 20,
-  floorMinutes: 15,
+  floorMinutes: 20,
+  stairsOpenMinutes: 10,
   respawnTurns: 5,
   immunitySeconds: 180,
   roomsPerPlayer: 2,
@@ -39,7 +41,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   voteTurns: 3,
   bots: 10,
   closers: 4,
-  finalFloor: 6,
+  finalFloor: 8,
   ai: { ...DEFAULT_AI },
 };
 
@@ -58,6 +60,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   cfg.port = num(env.PORT) ?? cfg.port;
   cfg.turnSeconds = num(env.TURN_SECONDS) ?? cfg.turnSeconds;
   cfg.floorMinutes = num(env.FLOOR_MINUTES) ?? cfg.floorMinutes;
+  cfg.stairsOpenMinutes = num(env.STAIRS_OPEN_MINUTES) ?? cfg.stairsOpenMinutes;
   cfg.respawnTurns = num(env.RESPAWN_TURNS) ?? cfg.respawnTurns;
   cfg.immunitySeconds = num(env.IMMUNITY_SECONDS) ?? cfg.immunitySeconds;
   cfg.spectatorKey = env.SPECTATOR_KEY ?? cfg.spectatorKey;

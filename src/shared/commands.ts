@@ -117,7 +117,7 @@ export const HELP_TEXT = [
   '!parle <message> — discuter avec le marchand (safe room)',
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',
-  '!descendre — prendre l\'escalier (salle du boss vaincu)',
+  '!descendre — prendre l\'escalier (boss vaincu, et escalier descellé : dernière moitié du chrono)',
   '!vote <n°> — voter pour l\'événement proposé par la production',
   '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',
   '!commandes ou !aide — afficher cette liste',

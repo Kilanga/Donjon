@@ -217,9 +217,43 @@ describe('étages', () => {
     p.alive = true;
     p.hp = p.maxHp;
     p.roomId = f.bossRoom;
+    // Boss vaincu, mais l'escalier est encore scellé (première moitié de l'étage)
     g.submit('a', '!descendre', T0 + 20_000);
     g.tick(T0 + 40_000);
+    expect(p.floor).toBe(1);
+    expect(g.stairsInMs(f)).toBeGreaterThan(0);
+    // Il se descelle à mi-parcours (floorMinutes − stairsOpenMinutes), avec une annonce
+    const open = T0 + (DEFAULT_CONFIG.floorMinutes - DEFAULT_CONFIG.stairsOpenMinutes) * 60_000;
+    const ev = g.tick(open + 1000);
+    expect(ev.some((e) => /SE DESCELLE/.test(e.text))).toBe(true);
+    p.alive = true;
+    p.hp = p.maxHp;
+    p.roomId = f.bossRoom;
+    g.submit('a', '!descendre', open + 2000);
+    g.tick(open + 21_000);
     expect(p.floor).toBe(2);
+  });
+
+  it('les étages tombent à heure fixe depuis le début de la saison, quel que soit le rythme', () => {
+    const g = setup();
+    const F = DEFAULT_CONFIG.floorMinutes * 60_000;
+    g.submit('a', '!join', T0);
+    expect(g.state.seasonStart).toBe(T0);
+    expect(g.floor(1)!.collapseAt).toBe(T0 + F);
+    // Quelqu'un arrive très tôt à l'étage 3 : il tombe quand même à T0 + 3F
+    const p = g.player('a')!;
+    const f3 = g.freshFloor(3);
+    p.floor = 3;
+    p.roomId = f3.spawnRoom;
+    g.submit('a', '!fouille', T0 + 60_000);
+    g.tick(T0 + 80_000);
+    p.alive = true;
+    // (le chrono s'arme à l'arrivée : on le déclenche par une réapparition sur place)
+    p.alive = false;
+    p.respawnIn = 1;
+    p.deathTurn = -1;
+    g.tick(T0 + 100_000);
+    expect(g.floor(3)!.collapseAt).toBe(T0 + 3 * F);
   });
 });
 

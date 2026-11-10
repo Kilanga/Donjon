@@ -96,6 +96,7 @@ export interface FloorState {
   collapsed: boolean;
   warned5?: boolean;
   warned1?: boolean;
+  stairsOpened?: boolean; // l'annonce « l'escalier se descelle » a été faite
   bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
 }
 
@@ -120,13 +121,14 @@ export interface GameState {
   floodUntil: number; // tour de fin de l'inondation
   champions: import('../../shared/types.js').Legend[]; // sortis vainqueurs pendant cette partie
   seasonOver: boolean; // le dernier étage s'est effondré : la saison est finie, la partie est figée
+  seasonStart: number | null; // arrivée du premier vrai joueur : l'horloge de la saison (étage n tombe à seasonStart + n × floorMinutes)
   bounty: { target: string; gold: number; untilTurn: number } | null;
 }
 
 export function emptyState(seed: number): GameState {
   return {
     version: 1, turn: 0, nextId: 1, rng: seed >>> 0, floors: {}, players: {}, alliances: {}, events: [],
-    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [], seasonOver: false,
+    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [], seasonOver: false, seasonStart: null,
   };
 }
 

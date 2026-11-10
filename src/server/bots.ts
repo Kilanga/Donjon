@@ -172,14 +172,17 @@ export class BotManager {
       return '!ramasse';
     }
     if (r.type === 'tresor' && r.chest === 'ferme') return '!fouille';
-    if (r.stairs && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
+    const open = g.stairsOpen(f);
+    if (r.stairs && open && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
     if (r.type !== 'safe' && !r.searchedBy && !r.trapArmed && Math.random() < 0.5) return '!fouille';
     if (g.state.vote && !g.state.vote.votes[p.key] && Math.random() < 0.3) return `!vote ${1 + Math.floor(Math.random() * g.state.vote.options.length)}`;
 
     // Déplacement : vers l'escalier si l'étage presse, sinon vers une salle encore inconnue
     // (les retardataires, eux, ne cherchent jamais l'escalier : ils restent jusqu'à l'effondrement)
     const pressing = f.collapseAt !== null && f.collapseAt - Date.now() < 6 * 60_000;
-    let dest: number | null = !p.closer && (pressing || p.level >= 3) ? f.bossRoom : null;
+    // escalier scellé : on explore et on prend des niveaux ; descellé : on y va (les plus forts vont aussi taper le boss avant)
+    const bossAlive = f.monsters.some((m) => m.boss && m.hp > 0);
+    let dest: number | null = !p.closer && ((open && (pressing || p.level >= 2)) || (bossAlive && p.level >= 3 + Math.floor(f.n / 3))) ? f.bossRoom : null;
     if (dest === null) {
       const dist = bfs(f.rooms, r.id);
       let best = Infinity;

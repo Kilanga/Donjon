@@ -27,6 +27,13 @@ export interface SubmitResult {
   text: string;
 }
 
+/** « 7 min 30 s », « 45 s » */
+function fmtWait(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m ? `${m} min${s % 60 ? ` ${s % 60} s` : ''}` : `${s} s`;
+}
+
 export class Game {
   state: GameState;
   cfg: GameConfig;
@@ -143,13 +150,30 @@ export class Game {
     return f;
   }
 
-  /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (ou d'un retardataire ; les autres PNJ ne le déclenchent pas). */
+  /** Arme le chrono d'un étage. La saison démarre à l'arrivée du premier vrai joueur (les PNJ figurants ne la lancent pas) ;
+   *  ensuite l'étage n tombe à heure fixe, seasonStart + n × floorMinutes, quel que soit le rythme des joueurs
+   *  (un étage recreusé pour les retardataires garde au moins floorMinutes de vie). */
   private startTimer(f: FloorState, p?: PlayerState) {
-    if (p?.bot && !p.closer) return;
-    if (f.startedAt === null) {
-      f.startedAt = this.now;
-      f.collapseAt = this.now + this.cfg.floorMinutes * 60_000;
+    if (this.state.seasonStart === null) {
+      if (p?.bot && !p.closer) return;
+      this.state.seasonStart = this.now;
     }
+    if (f.startedAt === null) {
+      const F = this.cfg.floorMinutes * 60_000;
+      f.startedAt = this.now;
+      f.collapseAt = Math.max(this.state.seasonStart + f.n * F, this.now + F);
+    }
+  }
+
+  /** L'escalier n'est descellé que pendant les dernières minutes de l'étage (et jamais avant le début de la saison). */
+  stairsOpen(f: FloorState): boolean {
+    return this.stairsInMs(f) === 0;
+  }
+
+  /** Temps avant que l'escalier se descelle (0 = ouvert, null = la saison n'a pas commencé). */
+  stairsInMs(f: FloorState): number | null {
+    if (f.collapseAt === null) return null;
+    return Math.max(0, f.collapseAt - this.cfg.stairsOpenMinutes * 60_000 - this.now);
   }
 
   /** L'étage le moins profond encore debout : là où arrivent les nouveaux. */
@@ -924,6 +948,12 @@ export class Game {
     const r = f.rooms[p.roomId];
     if (!r.stairs) return this.say(p, 'Il n\'y a pas d\'escalier ici. Il est dans la salle du boss.');
     if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'Le boss bloque l\'escalier. Il faut d\'abord le vaincre.');
+    const wait = this.stairsInMs(f);
+    if (wait !== 0) {
+      return this.say(p, wait === null
+        ? 'L\'escalier est scellé : il s\'ouvrira quand la saison commencera.'
+        : `L'escalier est encore scellé : il s'ouvre dans ${fmtWait(wait)}. En attendant, explore, pille et prends des niveaux : plus bas, ça ne pardonne pas.`);
+    }
     if (f.n >= this.cfg.finalFloor) return this.finish(p);
     const next = this.freshFloor(f.n + 1);
     this.startTimer(next, p);
@@ -955,8 +985,18 @@ export class Game {
         flags.warned1 = true;
         this.emit({ floor: f.n, kind: 'systeme', text: `Plus qu'une minute avant l'effondrement de l'étage ${f.n} !`, scope: 'etage', drama: 40 });
       }
+      if (!f.stairsOpened && left > 0 && this.stairsOpen(f)) {
+        f.stairsOpened = true;
+        const boss = f.monsters.some((m) => m.boss && m.hp > 0);
+        const last = f.n >= this.cfg.finalFloor;
+        this.emit({
+          floor: f.n, kind: 'systeme', scope: 'global', drama: 45,
+          text: `${last ? 'LA SORTIE DU DONJON' : `L'escalier de l'étage ${f.n}`} SE DESCELLE ! ${boss ? 'Il ne reste qu\'à battre le boss qui le garde.' : 'Le boss est déjà tombé : foncez !'} ${Math.round(left / 60_000)} min avant l'effondrement.`,
+        });
+      }
       if (left <= 0) this.collapse(f);
     }
+    if (this.state.seasonOver) return; // la saison vient de se terminer : plus rien ne bouge
     // Réapparitions
     for (const p of players) {
       if (p.alive || p.deathTurn === this.state.turn) continue;
@@ -1398,7 +1438,8 @@ export class Game {
       watched.add(viewer.roomId);
       rooms = [...known].map((id) => this.roomView(f, f.rooms[id], id === viewer.roomId, watched.has(id), viewer));
     }
-    return { n: f.n, uid: f.uid, theme: f.theme, collapseInSec, rooms };
+    const st = this.stairsInMs(f);
+    return { n: f.n, uid: f.uid, theme: f.theme, collapseInSec, stairsInSec: st === null ? null : Math.ceil(st / 1000), rooms };
   }
 
   viewFor(name: string, now = Date.now()): { me: MeView | null; floor: FloorView | null; merchant: MerchantOffer[] | null } {
@@ -1441,6 +1482,7 @@ export class Game {
         humans: alive.filter((p) => p.floor === f.n && !p.bot).length,
         bots: alive.filter((p) => p.floor === f.n && p.bot).length,
         collapseInSec: f.collapseAt === null ? null : Math.max(0, Math.ceil((f.collapseAt - now) / 1000)),
+        stairsInSec: f.collapseAt === null ? null : Math.max(0, Math.ceil((f.collapseAt - this.cfg.stairsOpenMinutes * 60_000 - now) / 1000)),
       }))
       .filter((s) => s.n === 1 || s.humans + s.bots > 0)
       .sort((a, b) => a.n - b.n);
