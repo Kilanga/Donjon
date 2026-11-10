@@ -408,7 +408,7 @@ export class World {
     let delay = 0;
     for (const e of events) {
       if (!this.floor || e.floor !== this.floor.n) continue;
-      if (e.roomId !== undefined) this.addHeat(e.roomId, e.drama + (e.fx ? 8 : 0));
+      if (e.roomId !== undefined && e.scope !== 'prive' && !e.npc) this.addHeat(e.roomId, e.drama + 8); // toute action compte un peu (pas le marchand)
       if (!e.fx) continue;
       const d = delay;
       setTimeout(() => this.playFx(e), d);
@@ -535,23 +535,39 @@ export class World {
         return;
       }
     }
+    // Une salle sans plus personne de vivant (le mort a disparu) ne retient la caméra que 3 s après son dernier évènement
+    const alive = (id: number) => (f.rooms.find((x) => x.id === id)?.players ?? []).some((p) => p.hp > 0);
+    const score = (id: number) => {
+      const h = this.heat.get(id);
+      if (!h) return 0;
+      if (!alive(id) && now - h.t > 3000) return 0;
+      return this.heatOf(id, now);
+    };
     let best: number | null = null;
     let bestScore = 0;
-    for (const id of this.heat.keys()) {
-      const s = this.heatOf(id, now);
+    let lastActive: { id: number; t: number } | null = null; // salle occupée où il s'est passé quelque chose en dernier
+    for (const [id, h] of this.heat) {
+      const s = score(id);
       if (s > bestScore) {
         bestScore = s;
         best = id;
       }
+      if (alive(id) && now - h.t < 15000 && (!lastActive || h.t > lastActive.t)) lastActive = { id, t: h.t };
     }
-    const curScore = this.shot.roomId !== null ? this.heatOf(this.shot.roomId, now) : 0;
+    // Rien de spectaculaire : on suit la dernière salle où un joueur agit, plutôt qu'un plan large
+    if ((best === null || bestScore < 14) && lastActive) {
+      best = lastActive.id;
+      bestScore = 14;
+    }
+    const curScore = this.shot.roomId !== null ? score(this.shot.roomId) : 0;
+    const curDead = this.shot.roomId !== null && !alive(this.shot.roomId) && curScore === 0;
     const elapsed = now - this.shot.since;
-    if (best !== null && bestScore >= 14 && best !== this.shot.roomId && (elapsed > 3500 || bestScore > curScore * 1.8 + 20)) {
+    if (best !== null && bestScore >= 14 && best !== this.shot.roomId && (elapsed > 3500 || curDead || bestScore > curScore * 1.8 + 20)) {
       this.shot = { roomId: best, since: now };
       this.cut = true;
       const r = f.rooms.find((x) => x.id === best);
       this.onShot?.(r ? roomLabel(r) : '');
-    } else if (this.shot.roomId !== null && curScore < 8 && elapsed > 6000) {
+    } else if (this.shot.roomId !== null && curScore < 8 && (elapsed > 6000 || curDead)) {
       this.shot = { roomId: null, since: now };
       this.onShot?.('Plan large');
     }

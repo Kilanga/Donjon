@@ -58,10 +58,10 @@ export class Director {
 
   onEvent(e: GameEvent) {
     if (!this.floor || e.floor !== this.floor.n) return;
-    if (e.roomId !== undefined && e.drama > 0) {
+    if (e.roomId !== undefined && e.scope !== 'prive' && !e.npc) {
       const now = performance.now();
       const h = this.heat.get(e.roomId);
-      const score = (h ? decay(h.score, now - h.t) : 0) + e.drama + 5;
+      const score = (h ? decay(h.score, now - h.t) : 0) + e.drama + 8; // toute action compte un peu
       this.heat.set(e.roomId, { score, t: now });
     }
     if (e.drama >= LOWER_THIRD_MIN && e.scope !== 'prive') this.lowerThird(e.text);
@@ -87,16 +87,31 @@ export class Director {
       return;
     }
     if (!this.auto) return;
+    // Une salle sans plus personne de vivant (le mort a disparu) ne retient la caméra que 3 s après son dernier évènement
+    const alive = (id: number) => (f.rooms.find((x) => x.id === id)?.players ?? []).some((p) => p.hp > 0);
+    const scoreOf = (id: number) => {
+      const h = this.heat.get(id);
+      if (!h) return 0;
+      if (!alive(id) && now - h.t > 3000) return 0;
+      return decay(h.score, now - h.t);
+    };
     let best: { id: number; score: number } | null = null;
+    let lastActive: { id: number; t: number } | null = null;
     for (const [id, h] of this.heat) {
-      const sc = decay(h.score, now - h.t);
-      if (sc < 1) this.heat.delete(id);
-      else if (!best || sc > best.score) best = { id, score: sc };
+      if (decay(h.score, now - h.t) < 1) {
+        this.heat.delete(id);
+        continue;
+      }
+      const sc = scoreOf(id);
+      if (sc > 0 && (!best || sc > best.score)) best = { id, score: sc };
+      if (alive(id) && now - h.t < 15000 && (!lastActive || h.t > lastActive.t)) lastActive = { id, t: h.t };
     }
-    const cur = this.shot.roomId !== null ? this.heat.get(this.shot.roomId) : undefined;
-    const curScore = cur ? decay(cur.score, now - cur.t) : 0;
+    // Rien de spectaculaire : on suit la dernière salle où un joueur agit, plutôt qu'un plan large
+    if ((!best || best.score < THRESHOLD) && lastActive) best = { id: lastActive.id, score: THRESHOLD };
+    const curScore = this.shot.roomId !== null ? scoreOf(this.shot.roomId) : 0;
+    const curDead = this.shot.roomId !== null && curScore === 0;
     const muchHotter = best !== null && best.id !== this.shot.roomId && best.score > curScore * 1.8 + 20;
-    const held = now - this.shot.since < MIN_SHOT && !muchHotter;
+    const held = now - this.shot.since < MIN_SHOT && !muchHotter && !curDead;
     if (held) return;
     if (best && best.score >= THRESHOLD) {
       if (best.id !== this.shot.roomId) {
