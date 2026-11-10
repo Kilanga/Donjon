@@ -1,0 +1,13 @@
+{
+  "port": 3000,
+  "turnSeconds": 20,
+  "floorMinutes": 15,
+  "respawnTurns": 5,
+  "immunitySeconds": 180,
+  "roomsPerPlayer": 2,
+  "minRooms": 20,
+  "deathXpLoss": 0.25,
+  "spectatorKey": "regie",
+  "twitchChannel": "",
+  "savePath": "data/save.json"
+}

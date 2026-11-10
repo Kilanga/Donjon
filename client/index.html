@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Le Donjon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header id="top">
+    <div class="brand">LE DONJON</div>
+    <div class="hud">
+      <span id="hud-floor">Étage —</span>
+      <span id="hud-theme" class="muted"></span>
+      <span id="hud-collapse" class="collapse"></span>
+      <span id="hud-online" class="muted"></span>
+    </div>
+    <div class="turn">
+      <span id="hud-turn">Tour —</span>
+      <div class="bar"><i id="turn-bar"></i></div>
+    </div>
+  </header>
+
+  <main id="layout">
+    <section id="map-wrap">
+      <canvas id="map"></canvas>
+      <div id="pending" class="pending hidden"></div>
+      <div id="dpad">
+        <button data-cmd="!nord" title="Nord">▲</button>
+        <button data-cmd="!ouest" title="Ouest">◀</button>
+        <button data-cmd="!est" title="Est">▶</button>
+        <button data-cmd="!sud" title="Sud">▼</button>
+      </div>
+      <div id="map-help" class="muted">Molette : zoom · glisser : déplacer · double-clic : recentrer</div>
+      <div id="spectator-bar" class="hidden"></div>
+    </section>
+
+    <aside id="side">
+      <div class="card" id="me-card"></div>
+      <div class="card" id="room-card"></div>
+      <div class="card" id="inv-card"></div>
+    </aside>
+  </main>
+
+  <footer id="bottom">
+    <div class="card log-card">
+      <div class="card-title">Journal</div>
+      <div id="log"></div>
+    </div>
+    <div class="card chat-card">
+      <div class="card-title">Chat <span class="muted">(comme sur Twitch)</span></div>
+      <div id="chat"></div>
+      <form id="cmd-form" autocomplete="off">
+        <input id="cmd" placeholder="!attaque gobelin · !nord · !fouille · !aide" maxlength="200" />
+        <button type="submit">Envoyer</button>
+      </form>
+    </div>
+  </footer>
+
+  <div id="login" class="overlay">
+    <div class="login-box">
+      <h1>LE DONJON</h1>
+      <p class="tagline">Télé-réalité de donjon. Morts absurdes garanties.</p>
+      <form id="login-form" autocomplete="off">
+        <label for="pseudo">Ton pseudo (comme sur Twitch)</label>
+        <input id="pseudo" maxlength="24" placeholder="pseudo" required />
+        <button type="submit">Entrer</button>
+      </form>
+      <div id="class-pick" class="hidden">
+        <p>Choisis ta classe :</p>
+        <div class="classes"></div>
+      </div>
+      <p id="login-msg" class="muted"></p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
