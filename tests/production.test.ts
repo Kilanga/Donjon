@@ -93,7 +93,7 @@ describe('classement et régie', () => {
     g.submit('a', '!join', T0);
     expect(g.adminCollapse(1, T0)).toBe(true);
     g.tick(T0 + 20_000);
-    expect(g.player('a')!.alive).toBe(false);
+    expect(g.player('a')!.floor).toBe(2); // tombé à l'étage suivant
     const lastId = g.state.nextId;
     g.reset();
     expect(Object.keys(g.state.players)).toHaveLength(0);

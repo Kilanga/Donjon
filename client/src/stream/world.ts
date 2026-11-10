@@ -149,7 +149,7 @@ export class World {
   // ---------------------------------------------------------------- décor
 
   setFloor(f: FloorView) {
-    const changed = !this.floor || this.floor.n !== f.n || this.floor.rooms.length !== f.rooms.length;
+    const changed = !this.floor || this.floor.n !== f.n || this.floor.uid !== f.uid || this.floor.rooms.length !== f.rooms.length;
     this.floor = f;
     if (changed) {
       this.buildStatic(f);

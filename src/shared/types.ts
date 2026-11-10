@@ -102,6 +102,7 @@ export interface MeView {
 
 export interface FloorView {
   n: number;
+  uid?: string; // change quand l'étage est recreusé
   theme: string;
   collapseInSec: number | null;
   rooms: RoomView[];
@@ -184,6 +185,15 @@ export interface PlayerViewMsg {
   vote: VoteView | null;
   effects: EffectsView;
   obituary: { turn: number; text: string }[];
+  floors?: FloorSummary[]; // étages debout et qui y est (vue stream, régie)
+}
+
+export interface FloorSummary {
+  n: number;
+  theme: string;
+  humans: number; // vrais joueurs vivants
+  bots: number; // PNJ figurants vivants
+  collapseInSec: number | null;
 }
 
 export type ServerMsg =

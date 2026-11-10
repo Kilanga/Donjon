@@ -84,6 +84,7 @@ export interface RoomState {
 
 export interface FloorState {
   n: number;
+  uid?: string; // identifiant de génération (change quand l'étage est recreusé)
   theme: string;
   rooms: RoomState[];
   monsters: MonsterState[];
@@ -133,5 +134,6 @@ export function migrate(s: GameState): GameState {
     p.betrayals ??= 0;
     p.deepest ??= p.floor;
   }
+  for (const f of Object.values(s.floors)) f.uid ??= `f${f.n}-ancien`;
   return s;
 }

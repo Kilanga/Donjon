@@ -233,6 +233,7 @@ function sendState(c: Client) {
     type: 'state' as const, turn: game.state.turn, turnEndsAt: pausedAt ? turnEndsAt + (now - pausedAt) : turnEndsAt,
     turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
+    ...(c.spectator ? { floors: game.floorsSummary(now) } : {}),
   };
   if (c.spectator) {
     send(c, { ...base, me: null, floor: game.spectatorView(c.floor, now), merchant: null, spectator: true });

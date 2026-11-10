@@ -180,20 +180,28 @@ describe('progression', () => {
 });
 
 describe('étages', () => {
-  it('effondrement : les joueurs restés meurent et réapparaissent à l\'étage suivant', () => {
+  it('effondrement : les joueurs restés tombent vivants à l\'étage suivant, les nouveaux entrent dans un étage 1 recreusé', () => {
     const g = setup({ floorMinutes: 1, respawnTurns: 1 });
     g.submit('a', '!join', T0);
     const p = g.player('a')!;
+    p.gold = 50;
+    const weapon = p.weapon;
+    const oldUid = g.floor(1)!.uid;
     expect(p.floor).toBe(1);
     const ev = g.tick(T0 + 61_000);
     expect(ev.some((e) => e.text.includes('EFFONDRE'))).toBe(true);
-    expect(p.alive).toBe(false);
-    g.tick(T0 + 81_000);
+    expect(ev.some((e) => e.text.includes('traverse le plancher'))).toBe(true);
     expect(p.alive).toBe(true);
     expect(p.floor).toBe(2);
-    // Un nouveau joueur arrive sur l'étage encore debout
+    expect(p.hp).toBeLessThan(p.maxHp);
+    expect(p.gold).toBe(30); // 40 % perdus
+    expect(p.weapon).toBe(weapon); // équipement gardé
+    expect(p.stunned).toBe(true);
+    // Un nouveau joueur entre à l'étage 1, recreusé à neuf
     g.submit('c', '!join', T0 + 82_000);
-    expect(g.player('c')!.floor).toBe(2);
+    expect(g.player('c')!.floor).toBe(1);
+    expect(g.floor(1)!.collapsed).toBe(false);
+    expect(g.floor(1)!.uid).not.toBe(oldUid);
   });
 
   it('on ne descend pas tant que le boss est vivant', () => {

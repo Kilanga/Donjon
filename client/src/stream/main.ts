@@ -50,6 +50,7 @@ function onMessage(m: ServerMsg) {
     fresh.forEach((e) => seen.add(e.id));
     world.onEvents(fresh);
     for (const e of fresh) onEvent(e);
+    for (const e of fresh) heatFloor(e);
   } else if (m.type === 'chat' && !m.cmd) {
     world.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
@@ -73,8 +74,52 @@ function showCommand(from: string, text: string, ok: boolean, reply: string, twi
   while (list.children.length > 6) list.lastElementChild!.remove();
 }
 
-/** Le stream montre l'étage où il y a le plus de crawlers vivants. */
+// ------------------------------------------------------------ réalisation multi-étages
+// Le stream va là où ça se passe : vrais joueurs d'abord, puis l'action récente (drame), avec un carton « ÉTAGE N ».
+const floorHeat = new Map<number, { s: number; t: number }>();
+let floorSince = 0;
+const heatOf = (n: number, now: number) => {
+  const h = floorHeat.get(n);
+  return h ? h.s * Math.pow(0.5, (now - h.t) / 20000) : 0;
+};
+function heatFloor(e: GameEvent) {
+  if (e.scope === 'prive' || e.npc || !e.floor) return;
+  const now = performance.now();
+  floorHeat.set(e.floor, { s: heatOf(e.floor, now) + e.drama + 4, t: now });
+}
+
+function showCard(n: number, sub: string) {
+  const card = $('card');
+  card.querySelector('.c1')!.textContent = `ÉTAGE ${n}`;
+  card.querySelector('.c2')!.textContent = sub;
+  card.classList.remove('hidden');
+  card.style.animation = 'none';
+  void card.offsetWidth;
+  card.style.animation = '';
+  setTimeout(() => card.classList.add('hidden'), 2700);
+}
+
+/** Choisit l'étage montré : il faut que ça vaille le déplacement (et au moins 25 s sur un étage). */
 function pickFloor(s: PlayerViewMsg) {
+  const floors = s.floors;
+  if (floors?.length) {
+    const now = performance.now();
+    const score = (f: { n: number; humans: number; bots: number }) => f.humans * 12 + f.bots * 2 + heatOf(f.n, now);
+    const occupied = floors.filter((f) => f.humans + f.bots > 0);
+    if (!occupied.length) return;
+    const best = occupied.reduce((a, b) => (score(b) > score(a) ? b : a));
+    const cur = floors.find((f) => f.n === s.floor?.n);
+    const curEmpty = !cur || cur.humans + cur.bots === 0;
+    const worth = curEmpty || (now - floorSince > 25000 && score(best) > score(cur!) * 1.3 + 10);
+    if (best.n !== s.floor?.n && best.n !== wantedFloor && worth) {
+      wantedFloor = best.n;
+      floorSince = now;
+      send({ type: 'floor', n: best.n });
+      const who = [best.humans ? `${best.humans} aventurier${best.humans > 1 ? 's' : ''}` : '', best.bots ? `${best.bots} PNJ` : ''].filter(Boolean).join(' · ');
+      showCard(best.n, `${who} · ${best.theme}`);
+    }
+    return;
+  }
   const count = new Map<number, number>();
   for (const r of s.leaderboard) if (r.alive) count.set(r.floor, (count.get(r.floor) ?? 0) + 1);
   let best: number | null = null;
@@ -93,6 +138,15 @@ function renderHud(s: PlayerViewMsg) {
   const alive = s.leaderboard.filter((r) => r.alive).length;
   $('meta').innerHTML = f ? `Étage <b>${f.n}</b> · ${esc(f.theme)} · <b>${alive}</b> crawlers en vie` : '—';
   $('pause').classList.toggle('hidden', !s.paused);
+  // Les étages : qui est où, et combien de temps avant l'effondrement
+  if (s.floors && s.floors.length > 1) {
+    $('floors').classList.remove('hidden');
+    $('floors').innerHTML = '<h3>Les étages</h3>' + s.floors.map((x) => {
+      const who = [x.humans ? `${x.humans} ⚔` : '', x.bots ? `${x.bots} PNJ` : ''].filter(Boolean).join(' · ') || 'vide';
+      const t = x.collapseInSec === null ? '—' : fmt(x.collapseInSec);
+      return `<div class="f ${x.n === f?.n ? 'on' : ''}"><span class="n">Étage ${x.n}</span><span class="w">${who}</span><span class="t ${x.collapseInSec !== null && x.collapseInSec < 60 ? 'urgent' : ''}">${t}</span></div>`;
+    }).join('');
+  } else $('floors').classList.add('hidden');
   // Classement
   $('lb').innerHTML = `<h3>Classement</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">PNJ</small>' : ''}${r.bounty ? ' 💰' : ''}${r.traitor ? ' ☠' : ''}</span><span class="s">niv ${r.level} · ét. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
   // Vote

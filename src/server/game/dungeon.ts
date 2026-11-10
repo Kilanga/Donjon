@@ -81,7 +81,7 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
   }
 
   const floor: FloorState = {
-    n, theme: n === 1 ? 'classique' : rng.pick(THEMES.slice(1)), rooms, monsters: [], spawnRoom: spawn.id, bossRoom: boss.id,
+    n, uid: `f${n}-${nextId()}`, theme: n === 1 ? 'classique' : rng.pick(THEMES.slice(1)), rooms, monsters: [], spawnRoom: spawn.id, bossRoom: boss.id,
     startedAt: null, collapseAt: null, collapsed: false,
   };
 

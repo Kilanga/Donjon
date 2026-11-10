@@ -1,7 +1,7 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, suggestCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, EffectsView, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
+  ClassId, Dir, EffectsView, FloorSummary, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
@@ -153,18 +153,22 @@ export class Game {
   }
 
   /** L'étage le moins profond encore debout : là où arrivent les nouveaux. */
+  /** Les nouveaux entrent toujours à l'étage 1 (recreusé s'il s'est effondré) : le donjon est une tour sans fond. */
   private entryFloor(): FloorState {
-    const live = Object.values(this.state.floors).filter((f) => !f.collapsed).sort((a, b) => a.n - b.n);
-    if (live.length) return live[0];
-    const deepest = Math.max(0, ...Object.keys(this.state.floors).map(Number));
-    return this.ensureFloor(deepest + 1);
+    return this.freshFloor(1);
   }
 
-  /** Premier étage encore debout à partir de n. */
-  private liveFloorFrom(n: number): FloorState {
-    let k = n;
-    while (this.state.floors[k]?.collapsed) k++;
-    return this.ensureFloor(k);
+  /** L'étage n, debout : recreusé à neuf (nouveau plan, nouveaux monstres) s'il s'était effondré. */
+  freshFloor(n: number): FloorState {
+    const old = this.state.floors[n];
+    if (old && !old.collapsed) return old;
+    if (old) {
+      delete this.state.floors[n];
+      for (const p of Object.values(this.state.players)) delete p.discovered[n];
+    }
+    const f = this.ensureFloor(n);
+    if (old) this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} a été recreusé : nouveau plan, nouveaux monstres, de quoi accueillir les nouveaux aventuriers.`, scope: 'global', drama: 10 });
+    return f;
   }
 
   // ------------------------------------------------------------- commandes
@@ -914,7 +918,7 @@ export class Game {
     const r = f.rooms[p.roomId];
     if (!r.stairs) return this.say(p, 'Il n\'y a pas d\'escalier ici. Il est dans la salle du boss.');
     if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'Le boss bloque l\'escalier. Il faut d\'abord le vaincre.');
-    const next = this.liveFloorFrom(f.n + 1);
+    const next = this.freshFloor(f.n + 1);
     this.startTimer(next, p);
     p.floor = next.n;
     p.roomId = next.spawnRoom;
@@ -951,7 +955,8 @@ export class Game {
       if (p.alive || p.deathTurn === this.state.turn) continue;
       p.respawnIn--;
       if (p.respawnIn > 0) continue;
-      const f = this.liveFloorFrom(p.floor);
+      // Réapparition à son étage, ou au suivant s'il s'est effondré entre-temps
+      const f = this.state.floors[p.floor]?.collapsed ? this.freshFloor(p.floor + 1) : this.freshFloor(p.floor);
       this.startTimer(f, p);
       p.floor = f.n;
       p.deepest = Math.max(p.deepest, f.n);
@@ -1004,13 +1009,32 @@ export class Game {
     }
   }
 
+  /** Effondrement : ceux qui sont restés tombent à l'étage suivant (PV et or perdus, équipement gardé). */
   private collapse(f: FloorState) {
     f.collapsed = true;
-    const next = this.liveFloorFrom(f.n + 1);
     const victims = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive);
-    this.emit({ floor: f.n, kind: 'systeme', text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${victims.length ? `${victims.map((v) => v.name).join(', ')} n'ont pas trouvé la sortie.` : 'Personne n\'est resté coincé, bravo.'}`, scope: 'global', drama: 70 });
-    for (const p of victims) this.killPlayer(p, `l'effondrement de l'étage ${f.n}`, null);
-    // Les morts de cet étage réapparaîtront à l'étage ${next.n} (voir liveFloorFrom)
+    this.emit({ floor: f.n, kind: 'systeme', text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${victims.length ? `${victims.map((v) => v.name).join(', ')} n'ont pas trouvé la sortie et passent à travers le plancher.` : 'Personne n\'est resté coincé, bravo.'}`, scope: 'global', drama: 70 });
+    if (!victims.length) return;
+    const next = this.freshFloor(f.n + 1);
+    const landing = next.rooms.filter((r) => r.type !== 'safe' && r.type !== 'boss' && !next.monsters.some((m) => m.hp > 0 && m.roomId === r.id));
+    for (const p of victims) {
+      const hpLoss = Math.max(1, Math.ceil(p.maxHp * 0.3));
+      const goldLoss = Math.floor(p.gold * 0.4);
+      p.hp = Math.max(1, p.hp - hpLoss);
+      p.gold -= goldLoss;
+      p.floor = next.n;
+      p.roomId = landing.length ? this.rng.pick(landing).id : next.spawnRoom;
+      p.deepest = Math.max(p.deepest, next.n);
+      p.pending = null;
+      p.lastAction = null;
+      p.stunned = true; // sonné par la chute : il perd son prochain tour
+      this.discover(p);
+      this.startTimer(next, p);
+      this.emit({
+        floor: next.n, roomId: p.roomId, kind: 'drole', scope: 'global', actors: [p.key], drama: 60, fx: { kind: 'trap', dst: `p:${p.name}` },
+        text: `${p.name} traverse le plancher dans un nuage de gravats et s'écrase à l'étage ${next.n}. Sonné, mais entier. (−${hpLoss} PV${goldLoss ? `, −${goldLoss} po perdues dans la chute` : ''})`,
+      });
+    }
   }
 
   // ------------------------------------------------- production, classement, régie
@@ -1323,7 +1347,7 @@ export class Game {
       watched.add(viewer.roomId);
       rooms = [...known].map((id) => this.roomView(f, f.rooms[id], id === viewer.roomId, watched.has(id), viewer));
     }
-    return { n: f.n, theme: f.theme, collapseInSec, rooms };
+    return { n: f.n, uid: f.uid, theme: f.theme, collapseInSec, rooms };
   }
 
   viewFor(name: string, now = Date.now()): { me: MeView | null; floor: FloorView | null; merchant: MerchantOffer[] | null } {
@@ -1354,6 +1378,21 @@ export class Game {
     if (e.actors?.includes(key)) return true;
     if (p.floor === e.floor && p.roomId === e.roomId) return true;
     return this.alliesOf(p).some((k) => e.actors?.includes(k));
+  }
+
+  /** Étages debout, avec leurs occupants (pour le panneau « Les étages » du stream). */
+  floorsSummary(now = Date.now()): FloorSummary[] {
+    const alive = Object.values(this.state.players).filter((p) => p.alive);
+    return Object.values(this.state.floors)
+      .filter((f) => !f.collapsed)
+      .map((f) => ({
+        n: f.n, theme: f.theme,
+        humans: alive.filter((p) => p.floor === f.n && !p.bot).length,
+        bots: alive.filter((p) => p.floor === f.n && p.bot).length,
+        collapseInSec: f.collapseAt === null ? null : Math.max(0, Math.ceil((f.collapseAt - now) / 1000)),
+      }))
+      .filter((s) => s.n === 1 || s.humans + s.bots > 0)
+      .sort((a, b) => a.n - b.n);
   }
 
   /** Ajoute un commentaire de l'IA du donjon (ou du marchand) au journal et le renvoie. */
