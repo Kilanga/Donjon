@@ -9,5 +9,13 @@
   "deathXpLoss": 0.25,
   "spectatorKey": "regie",
   "twitchChannel": "",
-  "savePath": "data/save.json"
+  "savePath": "data/save.json",
+  "ai": {
+    "provider": "off",
+    "ollamaUrl": "http://localhost:11434",
+    "ollamaModel": "qwen2.5:14b",
+    "anthropicModel": "claude-haiku-5-5",
+    "timeoutMs": 12000,
+    "maxPerMinute": 8
+  }
 }

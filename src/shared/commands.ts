@@ -78,6 +78,7 @@ export const HELP_TEXT = [
   '!utilise <objet> / !equipe <objet> — utiliser ou équiper',
   '!marchand, !achete <n°>, !vends <objet> — commerce (safe room)',
   '!repos — se soigner (safe room)',
+  '!parle <message> — discuter avec le marchand (safe room)',
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',
   '!descendre — prendre l\'escalier (salle du boss vaincu)',

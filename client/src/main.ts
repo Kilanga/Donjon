@@ -84,7 +84,7 @@ const seen = new Set<number>();
 function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
-  logLine(e.text, e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
+  logLine(e.text, e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
   if (e.drama >= 80) map.shake = Math.max(map.shake, 4);
 }
 function chatLine(from: string, text: string, isCmd = false) {

@@ -8,6 +8,8 @@ import { loadConfig } from './config.js';
 import { Game, playerKey } from './game/engine.js';
 import type { GameState } from './game/state.js';
 import { connectTwitch } from './twitch.js';
+import { DungeonAI } from './ai.js';
+import { Narrator } from './narrator.js';
 
 const cfg = loadConfig();
 const root = process.cwd();
@@ -100,6 +102,10 @@ function deliver(events: GameEvent[]) {
   }
 }
 
+// IA du donjon (optionnelle) : la clé API ne vient que de la variable d'environnement
+const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
+const narrator = new Narrator(game, ai, (evs) => deliver(evs));
+
 /** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
 function say(name: string, text: string) {
   const clean = text.replace(/\s+/g, ' ').trim().slice(0, 140);
@@ -113,6 +119,19 @@ function command(name: string, text: string, from?: Client) {
   const dis = text.match(/^!(dis|say|parler)\s+(.+)/i);
   if (dis) return say(name, dis[2]);
   if (!text.startsWith('!')) return say(name, text);
+  const talk = text.match(/^!(parle|talk)(?:\s+(.*))?$/i);
+  if (talk) {
+    let r;
+    try {
+      r = narrator.talk(name, talk[2] ?? '');
+    } catch (e) {
+      console.error('[ia] !parle :', e);
+      r = { ok: false, text: 'Le marchand fait semblant de ne pas t\'entendre.' };
+    }
+    if (from) send(from, { type: 'feedback', ok: r.ok, text: r.text });
+    for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
+    return r;
+  }
   const before = game.state.nextId;
   let res;
   try {
@@ -181,6 +200,7 @@ function runTurn() {
     console.error(`[tour ${game.state.turn}] erreur, la partie continue :`, e);
   }
   deliver(events);
+  narrator.onTurn(events);
   for (const c of clients) sendState(c);
   try {
     save();
@@ -204,7 +224,8 @@ if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(
 server.listen(cfg.port, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
   console.log(`  Vue spectateur : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
-  console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}\n`);
+  console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}`);
+  console.log(`  IA du donjon : ${ai.describe()}\n`);
 });
 
 process.on('uncaughtException', (e) => console.error('[serveur] erreur inattendue (la partie continue) :', e));

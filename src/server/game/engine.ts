@@ -985,6 +985,14 @@ export class Game {
     if (p.floor === e.floor && p.roomId === e.roomId) return true;
     return this.alliesOf(p).some((k) => e.actors?.includes(k));
   }
+
+  /** Ajoute un commentaire de l'IA du donjon (ou du marchand) au journal et le renvoie. */
+  narrate(text: string, floor: number, roomId?: number, scope: GameEvent['scope'] = 'global', actors?: string[]): GameEvent {
+    this.out = [];
+    this.emit({ floor, roomId, kind: 'drole', text, scope, actors, drama: 0, narrator: true });
+    this.sync();
+    return this.out[0];
+  }
 }
 
 // ------------------------------------------------------------------- utilitaires
