@@ -666,12 +666,26 @@ export class World {
     const h = this.renderer.domElement.clientHeight;
     const v = new THREE.Vector3();
     const close = this.camPos.distanceTo(this.camLook) < 40;
+    // Étiquettes visibles, puis on décale vers le haut celles qui se chevauchent (plan large, groupe serré)
+    const shown: { e: Ent; x: number; y: number; half: number }[] = [];
     for (const e of this.ents.values()) {
       v.copy(e.obj.position).add(new THREE.Vector3(0, 2.7 * e.obj.scale.y, 0)).project(this.camera);
       const visible = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && e.dyingUntil < now && (close || e.player || e.boss);
       e.label.style.display = visible ? 'block' : 'none';
-      if (!visible) continue;
-      e.label.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;
+      if (visible) shown.push({ e, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, half: Math.max(26, e.name.length * 4.2 + 6) });
+    }
+    shown.sort((a, b) => b.y - a.y || a.x - b.x);
+    const placed: typeof shown = [];
+    for (const s of shown) {
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = placed.find((o) => Math.abs(o.x - s.x) < o.half + s.half && Math.abs(o.y - s.y) < 22);
+        if (!hit) break;
+        s.y = hit.y - 22;
+      }
+      placed.push(s);
+    }
+    for (const { e, x, y } of placed) {
+      e.label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
       const pct = Math.max(0, Math.min(100, (100 * e.hp) / e.maxHp));
       const hpColor = pct > 50 ? '#5ce65c' : pct > 25 ? '#ffc23d' : '#ff4040';
       const bub = e.bubble && e.bubble.until > now ? `<div class="bub3d">${escapeHtml(e.bubble.text)}</div>` : '';

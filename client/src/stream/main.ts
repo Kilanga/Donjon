@@ -147,7 +147,17 @@ function tickHud() {
   world = new World($('c') as HTMLCanvasElement, $('labels'), assets);
   if (follow) world.followName = follow;
   world.onShot = (label) => ($('shot').textContent = label);
-  const resize = () => world.resize(innerWidth, innerHeight);
+  if (params.has('debug')) (window as unknown as { world: World }).world = world;
+  // Le HUD est dessiné pour du 1920×1080 : on le réduit dans une fenêtre plus petite
+  const ui = document.querySelector('.ui') as HTMLElement;
+  const resize = () => {
+    world.resize(innerWidth, innerHeight);
+    const s = Math.min(1, innerWidth / 1600, innerHeight / 900);
+    ui.style.transform = s < 1 ? `scale(${s})` : '';
+    ui.style.transformOrigin = '0 0';
+    ui.style.width = s < 1 ? `${100 / s}%` : '';
+    ui.style.height = s < 1 ? `${100 / s}%` : '';
+  };
   addEventListener('resize', resize);
   resize();
   connect();
