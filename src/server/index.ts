@@ -110,11 +110,41 @@ const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
 };
+/** Adresse du visiteur : derrière le tunnel (connexion locale de cloudflared), la vraie IP est dans CF-Connecting-IP. */
+const isLoopback = (ip: string) => ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+function ipOf(req: http.IncomingMessage): string {
+  const remote = req.socket.remoteAddress ?? '';
+  const local = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  const cf = req.headers['cf-connecting-ip'];
+  return local && typeof cf === 'string' && cf ? cf.slice(0, 64) : remote;
+}
+/** Essais de clé de régie ratés par adresse : 5 échecs = 15 min de blocage (la clé ne se devine pas par essais). */
+const keyFails = new Map<string, { n: number; until: number }>();
+function keyBlocked(ip: string): boolean {
+  const f = keyFails.get(ip);
+  return !!f && f.n >= 5 && f.until > Date.now();
+}
+function keyCheck(ip: string, key: string | null | undefined): boolean {
+  if (keyBlocked(ip)) return false;
+  if (key === cfg.spectatorKey) return true;
+  const f = keyFails.get(ip) ?? { n: 0, until: 0 };
+  if (f.until < Date.now()) f.n = 0;
+  f.n++;
+  f.until = Date.now() + 15 * 60_000;
+  keyFails.set(ip, f);
+  if (f.n === 5) console.log(`[sécurité] ${ip} : 5 mauvaises clés de régie, bloqué 15 min.`);
+  return false;
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
-  if (url.pathname.startsWith('/journaux')) return journaux(url, res);
+  // En-têtes de sécurité : pas d'affichage dans un cadre d'un autre site, pas de clé dans le Referer, pas de devinette de type
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
+  if (url.pathname.startsWith('/journaux')) return journaux(url, res, ipOf(req));
   if (url.pathname === '/bilan') {
-    if (url.searchParams.get('cle') !== cfg.spectatorKey) {
+    if (!keyCheck(ipOf(req), url.searchParams.get('cle'))) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
       return;
     }
@@ -148,9 +178,9 @@ const server = http.createServer((req, res) => {
 });
 
 // Journaux de session (régie) : page de téléchargement, rapport Markdown, journal brut
-function journaux(url: URL, res: http.ServerResponse) {
+function journaux(url: URL, res: http.ServerResponse, ip: string) {
   const key = url.searchParams.get('cle');
-  if (key !== cfg.spectatorKey) {
+  if (!keyCheck(ip, key) || key === null) {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
     return;
   }
@@ -213,6 +243,7 @@ Ils couvrent la dernière soirée (★ : ${evening.size} fichier(s), un par dém
 
 // -------------------------------------------------------------- WebSocket
 interface Client {
+  ip: string; // adresse du visiteur (vraie IP derrière le tunnel)
   lastPos?: number; // dernier déplacement libre relayé (limite de débit)
   ws: WebSocket;
   name: string | null; // pseudo du joueur
@@ -305,6 +336,7 @@ const narrator = new Narrator(game, ai, (evs) => deliver(evs));
 const links = new Links<Client>(path.join(root, 'data', 'liens.json'), cfg.twitchChannel ? [playerKey(cfg.twitchChannel)] : []);
 setInterval(() => links.save(), 10_000).unref();
 const muted = new Map<string, number>(); // pseudo -> fin du silence (ms)
+const namesByIp = new Map<string, Set<string>>(); // pseudos pris sur la page web, par adresse
 const isMuted = (name: string) => (muted.get(playerKey(name)) ?? 0) > Date.now();
 
 /** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
@@ -405,8 +437,14 @@ function feedback(name: string, kind: 'bug' | 'avis', text: string, src: string,
 }
 
 wss.on('connection', (ws, req) => {
+  const ip = ipOf(req);
+  const fromIp = [...clients].filter((o) => o.ip === ip).length;
+  if (clients.size >= 400 || (fromIp >= 12 && !isLoopback(ip))) {
+    ws.close(1013, 'trop de connexions');
+    return;
+  }
   const ua = String(req.headers['user-agent'] ?? '').slice(0, 200);
-  const c: Client = { ws, name: null, spectator: false, floor: null, recent: [], id: nextClientId++, ua, mobile: /Mobi|Android|iPhone|iPad/i.test(ua), since: Date.now(), errors: 0 };
+  const c: Client = { ip, ws, name: null, spectator: false, floor: null, recent: [], id: nextClientId++, ua, mobile: /Mobi|Android|iPhone|iPad/i.test(ua), since: Date.now(), errors: 0 };
   clients.add(c);
   let budget = 40; // messages permis (tous types) : +20 par seconde, au-delà on ignore
   let lastRefill = Date.now();
@@ -463,7 +501,7 @@ function onClientMessage(c: Client, msg: ClientMsg) {
   {
     if (msg.type === 'hello') {
       if (msg.spectatorKey !== undefined) {
-        if (msg.spectatorKey !== cfg.spectatorKey) return send(c, { type: 'feedback', ok: false, text: 'Clé spectateur incorrecte.' });
+        if (!keyCheck(c.ip, String(msg.spectatorKey))) return send(c, { type: 'feedback', ok: false, text: keyBlocked(c.ip) ? 'Trop d\'essais. Réessaie plus tard.' : 'Clé spectateur incorrecte.' });
         c.spectator = true;
       } else {
         const name = String(msg.name ?? '').replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24); // pas de HTML ni de caractères de contrôle dans un pseudo
@@ -476,6 +514,10 @@ function onClientMessage(c: Client, msg: ClientMsg) {
           journal.write('admin', { action: 'lien demandé', arg: name });
           return send(c, { type: 'link', name, code });
         }
+        const mine = namesByIp.get(c.ip) ?? new Set<string>();
+        if (!mine.has(key) && mine.size >= 6 && !isLoopback(c.ip)) return send(c, { type: 'feedback', ok: false, text: 'Trop de pseudos différents depuis cette connexion.' });
+        mine.add(key);
+        namesByIp.set(c.ip, mine);
         c.name = name;
         if (game.player(name)?.bot) {
           game.removeBot(name);
@@ -743,7 +785,18 @@ const onListenError = (e: NodeJS.ErrnoException) => {
 server.on('error', onListenError);
 wss.on('error', onListenError); // ws relaie les erreurs du serveur HTTP
 
-server.listen(cfg.port, () => {
+if (cfg.tunnel) {
+  // « localhost » peut désigner ::1 sous Windows : on écoute aussi là (toujours uniquement sur la machine)
+  const handler = server.listeners('request')[0] as http.RequestListener;
+  const local6 = http.createServer(handler);
+  local6.on('upgrade', (req, socket, head) => {
+    if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/ws') return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  });
+  local6.on('error', () => undefined); // pas d'IPv6 sur la machine : sans importance
+  local6.listen(cfg.port, '::1');
+}
+server.listen(cfg.port, cfg.tunnel ? '127.0.0.1' : undefined, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
   console.log(`  Régie (vue spectateur + maître du jeu, NE PAS PARTAGER) : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}`);
@@ -764,7 +817,7 @@ let publicUrl = '';
 let tunnelProc: ChildProcess | null = null;
 function startTunnel() {
   try {
-    tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${cfg.port}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${cfg.port}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (e) {
     console.error('[tunnel] impossible de lancer cloudflared :', (e as Error).message);
     return;

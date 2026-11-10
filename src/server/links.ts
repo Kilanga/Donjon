@@ -7,7 +7,7 @@ import { readJsonSafe, writeAtomic } from './fsutil.js';
 
 interface Stored {
   twitch: string[]; // clés des pseudos vus dans le chat Twitch
-  tokens: Record<string, string>; // jeton -> clé du pseudo
+  tokens: Record<string, string>; // empreinte SHA-256 du jeton -> clé du pseudo (le jeton lui-même n'est jamais écrit sur disque)
 }
 
 interface Pending<T> {
@@ -44,12 +44,13 @@ export class Links<T> {
 
   /** Le jeton présenté par la page ouvre-t-il ce pseudo ? */
   tokenOpens(token: string | undefined, key: string): boolean {
-    return !!token && this.data.tokens[token] === key;
+    return !!token && token.length <= 64 && this.data.tokens[hash(token)] === key;
   }
 
   /** Demande de liaison : renvoie le code à écrire dans le chat (valable 10 min). */
   request(key: string, name: string, who: T, now = Date.now()): string {
     for (const [c, p] of this.pending) if (p.until < now || p.who === who) this.pending.delete(c);
+    if (this.pending.size >= 500) this.pending.delete(this.pending.keys().next().value!); // plafond : la plus ancienne demande saute
     let code = '';
     do code = String(crypto.randomInt(1000, 10000));
     while (this.pending.has(code));
@@ -62,8 +63,11 @@ export class Links<T> {
     const p = this.pending.get(code);
     if (!p || p.until < now || p.key !== twitchKey) return null; // mauvais compte : un autre viewer ne peut pas valider à ta place
     this.pending.delete(code);
-    const token = crypto.randomBytes(18).toString('base64url');
-    this.data.tokens[token] = p.key;
+    const token = crypto.randomBytes(24).toString('base64url');
+    // Une seule page reliée par compte : la nouvelle liaison révoque les anciennes
+    // (si quelqu'un t'a fait taper son code, refaire !lien depuis ta page te rend ton perso)
+    for (const [h, k] of Object.entries(this.data.tokens)) if (k === p.key) delete this.data.tokens[h];
+    this.data.tokens[hash(token)] = p.key;
     this.dirty = true;
     return { who: p.who, name: p.name, token };
   }
@@ -82,4 +86,8 @@ export class Links<T> {
       console.error('[liens] non enregistrés :', (e as Error).message);
     }
   }
+}
+
+function hash(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }

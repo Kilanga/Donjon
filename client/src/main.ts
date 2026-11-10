@@ -88,7 +88,7 @@ function onMessage(m: ServerMsg) {
     // Pseudo d'un compte Twitch : la preuve se fait dans le chat
     $('login').classList.remove('hidden');
     $('login-form').classList.remove('hidden');
-    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.</small>`;
+    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.<br>⚠️ Ne tape jamais un code !lien que quelqu'un d'autre te donne : il prendrait ton perso.</small>`;
   } else if (m.type === 'linked') {
     localStorage.setItem('donjon-jeton', m.token);
     $('login-msg').textContent = '';

@@ -10,5 +10,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Cherche la ligne https://....trycloudflare.com ci-dessous et envoie-la a tes amis.
-cloudflared tunnel --url http://localhost:3000
+cloudflared tunnel --url http://127.0.0.1:3000
 pause

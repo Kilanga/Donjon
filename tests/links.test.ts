@@ -24,4 +24,14 @@ describe('liaison page web ↔ compte Twitch', () => {
     const code = l.request('bob', 'Bob', 'p', 0);
     expect(l.confirm(code, 'bob', 11 * 60_000)).toBeNull();
   });
+
+  it('une nouvelle liaison révoque l\'ancienne page (on récupère son perso), et les jetons ne sont pas gardés en clair', () => {
+    const l = new Links<string>(null);
+    l.sawOnTwitch('cid');
+    const a = l.confirm(l.request('cid', 'Cid', 'voleur'), 'cid')!;
+    const b = l.confirm(l.request('cid', 'Cid', 'vraie-page'), 'cid')!;
+    expect(l.tokenOpens(a.token, 'cid')).toBe(false);
+    expect(l.tokenOpens(b.token, 'cid')).toBe(true);
+    expect(JSON.stringify((l as unknown as { data: unknown }).data)).not.toContain(b.token);
+  });
 });
