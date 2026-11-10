@@ -74,7 +74,15 @@ export class DungeonAI {
       const names = (data.models ?? []).map((m) => m.name);
       const want = this.cfg.ollamaModel.includes(':') ? this.cfg.ollamaModel : `${this.cfg.ollamaModel}:latest`;
       if (!names.includes(want)) return `Ollama répond, mais le modèle ${this.cfg.ollamaModel} n'est pas installé (modèles : ${names.join(', ') || 'aucun'}). Tape « ollama pull ${this.cfg.ollamaModel} ».`;
-      return `Ollama prêt (${this.cfg.ollamaModel}).`;
+      // Préchargement : le modèle est mis en mémoire tout de suite (et y reste 4 h), pour que la première réplique soit rapide
+      void fetch(`${this.cfg.ollamaUrl.replace(/\/$/, '')}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: this.cfg.ollamaModel, prompt: '', keep_alive: '4h' }),
+      })
+        .then((r) => console.log(r.ok ? `  [ia] modèle ${this.cfg.ollamaModel} chargé en mémoire.` : `  [ia] préchargement refusé (HTTP ${r.status}).`))
+        .catch(() => console.log('  [ia] préchargement impossible : la première réplique sera plus lente.'));
+      return `Ollama prêt (${this.cfg.ollamaModel}), chargement du modèle…`;
     } catch {
       return `Ollama ne répond pas sur ${this.cfg.ollamaUrl} : lance l'application Ollama. Le jeu continue avec ses textes écrits.`;
     }
@@ -126,6 +134,7 @@ export class DungeonAI {
       body: JSON.stringify({
         model: this.cfg.ollamaModel,
         stream: false,
+        keep_alive: '4h', // sinon Ollama décharge le modèle après 5 min sans appel, et le recharger dépasse le délai
         options: { temperature: 0.9, num_predict: 120 },
         messages: [
           { role: 'system', content: system },
