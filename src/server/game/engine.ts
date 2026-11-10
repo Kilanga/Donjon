@@ -45,6 +45,10 @@ export class Game {
     this.cfg = cfg;
     this.state = state ? migrate(state) : emptyState(cfg.seed ?? Date.now());
     this.rng = new Rng(this.state.rng);
+    if (this.state.seasonStart === null) {
+      const timed = Object.values(this.state.floors).filter((f) => f.collapseAt !== null);
+      if (timed.length) this.state.seasonStart = Math.min(...timed.map((f) => f.collapseAt! - f.n * cfg.floorMinutes * 60_000));
+    }
   }
 
   /** Nouvelle partie : efface tout et recrée l'étage 1. */
@@ -173,6 +177,7 @@ export class Game {
   /** Temps avant que l'escalier se descelle (0 = ouvert, null = la saison n'a pas commencé). */
   stairsInMs(f: FloorState): number | null {
     if (f.collapseAt === null) return null;
+    if (f.stairsOpened) return 0; // annoncé ouvert : il le reste (même si un vote rallonge l'étage)
     return Math.max(0, f.collapseAt - this.cfg.stairsOpenMinutes * 60_000 - this.now);
   }
 
@@ -240,11 +245,11 @@ export class Game {
   private join(name: string, arg: string, bot = false): SubmitResult {
     const key = playerKey(name);
     if (!key) return { ok: false, text: 'Pseudo invalide.' };
+    if (this.state.seasonOver) return { ok: false, text: 'La saison est terminée : le Donjon est fermé. Rendez-vous à la prochaine !' };
     if (this.state.players[key]) return { ok: false, text: 'Tu es déjà dans le donjon !' };
     const cls = parseClass(arg) ?? this.rng.pick(Object.keys(CLASSES) as ClassId[]);
     const def = CLASSES[cls];
     const f = this.entryFloor();
-    if (!bot) this.startTimer(f);
     const p: PlayerState = {
       key, name: name.trim().slice(0, 24), cls, level: 1, xp: 0, hp: def.hp, maxHp: def.hp, stats: { ...def.stats }, statPoints: 0, gold: 10,
       weapon: makeItem(def.startWeapon, this.nextId), armor: def.startArmor ? makeItem(def.startArmor, this.nextId) : null,
@@ -254,6 +259,7 @@ export class Game {
       discovered: {}, kills: 0, deaths: 0, betrayals: 0, deepest: f.n, joinedTurn: this.state.turn, ...(bot ? { bot: true } : {}),
     };
     this.state.players[key] = p;
+    this.startTimer(f, p); // (un PNJ figurant ne lance pas la saison, mais arme un étage recreusé une fois qu'elle a commencé)
     this.discover(p);
     this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} le ${def.label} entre dans le donjon (étage ${f.n}) !`, scope: 'global', actors: [key], drama: 5 });
     this.merchantSays(f.n, p.roomId, MERCHANT_WELCOME, key);
@@ -289,7 +295,10 @@ export class Game {
     if (this.isAlly(p, t)) return { ok: false, text: `Tu es déjà allié avec ${t.name}.` };
     if (p.allyProposals.includes(t.key)) {
       const target = t.allianceId ? this.state.alliances[t.allianceId] : p.allianceId ? this.state.alliances[p.allianceId] : null;
-      if (target && target.length >= ALLIANCE_MAX) return { ok: false, text: `Alliance complète (${ALLIANCE_MAX} maximum).` };
+      if (target && target.length >= ALLIANCE_MAX) {
+        p.allyProposals = p.allyProposals.filter((k) => k !== t.key);
+        return { ok: false, text: `Alliance complète (${ALLIANCE_MAX} maximum).` };
+      }
       if (t.allianceId) {
         this.leaveAlliance(p, false);
         this.state.alliances[t.allianceId].push(p.key);
@@ -690,11 +699,20 @@ export class Game {
     for (const s of sharers) this.gainXp(s, share);
     const shareTxt = sharers.length > 1 ? ` (XP partagée : ${share} chacun)` : ` (+${m.xp} XP)`;
     this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} terrasse ${m.name} et récupère ${m.gold} po${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
+    const wait = m.boss ? this.stairsInMs(f) : 0;
+    const sealed = wait !== 0 ? ` Mais l'escalier est encore scellé${wait ? ` (ouverture dans ${fmtWait(wait)})` : ''}.` : '';
     if (m.boss && floorN >= this.cfg.finalFloor) {
-      // Dernier étage : la sortie n'est ouverte que quelques tours, pour ceux qui ont mené le combat
+      // Dernier étage : le gardien se relève au bout de 6 tours (la sortie n'est ouverte qu'à ceux qui viennent de le battre)
       f.bossBackTurn = this.state.turn + 6;
-      this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! LA SORTIE EST OUVERTE pendant 6 tours : !descendre dans la salle du boss pour entrer dans la Légende.`, scope: 'global', actors: [killer.key], drama: 100 });
-    } else if (m.boss) this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`, scope: 'global', actors: [killer.key], drama: 80 });
+      this.emit({
+        floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 100,
+        text: sealed
+          ? `${m.name} est vaincu par ${killer.name} !${sealed} Il se relèvera dans 6 tours : il faudra le rebattre une fois la sortie ouverte.`
+          : `${m.name} est vaincu par ${killer.name} ! LA SORTIE EST OUVERTE pendant 6 tours : !descendre dans la salle du boss pour entrer dans la Légende.`,
+      });
+    } else if (m.boss) {
+      this.emit({ floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 80, text: `${m.name} est vaincu par ${killer.name} !${sealed || ` L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`}` });
+    }
   }
 
   gainXp(p: PlayerState, amount: number) {
@@ -987,6 +1005,7 @@ export class Game {
       }
       if (!f.stairsOpened && left > 0 && this.stairsOpen(f)) {
         f.stairsOpened = true;
+        if (!Object.values(this.state.players).some((p) => p.alive && p.floor === f.n)) continue;
         const boss = f.monsters.some((m) => m.boss && m.hp > 0);
         const last = f.n >= this.cfg.finalFloor;
         this.emit({
@@ -999,7 +1018,7 @@ export class Game {
     if (this.state.seasonOver) return; // la saison vient de se terminer : plus rien ne bouge
     // Réapparitions
     for (const p of players) {
-      if (p.alive || p.deathTurn === this.state.turn) continue;
+      if (p.alive || p.deathTurn === this.state.turn || !this.state.players[p.key]) continue; // sorti (Légende) ou expulsé : pas de retour
       p.respawnIn--;
       if (p.respawnIn > 0) continue;
       // Réapparition à son étage, ou au suivant s'il s'est effondré entre-temps
@@ -1017,7 +1036,7 @@ export class Game {
       this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} réapparaît dans la safe room de l'étage ${f.n}, l'air vexé. Immunisé ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
-    this.themeEffects(players);
+    this.themeEffects(players.filter((p) => this.state.players[p.key]));
     // Le gardien du dernier étage se relève : la sortie se referme
     for (const f of Object.values(this.state.floors)) {
       if (f.bossBackTurn === undefined || this.state.turn < f.bossBackTurn) continue;

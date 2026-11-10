@@ -17,6 +17,11 @@ const center = (r: { x: number; y: number }) => new THREE.Vector3(r.x * CELL, 0,
 // Apparence des monstres : Quaternius pour les créatures, squelettes KayKit pour les morts-vivants.
 // « repli » : modèle KayKit utilisé si le fichier Quaternius n'a pas pu être chargé.
 type Look = { model: CharName; scale: number; tint?: number; emissive?: number; repli?: Look };
+// Le trou de l'escalier : partagé (reconstruit à chaque état, il ne faut pas recréer de géométrie GPU à chaque fois)
+const HOLE_GEO = new THREE.BoxGeometry(3.6, 0.3, 3.6);
+const HOLE_DARK = new THREE.MeshStandardMaterial({ color: 0x050308 });
+const HOLE_LIT = new THREE.MeshStandardMaterial({ color: 0x050308, emissive: 0xffb030, emissiveIntensity: 0.6 });
+
 const MONSTER_LOOK: Record<string, Look> = {
   gobelin: { model: 'q_gobelin', scale: 0.62, repli: { model: 'sk_minion', scale: 0.85, tint: 0xa8e080 } },
   squelette: { model: 'sk_warrior', scale: 1 },
@@ -73,6 +78,8 @@ interface Ent {
   label: HTMLDivElement;
   bubble: { text: string; until: number } | null;
   dyingUntil: number; // garde l'entité affichée le temps de l'animation de mort
+  gone?: boolean; // n'existe plus côté serveur : à retirer dès la fin de l'animation
+  lastHtml?: string; // dernière étiquette écrite (évite de réécrire le DOM à chaque image)
   busyUntil: number; // animation ponctuelle en cours
   color: string;
 }
@@ -286,7 +293,7 @@ export class World {
       }
       if (r.type === 'boss') {
         // L'escalier vers l'étage suivant : un trou qui s'illumine quand le boss est vaincu
-        const hole = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.3, 3.6), new THREE.MeshStandardMaterial({ color: 0x050308, emissive: r.bossAlive ? 0x000000 : 0xffb030, emissiveIntensity: r.bossAlive ? 0 : 0.6 }));
+        const hole = new THREE.Mesh(HOLE_GEO, r.bossAlive ? HOLE_DARK : HOLE_LIT);
         hole.position.set(c.x, -0.1, c.z - 4);
         this.dynamic.add(hole);
       }
@@ -336,8 +343,14 @@ export class World {
       });
     }
     for (const [key, e] of this.ents) {
-      if (seen.has(key)) continue;
-      if (e.dyingUntil > now) continue;
+      if (seen.has(key)) {
+        e.gone = false;
+        continue;
+      }
+      if (e.dyingUntil > now) {
+        e.gone = true; // retiré à la fin de son animation de mort (voir render)
+        continue;
+      }
       this.removeEnt(e);
       this.ents.delete(key);
     }
@@ -447,6 +460,11 @@ export class World {
   private removeEnt(e: Ent) {
     this.scene.remove(e.obj);
     e.mixer.stopAllAction();
+    e.mixer.uncacheRoot(e.obj);
+    e.obj.traverse((o) => {
+      const sk = (o as THREE.SkinnedMesh).skeleton;
+      if (sk) sk.dispose(); // texture des os, propre à chaque clone
+    });
     e.label.remove();
   }
 
@@ -474,6 +492,13 @@ export class World {
       if (e.roomId !== undefined && e.scope !== 'prive' && !e.npc) this.addHeat(e.roomId, e.drama + 8); // toute action compte un peu (pas le marchand)
       if (!e.fx) continue;
       const d = delay;
+      if ((e.fx.kind === 'death' || e.fx.kind === 'kill') && e.fx.dst) {
+        const t = this.ents.get(e.fx.dst);
+        if (t) {
+          t.dyingUntil = performance.now() + d + 2600;
+          t.path = [];
+        }
+      }
       setTimeout(() => this.playFx(e), d);
       delay += e.fx.kind === 'death' || e.fx.kind === 'crit' ? 700 : 320;
     }
@@ -662,6 +687,12 @@ export class World {
   // ------------------------------------------------------------------ rendu
 
   render(dt: number, now: number) {
+    for (const [key, e] of this.ents) {
+      if (e.gone && e.dyingUntil < now) {
+        this.removeEnt(e);
+        this.ents.delete(key);
+      }
+    }
     this.direct(now);
     // Nouveau plan sur une salle lointaine : on coupe au lieu de traverser toute la carte
     if (this.cut) {
@@ -785,7 +816,10 @@ export class World {
       const hpColor = pct > 50 ? '#5ce65c' : pct > 25 ? '#ffc23d' : '#ff4040';
       const bub = e.bubble && e.bubble.until > now ? `<div class="bub3d">${escapeHtml(e.bubble.text)}</div>` : '';
       const html = `${bub}<div class="n" style="color:${e.color}">${escapeHtml(e.name)}</div><div class="hp"><i style="width:${pct}%;background:${hpColor}"></i></div>`;
-      if (e.label.innerHTML !== html) e.label.innerHTML = html;
+      if (e.lastHtml !== html) {
+        e.lastHtml = html;
+        e.label.innerHTML = html;
+      }
     }
   }
 }

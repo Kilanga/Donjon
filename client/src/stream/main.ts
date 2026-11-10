@@ -31,13 +31,43 @@ initTelemetry(send, 'stream 3D');
 
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  const sock = ws;
   ws.onopen = () => {
+    wantedFloor = null;
+    floorSince = 0;
+    replay = true; // le premier lot d'évènements est un rappel : pas de cartons
+    lastMsg = Date.now();
     send({ type: 'hello', name: '', spectatorKey: key });
     telemetryReady();
   };
-  ws.onmessage = (e) => onMessage(JSON.parse(e.data) as ServerMsg);
-  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onmessage = (e) => {
+    lastMsg = Date.now();
+    try {
+      onMessage(JSON.parse(e.data) as ServerMsg);
+    } catch (err) {
+      console.error('[stream] message non traité', err);
+    }
+  };
+  ws.onclose = () => {
+    if (ws === sock) setTimeout(connect, 2000);
+  };
 }
+let lastMsg = Date.now();
+let replay = false;
+// Le serveur envoie l'état toutes les 5 s : 15 s de silence = connexion morte (tunnel, veille…), on la relance
+setInterval(() => {
+  if (!ws || Date.now() - lastMsg < 15_000) return;
+  const old = ws;
+  old.onclose = null;
+  old.onmessage = null;
+  try {
+    old.close();
+  } catch {
+    /* déjà fermée */
+  }
+  lastMsg = Date.now();
+  connect();
+}, 5000);
 
 function onMessage(m: ServerMsg) {
   if (m.type === 'state') {
@@ -53,6 +83,9 @@ function onMessage(m: ServerMsg) {
     for (const e of fresh) onEvent(e);
     for (const e of fresh) heatFloor(e);
     const win = fresh.find((e) => e.victory);
+    const first = replay;
+    replay = false;
+    if (first) return;
     if (win?.victory) showCard('VICTOIRE !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
   } else if (m.type === 'chat' && !m.cmd) {
     world.bubble(m.from, m.text);
@@ -62,7 +95,8 @@ function onMessage(m: ServerMsg) {
     showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
     if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();
   } else if (m.type === 'feedback' && !m.ok) {
-    $('load-msg').textContent = m.text + ' Ajoute ?cle=<clé de la régie> à l\'adresse.';
+    const lm = document.getElementById('load-msg');
+    if (lm) lm.textContent = m.text + ' Ajoute ?cle=<clé de la régie> à l\'adresse.';
   }
 }
 
@@ -104,6 +138,7 @@ function heatFloor(e: GameEvent) {
   floorHeat.set(e.floor, { s: heatOf(e.floor, now) + e.drama + 4, t: now });
 }
 
+let cardTimer = 0;
 function showCard(n: number | string, sub: string) {
   const card = $('card');
   card.querySelector('.c1')!.textContent = typeof n === 'number' ? `ÉTAGE ${n}` : n;
@@ -112,7 +147,8 @@ function showCard(n: number | string, sub: string) {
   card.style.animation = 'none';
   void card.offsetWidth;
   card.style.animation = '';
-  setTimeout(() => card.classList.add('hidden'), 2700);
+  clearTimeout(cardTimer);
+  cardTimer = window.setTimeout(() => card.classList.add('hidden'), 2700);
 }
 
 /** Choisit l'étage montré : il faut que ça vaille le déplacement (et au moins 25 s sur un étage). */
@@ -159,7 +195,7 @@ function renderHud(s: PlayerViewMsg) {
     const champs = s.champions ?? [];
     $('season').classList.remove('hidden');
     $('season-sub').textContent = champs.length ? `${champs.length} légende${champs.length > 1 ? 's' : ''} cette saison` : 'Personne n\'est sorti : le Donjon a gagné.';
-    $('season-list').innerHTML = champs.map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(PNJ)</small>' : ''}</b><span>niv ${c.level} · ${c.kills} monstres · ${c.deaths} morts</span></div>`).join('');
+    $('season-list').innerHTML = champs.slice(0, 10).map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(PNJ)</small>' : ''}</b><span>niv ${c.level} · ${c.kills} monstres · ${c.deaths} morts</span></div>`).join('');
   } else $('season').classList.add('hidden');
   // Les étages : qui est où, et combien de temps avant l'effondrement
   if (s.floors && s.floors.length > 1) {
@@ -260,12 +296,18 @@ function tickHud() {
   $('load').style.opacity = '0';
   setTimeout(() => $('load').remove(), 700);
   let last = performance.now();
+  let loopErrors = 0;
   const loop = (t: number) => {
     const dt = Math.min(0.1, (t - last) / 1000);
     last = t;
-    world.render(dt, t);
-    tickHud();
-    requestAnimationFrame(loop);
+    try {
+      world.render(dt, t);
+      tickHud();
+    } catch (e) {
+      if (++loopErrors <= 5) console.error('[stream] image non rendue', e); // la télémétrie remonte l'erreur au journal
+    } finally {
+      requestAnimationFrame(loop);
+    }
   };
   requestAnimationFrame(loop);
 })();

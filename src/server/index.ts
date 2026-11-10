@@ -14,6 +14,8 @@ import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
 import { BotManager } from './bots.js';
+import { maskPlayerText, nameAllowed } from './moderation.js';
+import { readJsonSafe, writeAtomic } from './fsutil.js';
 import { NpcSociety } from './pnj.js';
 import { Journal, errInfo } from './journal.js';
 import { buildReport } from './report.js';
@@ -25,22 +27,19 @@ const savePath = path.join(root, cfg.savePath);
 
 // --------------------------------------------------------------- sauvegarde
 function loadSave(): GameState | undefined {
-  try {
-    if (fs.existsSync(savePath)) {
-      const s = JSON.parse(fs.readFileSync(savePath, 'utf8')) as GameState;
-      console.log(`[sauvegarde] partie rechargée (tour ${s.turn}, ${Object.keys(s.players).length} joueurs)`);
+  // La sauvegarde principale, sinon la plus récente des sauvegardes de secours
+  const backups = [0, 1, 2].map((i) => savePath.replace(/\.json$/, `-secours-${i}.json`)).filter((f) => fs.existsSync(f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  for (const f of [savePath, ...backups]) {
+    const s = readJsonSafe<GameState>(f, 'sauvegarde');
+    if (s && s.players && s.floors) {
+      console.log(`[sauvegarde] partie rechargée depuis ${path.basename(f)} (tour ${s.turn}, ${Object.keys(s.players).length} joueurs)`);
       return s;
     }
-  } catch (e) {
-    console.error('[sauvegarde] fichier illisible, nouvelle partie :', e);
   }
   return undefined;
 }
 function save() {
-  fs.mkdirSync(path.dirname(savePath), { recursive: true });
-  const tmp = savePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(game.state));
-  fs.renameSync(tmp, savePath);
+  writeAtomic(savePath, JSON.stringify(game.state));
   // Sauvegarde de secours tous les 10 tours (3 fichiers en rotation)
   if (game.state.turn % 10 === 0) fs.copyFileSync(savePath, savePath.replace(/\.json$/, `-secours-${(game.state.turn / 10) % 3}.json`));
 }
@@ -49,7 +48,8 @@ function save() {
 if (cfg.spectatorKey === 'regie' && !process.env.SPECTATOR_KEY) {
   const keyFile = path.join(root, 'data', 'cle-regie.txt');
   try {
-    if (fs.existsSync(keyFile)) cfg.spectatorKey = fs.readFileSync(keyFile, 'utf8').trim();
+    const stored = fs.existsSync(keyFile) ? fs.readFileSync(keyFile, 'utf8').trim() : '';
+    if (stored.length >= 6) cfg.spectatorKey = stored;
     else {
       cfg.spectatorKey = Math.random().toString(36).slice(2, 10);
       fs.mkdirSync(path.dirname(keyFile), { recursive: true });
@@ -119,8 +119,15 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(recapHtml(game, cfg.turnSeconds, readLegends()));
     return;
   }
-  let file = path.normalize(path.join(staticDir, decodeURIComponent(url.pathname)));
-  if (!file.startsWith(staticDir)) {
+  let rel: string;
+  try {
+    rel = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+  let file = path.normalize(path.join(staticDir, rel));
+  if (file !== staticDir && !file.startsWith(staticDir + path.sep)) {
     res.writeHead(403).end();
     return;
   }
@@ -133,7 +140,9 @@ const server = http.createServer((req, res) => {
     file = path.join(staticDir, 'index.html');
   }
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] ?? 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
+  const rs = fs.createReadStream(file);
+  rs.on('error', () => res.destroy());
+  rs.pipe(res);
 });
 
 // Journaux de session (régie) : page de téléchargement, rapport Markdown, journal brut
@@ -202,6 +211,7 @@ Ils couvrent la dernière soirée (★ : ${evening.size} fichier(s), un par dém
 
 // -------------------------------------------------------------- WebSocket
 interface Client {
+  lastPos?: number; // dernier déplacement libre relayé (limite de débit)
   ws: WebSocket;
   name: string | null; // pseudo du joueur
   spectator: boolean;
@@ -217,7 +227,7 @@ let nextClientId = 1;
 /** Dernières commandes de chaque joueur (contexte des !bug). */
 const lastCmds = new Map<string, string[]>();
 const clients = new Set<Client>();
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
 let turnEndsAt = Date.now() + cfg.turnSeconds * 1000;
 let pausedAt: number | null = null; // pause de la régie
@@ -247,11 +257,8 @@ function sendState(c: Client) {
 // Légendes : tous ceux qui sont sortis par le dernier escalier, gardés d'une partie à l'autre (data/legendes.json)
 const legendsFile = path.join(root, 'data', 'legendes.json');
 function readLegends(): Legend[] {
-  try {
-    return fs.existsSync(legendsFile) ? (JSON.parse(fs.readFileSync(legendsFile, 'utf8')) as Legend[]) : [];
-  } catch {
-    return [];
-  }
+  const l = readJsonSafe<Legend[]>(legendsFile, 'légendes');
+  return Array.isArray(l) ? l : [];
 }
 const legendsSeen = new Set<number>();
 function recordLegends(events: GameEvent[]) {
@@ -264,8 +271,7 @@ function recordLegends(events: GameEvent[]) {
     journal.write('admin', { action: 'victoire', arg: e.victory!.name, msg: e.text });
   }
   try {
-    fs.mkdirSync(path.dirname(legendsFile), { recursive: true });
-    fs.writeFileSync(legendsFile, JSON.stringify(all, null, 1));
+    writeAtomic(legendsFile, JSON.stringify(all, null, 1));
   } catch (err) {
     console.error('[légendes] non enregistrées :', err);
   }
@@ -292,9 +298,15 @@ function deliver(events: GameEvent[]) {
 const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
 const narrator = new Narrator(game, ai, (evs) => deliver(evs));
 
+/** Pseudos vus dans le chat Twitch (la page web ne peut pas les prendre) et viewers rendus muets par la modération Twitch. */
+const twitchSeen = new Set<string>();
+const muted = new Map<string, number>(); // pseudo -> fin du silence (ms)
+const isMuted = (name: string) => (muted.get(playerKey(name)) ?? 0) > Date.now();
+
 /** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
 function say(name: string, text: string) {
-  const clean = text.replace(/\s+/g, ' ').trim().slice(0, 140);
+  if (isMuted(name)) return;
+  const clean = maskPlayerText(text.replace(/\s+/g, ' ').trim().slice(0, 140));
   if (!clean) return;
   journal.write('say', { name, text: clean });
   const p = game.player(name);
@@ -309,6 +321,7 @@ function say(name: string, text: string) {
 /** Traite une commande, qu'elle vienne de la page ou du chat Twitch. */
 function command(name: string, text: string, from?: Client) {
   const src = from ? 'web' : 'twitch';
+  if (isMuted(name)) return { ok: false, text: '' };
   if (game.player(name)?.bot) {
     // Un vrai joueur prend le pseudo d'un PNJ : le PNJ s'en va
     game.removeBot(name);
@@ -331,7 +344,7 @@ function command(name: string, text: string, from?: Client) {
     if (me && pnj) {
       npcs.speak(pnj, me, talk[2] ?? 'Salut !');
       if (from) send(from, { type: 'feedback', ok: true, text: `Tu t'adresses à ${pnj.name}.` });
-      for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: true, reply: `parle à ${pnj.name}`, src });
+      for (const c of clients) send(c, { type: 'chat', from: name, text: maskPlayerText(text), cmd: true, ok: true, reply: `parle à ${pnj.name}`, src });
       return { ok: true, text: '' };
     }
     try {
@@ -342,7 +355,7 @@ function command(name: string, text: string, from?: Client) {
     }
     journal.write('cmd', { name, text, src, ok: r.ok, reply: r.text, ms: 0 });
     if (from) send(from, { type: 'feedback', ok: r.ok, text: r.text });
-    for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: r.ok, reply: r.text.slice(0, 90), src });
+    for (const c of clients) send(c, { type: 'chat', from: name, text: maskPlayerText(text), cmd: true, ok: r.ok, reply: r.text.slice(0, 90), src });
     return r;
   }
   const before = game.state.nextId;
@@ -359,7 +372,7 @@ function command(name: string, text: string, from?: Client) {
   if (fresh.length) deliver(fresh);
   if (from) send(from, { type: 'feedback', ok: res.ok, text: res.text });
   // Les commandes affichées dans le faux chat, comme sur Twitch (avec le verdict pour le bandeau du stream)
-  for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: res.ok, reply: res.text.split('\n')[0].slice(0, 90), src });
+  for (const c of clients) send(c, { type: 'chat', from: name, text: maskPlayerText(text), cmd: true, ok: res.ok, reply: maskPlayerText(res.text.split('\n')[0].slice(0, 90)), src });
   for (const c of clients) if (c.spectator || (c.name && playerKey(c.name) === playerKey(name))) sendState(c);
   return res;
 }
@@ -390,13 +403,39 @@ wss.on('connection', (ws, req) => {
   const ua = String(req.headers['user-agent'] ?? '').slice(0, 200);
   const c: Client = { ws, name: null, spectator: false, floor: null, recent: [], id: nextClientId++, ua, mobile: /Mobi|Android|iPhone|iPad/i.test(ua), since: Date.now(), errors: 0 };
   clients.add(c);
+  let budget = 40; // messages permis (tous types) : +20 par seconde, au-delà on ignore
+  let lastRefill = Date.now();
+  let bad = 0;
+  let alive = true;
+  ws.on('pong', () => (alive = true));
+  const ping = setInterval(() => {
+    if (!alive) return ws.terminate(); // connexion morte (téléphone en veille…) : on la libère
+    alive = false;
+    ws.ping();
+  }, 30_000);
   ws.on('message', (data) => {
+    const now = Date.now();
+    budget = Math.min(40, budget + ((now - lastRefill) / 1000) * 20);
+    lastRefill = now;
+    if (budget < 1) return;
+    budget--;
+    let msg: ClientMsg;
     try {
-      onClientMessage(c, JSON.parse(String(data)) as ClientMsg);
+      msg = JSON.parse(String(data)) as ClientMsg;
+      if (!msg || typeof msg !== 'object') throw new Error('pas un objet');
+    } catch (e) {
+      if (++bad <= 3) console.error('[ws] message illisible ignoré :', (e as Error).message);
+      if (bad >= 20) ws.close(1008, 'messages invalides');
+      return;
+    }
+    try {
+      onClientMessage(c, msg);
     } catch (e) {
       console.error('[ws] message ignoré :', e);
     }
   });
+  ws.on('close', () => clearInterval(ping));
+  ws.on('error', (e) => { if (++bad <= 3) console.error('[ws] connexion fermée :', e.message); }); // message trop gros, etc.
   ws.on('close', () => {
     clients.delete(c);
     if (c.name || c.spectator) journal.write('disconnect', { cid: c.id, name: c.name, spectator: c.spectator, secs: Math.round((Date.now() - c.since) / 1000) });
@@ -410,8 +449,10 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         if (msg.spectatorKey !== cfg.spectatorKey) return send(c, { type: 'feedback', ok: false, text: 'Clé spectateur incorrecte.' });
         c.spectator = true;
       } else {
-        const name = String(msg.name ?? '').trim().slice(0, 24);
+        const name = String(msg.name ?? '').replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24); // pas de HTML ni de caractères de contrôle dans un pseudo
         if (!playerKey(name)) return send(c, { type: 'feedback', ok: false, text: 'Choisis un pseudo valide.' });
+        if (!nameAllowed(name)) return send(c, { type: 'feedback', ok: false, text: 'Ce pseudo ne passera pas à l\'antenne. Choisis-en un autre.' });
+        if (twitchSeen.has(playerKey(name)) || playerKey(name) === playerKey(cfg.twitchChannel)) return send(c, { type: 'feedback', ok: false, text: 'Ce pseudo est déjà utilisé dans le chat Twitch. Choisis-en un autre.' });
         c.name = name;
         if (game.player(name)?.bot) {
           game.removeBot(name);
@@ -446,6 +487,9 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         message: String(msg.message ?? '').slice(0, 500), stack: String(msg.stack ?? '').slice(0, 1500), where: String(msg.where ?? '').slice(0, 200),
       });
     } else if (msg.type === 'pos' && c.name) {
+      const now = Date.now();
+      if (now - (c.lastPos ?? 0) < 100) return; // 10 positions/s maximum
+      c.lastPos = now;
       // Déplacement libre dans la salle : purement visuel, relayé aux autres pages de l'étage
       const p = game.player(c.name);
       const x = Number(msg.x);
@@ -472,6 +516,7 @@ function admin(c: Client, action: string, arg?: string | number) {
         const delta = now - pausedAt;
         turnEndsAt += delta;
         for (const f of Object.values(game.state.floors)) if (f.collapseAt !== null) f.collapseAt += delta;
+        if (game.state.seasonStart !== null) game.state.seasonStart += delta; // l'horloge de saison suit la pause
         for (const p of Object.values(game.state.players)) if (p.immuneUntil > pausedAt) p.immuneUntil += delta;
         pausedAt = null;
       }
@@ -571,11 +616,20 @@ function runTurn() {
   } catch (e) {
     console.error('[pnj] erreur, la partie continue :', e);
   }
-  for (const c of clients) sendState(c);
   try {
     save();
   } catch (e) {
     console.error('[sauvegarde] échec :', e);
+  }
+  broadcastState();
+}
+function broadcastState() {
+  for (const c of clients) {
+    try {
+      sendState(c);
+    } catch (e) {
+      console.error('[état] page non mise à jour :', (e as Error).message);
+    }
   }
 }
 setInterval(() => {
@@ -583,9 +637,7 @@ setInterval(() => {
 }, 250);
 
 // Rafraîchit les chronos des pages toutes les 5 s (immunité, effondrement)
-setInterval(() => {
-  for (const c of clients) sendState(c);
-}, 5000);
+setInterval(broadcastState, 5000);
 
 // ------------------------------------------------------------ PNJ figurants
 /** Position libre d'un crawler dans sa salle (0..1), relayée aux pages de son étage et à la régie. */
@@ -628,7 +680,26 @@ setInterval(() => {
 }, 2500);
 
 // ----------------------------------------------------------------- Twitch
-if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(user, text));
+if (cfg.twitchChannel) {
+  connectTwitch(
+    cfg.twitchChannel,
+    (user, text) => {
+      const k = playerKey(user);
+      twitchSeen.add(k);
+      if (isMuted(user)) return; // banni ou en timeout sur Twitch : plus rien à l'antenne
+      try {
+        command(user, text);
+      } catch (e) {
+        console.error('[twitch] message non traité :', user, e);
+      }
+    },
+    (user, why, seconds) => {
+      muted.set(playerKey(user), Date.now() + seconds * 1000);
+      journal.write('admin', { action: 'muet', arg: user, msg: why });
+      console.log(`[twitch] ${user} : ${why} → ignoré par le jeu ${Number.isFinite(seconds) ? `pendant ${seconds} s` : 'jusqu\'au redémarrage'}`);
+    },
+  );
+}
 
 
 const onListenError = (e: NodeJS.ErrnoException) => {
@@ -655,7 +726,7 @@ process.on('unhandledRejection', (e) => console.error('[serveur] promesse rejet�
 
 process.on('exit', () => journal.flush());
 
-process.on('SIGINT', () => {
+const stop = () => {
   try {
     journal.write('snapshot', { leaderboard: game.leaderboard() });
     journal.write('stop', { players: Object.keys(game.state.players).length });
@@ -665,4 +736,5 @@ process.on('SIGINT', () => {
   } finally {
     process.exit(0);
   }
-});
+};
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const) process.on(sig, stop);

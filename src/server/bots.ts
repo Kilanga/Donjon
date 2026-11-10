@@ -105,6 +105,7 @@ export class BotManager {
 
   /** Après chaque tour : ajuster l'effectif, puis chaque PNJ choisit sa prochaine action. */
   afterTurn() {
+    if (this.game.state.seasonOver) return; // saison finie : les PNJ ne bougent plus
     this.balance();
     for (const b of this.bots()) {
       if (!b.alive) continue;
@@ -115,6 +116,7 @@ export class BotManager {
 
   /** Petits déplacements dans la salle entre deux tours, pour que la page ait l'air vivante. */
   fidget() {
+    if (this.game.state.seasonOver) return;
     for (const b of this.bots()) {
       if (!b.alive || Math.random() > 0.35) continue;
       this.hooks.pos(b.name, 0.15 + Math.random() * 0.7, 0.3 + Math.random() * 0.6);

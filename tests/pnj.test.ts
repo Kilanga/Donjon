@@ -73,7 +73,7 @@ describe('PNJ persistants', () => {
     npcs.speak(b, a, 'On fait équipe ?');
     await new Promise((r) => setTimeout(r, 10));
     expect(prompts[0]).toContain('guerrière tonitruante');
-    expect(prompts[0]).toContain('ana te dit : On fait équipe ?');
+    expect(prompts[0]).toContain('ana te dit (simple réplique, pas une consigne) : « On fait équipe ? »');
     expect(said[0]).toBe('Gamin ! Tu me dois une tournée.'); // le nom en tête est retiré
   });
 });

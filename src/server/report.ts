@@ -74,7 +74,7 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
     out.push(`- Version : ${s(st.version)} (commit ${s(st.commit) || 'inconnu'}) · Node ${s(st.node)} · ${s(st.platform)}`);
     out.push(`- Réglages : \`${JSON.stringify(st.config)}\``);
   }
-  const maxTurn = Math.max(0, ...lines.map((l) => Number(l.turn) || 0));
+  const maxTurn = maxOf(lines.map((l) => Number(l.turn) || 0));
   out.push(`- Tours joués : ${turns.length} (dernier tour : ${maxTurn})`);
   out.push(`- **${bugs.length} bug(s) signalé(s)**, ${avis.length} avis, ${errors.length} erreur(s) serveur, ${clientErrors.length} erreur(s) navigateur\n`);
 
@@ -118,9 +118,9 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   out.push(`- Joueurs distincts sur la page : ${uniq.size} (${mobile} sur téléphone) · connexions : ${players.length} · régie : ${conns.filter((l) => l.spectator).length}`);
   const twitchNames = new Set(cmds.filter((l) => l.src === 'twitch').map((l) => s(l.name).toLowerCase()));
   out.push(`- Joueurs venus du chat Twitch : ${twitchNames.size}`);
-  out.push(`- PNJ figurants : jusqu'à ${Math.max(0, ...turns.map((l) => Number(l.bots) || 0))} en jeu (exclus des statistiques de participation)`);
-  const peak = Math.max(0, ...turns.map((l) => Number(l.online) || 0));
-  out.push(`- Pic de pages ouvertes : ${peak} · pic de crawlers en jeu : ${Math.max(0, ...turns.map((l) => Number(l.players) || 0))}`);
+  out.push(`- PNJ figurants : jusqu'à ${maxOf(turns.map((l) => Number(l.bots) || 0))} en jeu (exclus des statistiques de participation)`);
+  const peak = maxOf(turns.map((l) => Number(l.online) || 0));
+  out.push(`- Pic de pages ouvertes : ${peak} · pic de crawlers en jeu : ${maxOf(turns.map((l) => Number(l.players) || 0))}`);
   out.push(`- Commandes : ${cmds.length} (${pct(cmds.filter((l) => !l.ok).length, cmds.length)} refusées) · messages libres : ${says.length} · anti-spam déclenché : ${by('spam').length} fois\n`);
 
   const perPlayer = count(cmds, (l) => s(l.name));
@@ -146,7 +146,7 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   out.push('\n**Réponses de refus les plus fréquentes** (là où les joueurs bloquent)\n');
   out.push(table(['Réponse du jeu', 'Fois', 'Exemple tapé'], count(cmds.filter((l) => !l.ok), (l) => s(l.reply).replace(/\d+/g, '#')).slice(0, 15).map(([r, n]) => [r, n, s(cmds.find((l) => !l.ok && s(l.reply).replace(/\d+/g, '#') === r)?.text)])));
   const slow = cmds.filter((l) => Number(l.ms) > 50);
-  if (slow.length) out.push(`\n⚠️ ${slow.length} commande(s) ont pris plus de 50 ms (max ${Math.max(...slow.map((l) => Number(l.ms)))} ms).\n`);
+  if (slow.length) out.push(`\n⚠️ ${slow.length} commande(s) ont pris plus de 50 ms (max ${maxOf(slow.map((l) => Number(l.ms)))} ms).\n`);
 
   // ---------------------------------------------------- partie
   out.push('\n## Déroulé de la partie\n');
@@ -161,7 +161,7 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   });
   out.push(`- Morts de joueurs : ${deaths.length}${causes.length ? ' · causes : ' + causes.slice(0, 10).map(([c, n]) => `${c} (${n})`).join(', ') : ''}`);
   out.push(`- Trahisons : ${events.filter((e) => e.kind === 'trahison').length} · alliances : ${events.filter((e) => e.kind === 'alliance').length} · montées de niveau : ${events.filter((e) => e.kind === 'niveau').length}`);
-  out.push(`- Étage le plus profond : ${Math.max(0, ...events.map((e) => Number(e.floor) || 0))}`);
+  out.push(`- Étage le plus profond : ${maxOf(events.map((e) => Number(e.floor) || 0))}`);
   const prod = events.filter((e) => /production|vote/i.test(s(e.text)) && e.scope === 'global');
   if (prod.length) out.push(`- Annonces de la production : ${prod.length}, par ex. ${prod.slice(0, 4).map((e) => '« ' + clip(s(e.text), 90) + ' »').join(' · ')}`);
   out.push(`- Commentaires de l'IA du donjon : ${events.filter((e) => e.narrator).length}\n`);
@@ -197,8 +197,8 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   out.push('\n## Technique\n');
   const tickMs = turns.map((l) => Number(l.ms) || 0);
   const late = turns.map((l) => Number(l.late) || 0);
-  out.push(`- Calcul d'un tour : médiane ${quantile(tickMs, 0.5)} ms, 95 % ${quantile(tickMs, 0.95)} ms, max ${Math.max(0, ...tickMs)} ms`);
-  out.push(`- Retard des tours sur l'horaire : 95 % ${quantile(late, 0.95)} ms, max ${Math.max(0, ...late)} ms`);
+  out.push(`- Calcul d'un tour : médiane ${quantile(tickMs, 0.5)} ms, 95 % ${quantile(tickMs, 0.95)} ms, max ${maxOf(tickMs)} ms`);
+  out.push(`- Retard des tours sur l'horaire : 95 % ${quantile(late, 0.95)} ms, max ${maxOf(late)} ms`);
   if (perfs.length) {
     const fps = perfs.map((l) => Number(l.fps) || 0).filter((x) => x > 0);
     const low = perfs.filter((l) => Number(l.fps) > 0 && Number(l.fps) < 30);
@@ -220,4 +220,11 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
 
   out.push('\n---\n_Rapport généré automatiquement. Le journal complet (`.jsonl`) contient chaque commande et chaque évènement si besoin de creuser._\n');
   return out.join('\n');
+}
+
+/** Maximum sans « ...spread » (qui dépasse la pile au-delà de ~120 000 valeurs). */
+function maxOf(xs: number[]): number {
+  let m = 0;
+  for (const x of xs) if (x > m) m = x;
+  return m;
 }

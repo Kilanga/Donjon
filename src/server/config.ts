@@ -50,7 +50,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   const cfg: GameConfig = { ...DEFAULT_CONFIG };
   const file = path.join(root, 'config.json');
   if (fs.existsSync(file)) {
-    const fromFile = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const fromFile = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); // Bloc-notes/PowerShell ajoutent parfois un BOM
     Object.assign(cfg, fromFile);
     cfg.ai = { ...DEFAULT_AI, ...(fromFile.ai ?? {}) };
     delete (cfg.ai as unknown as Record<string, unknown>).anthropicKey; // la clé ne se met jamais dans config.json
