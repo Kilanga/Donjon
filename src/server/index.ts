@@ -71,7 +71,7 @@ interface Client {
   name: string | null; // pseudo du joueur
   spectator: boolean;
   floor: number | null; // étage regardé (spectateur)
-  lastMsg: number;
+  recent: number[]; // horodatages des derniers messages (anti-spam)
 }
 const clients = new Set<Client>();
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -156,7 +156,7 @@ function command(name: string, text: string, from?: Client) {
 }
 
 wss.on('connection', (ws) => {
-  const c: Client = { ws, name: null, spectator: false, floor: null, lastMsg: 0 };
+  const c: Client = { ws, name: null, spectator: false, floor: null, recent: [] };
   clients.add(c);
   ws.on('message', (data) => {
     try {
@@ -184,8 +184,9 @@ function onClientMessage(c: Client, msg: ClientMsg) {
       sendState(c);
     } else if ((msg.type === 'cmd' || msg.type === 'say') && c.name) {
       const now = Date.now();
-      if (now - c.lastMsg < 250) return; // anti-spam
-      c.lastMsg = now;
+      c.recent = c.recent.filter((t) => now - t < 3000);
+      if (c.recent.length >= 8) return send(c, { type: 'feedback', ok: false, text: 'Doucement ! Trop de messages d\'un coup.' }); // anti-spam
+      c.recent.push(now);
       const text = String(msg.text ?? '').slice(0, 200);
       if (msg.type === 'say') say(c.name, text);
       else command(c.name, text, c);

@@ -243,6 +243,7 @@ function renderShared(s: PlayerViewMsg) {
   const box = $('vote');
   if (v) {
     box.classList.remove('hidden');
+    box.classList.toggle('voted', !!v.myVote);
     const opts = v.options.map((o) => {
       const tag = s.spectator ? 'div' : 'button';
       const attr = s.spectator ? 'class="vote-opt card"' : `class="vote-opt${v.myVote === o.key ? ' mine' : ''}" data-cmd="!vote ${o.n}"`;
