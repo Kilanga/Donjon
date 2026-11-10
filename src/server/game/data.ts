@@ -100,6 +100,12 @@ export const MONSTERS: MonsterTpl[] = [
   { kind: 'orque', names: ['Orque masqué', 'Orque pillard'], sprite: 'masked_orc_idle_anim', hp: 14, atk: 3, def: 2, dmg: 8, xp: 35, gold: [4, 12], minFloor: 2 },
   { kind: 'necromancien', names: ['Nécromancien apprenti', 'Nécromancien à capuche'], sprite: 'necromancer_anim', hp: 10, atk: 4, def: 2, dmg: 6, xp: 40, gold: [5, 14], minFloor: 2 },
   { kind: 'guerrier', names: ['Orque guerrier', 'Chef de guerre orque'], sprite: 'orc_warrior_idle_anim', hp: 16, atk: 4, def: 3, dmg: 8, xp: 45, gold: [5, 15], minFloor: 3, wanderer: true },
+  // Profondeurs (étage 4 et au-delà)
+  { kind: 'yeti', names: ['Yéti des cavernes', 'Yéti grognon'], sprite: 'ice_zombie_anim', hp: 20, atk: 4, def: 3, dmg: 8, xp: 55, gold: [6, 16], minFloor: 4, wanderer: true },
+  { kind: 'chaman', names: ['Chaman orque', 'Sorcier tribal'], sprite: 'orc_shaman_idle_anim', hp: 14, atk: 6, def: 2, dmg: 8, xp: 60, gold: [8, 18], minFloor: 4 },
+  { kind: 'marais', names: ['Horreur des marais', 'Crapaud des tourbières'], sprite: 'swampy_anim', hp: 22, atk: 4, def: 4, dmg: 8, xp: 65, gold: [8, 20], minFloor: 5 },
+  { kind: 'golem', names: ['Golem de boue', 'Colosse de vase'], sprite: 'muddy_anim', hp: 28, atk: 3, def: 6, dmg: 10, xp: 70, gold: [10, 22], minFloor: 5 },
+  { kind: 'lezard', names: ['Homme-lézard assassin', 'Lézard des profondeurs'], sprite: 'lizard_m_idle_anim', hp: 16, atk: 7, def: 4, dmg: 10, xp: 80, gold: [12, 26], minFloor: 6, wanderer: true },
 ];
 
 export const MIMIC: MonsterTpl = { kind: 'mimique', names: ['Mimique (ce n\'était pas un coffre)'], sprite: 'chest_mimic_open_anim', hp: 16, atk: 4, def: 2, dmg: 8, xp: 50, gold: [15, 40], minFloor: 1 };
@@ -107,6 +113,9 @@ export const MIMIC: MonsterTpl = { kind: 'mimique', names: ['Mimique (ce n\'éta
 export const BOSSES: MonsterTpl[] = [
   { kind: 'ogre', names: ['Grondak, ogre mangeur de héros'], sprite: 'ogre_idle_anim', hp: 38, atk: 5, def: 3, dmg: 10, xp: 200, gold: [40, 80], minFloor: 1, boss: true },
   { kind: 'gros_zombie', names: ['Moragh, la Matrone Putride'], sprite: 'big_zombie_idle_anim', hp: 42, atk: 4, def: 2, dmg: 10, xp: 200, gold: [40, 80], minFloor: 1, boss: true },
+  { kind: 'yeti_ancien', names: ['Grimfrost, le Yéti Ancien'], sprite: 'ogre_idle_anim', hp: 48, atk: 7, def: 5, dmg: 12, xp: 350, gold: [80, 140], minFloor: 4, boss: true },
+  { kind: 'dragon', names: ['Vorthrax, dragon des profondeurs'], sprite: 'big_demon_idle_anim', hp: 52, atk: 8, def: 6, dmg: 14, xp: 450, gold: [100, 180], minFloor: 5, boss: true },
+  { kind: 'crapaud_roi', names: ['Gorgoth, le Crapaud-Roi'], sprite: 'big_zombie_idle_anim', hp: 56, atk: 7, def: 7, dmg: 12, xp: 500, gold: [120, 200], minFloor: 6, boss: true },
   { kind: 'gros_demon', names: ['Baal-Zéphor, seigneur des abysses'], sprite: 'big_demon_idle_anim', hp: 36, atk: 6, def: 4, dmg: 10, xp: 220, gold: [50, 90], minFloor: 1, boss: true },
 ];
 

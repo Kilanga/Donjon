@@ -301,7 +301,7 @@ function command(name: string, text: string, from?: Client) {
     if (me && pnj) {
       npcs.speak(pnj, me, talk[2] ?? 'Salut !');
       if (from) send(from, { type: 'feedback', ok: true, text: `Tu t'adresses à ${pnj.name}.` });
-      for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
+      for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: true, reply: `parle à ${pnj.name}`, src });
       return { ok: true, text: '' };
     }
     try {
@@ -312,7 +312,7 @@ function command(name: string, text: string, from?: Client) {
     }
     journal.write('cmd', { name, text, src, ok: r.ok, reply: r.text, ms: 0 });
     if (from) send(from, { type: 'feedback', ok: r.ok, text: r.text });
-    for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
+    for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: r.ok, reply: r.text.slice(0, 90), src });
     return r;
   }
   const before = game.state.nextId;
@@ -328,8 +328,8 @@ function command(name: string, text: string, from?: Client) {
   const fresh = game.state.events.filter((e) => e.id >= before);
   if (fresh.length) deliver(fresh);
   if (from) send(from, { type: 'feedback', ok: res.ok, text: res.text });
-  // Les commandes affichées dans le faux chat, comme sur Twitch
-  for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
+  // Les commandes affichées dans le faux chat, comme sur Twitch (avec le verdict pour le bandeau du stream)
+  for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true, ok: res.ok, reply: res.text.split('\n')[0].slice(0, 90), src });
   for (const c of clients) if (c.spectator || (c.name && playerKey(c.name) === playerKey(name))) sendState(c);
   return res;
 }

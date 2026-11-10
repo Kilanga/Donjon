@@ -91,7 +91,10 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
   }
 
   // Monstres
-  const pool = MONSTERS.filter((m) => m.minFloor <= n);
+  // Plus on descend, plus les monstres faibles disparaissent : à l'étage n, on ne garde que ceux d'au moins l'étage n − 3
+  const all = MONSTERS.filter((m) => m.minFloor <= n);
+  const deep = all.filter((m) => m.minFloor >= n - 3);
+  const pool = deep.some((m) => !m.wanderer) && deep.some((m) => m.wanderer) ? deep : all;
   const fixed = pool.filter((m) => !m.wanderer);
   const wanderers = pool.filter((m) => m.wanderer);
   for (const r of rooms) {
@@ -102,7 +105,9 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
     if (r.type === 'tresor' && rng.chance(0.6)) floor.monsters.push(spawnMonster(rng.pick(fixed), n, r.id, rng, nextId));
     if (r.type === 'arene') floor.monsters.push(spawnMonster(rng.pick(fixed), n + 1, r.id, rng, nextId));
   }
-  floor.monsters.push(spawnMonster(rng.pick(BOSSES), n, boss.id, rng, nextId));
+  // Boss : les classiques en haut, les boss des profondeurs plus bas (les plus récents d'abord)
+  const bosses = BOSSES.filter((b) => b.minFloor <= n && b.minFloor >= Math.max(1, n - 2));
+  floor.monsters.push(spawnMonster(rng.pick(bosses.length ? bosses : BOSSES), n, boss.id, rng, nextId));
   const normals = rooms.filter((r) => r.type === 'normale' && dist[r.id] > 1);
   const nWander = Math.max(2, Math.round(count / 8));
   for (let i = 0; i < nWander && normals.length; i++) {

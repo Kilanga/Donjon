@@ -43,6 +43,18 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 #lb .r .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #lb .r .s { color: var(--mut); font-size: 12px; }
 #lb .r.dead .nm { opacity: .5; text-decoration: line-through; }
+#cmds { position: absolute; right: 20px; top: 330px; width: 290px; padding: 10px 14px; }
+#cmds h3 { margin: 0 0 6px; font: 600 15px 'Pixelify Sans', monospace; color: var(--gold); }
+#cmds .c { font-size: 13px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,.06); animation: cmdIn .3s ease-out; }
+#cmds .c:first-child { border-top: 0; }
+#cmds .c b { color: #fff; }
+#cmds .c code { color: #ffd65a; font-family: inherit; }
+#cmds .c .v { float: right; font-weight: 700; }
+#cmds .c.ok .v { color: #6dff8a; }
+#cmds .c.ko .v { color: #ff6b6b; }
+#cmds .c .why { display: block; color: var(--mut); font-size: 12px; margin-top: 1px; }
+#cmds .c.tw b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #9146ff; margin-right: 5px; vertical-align: 1px; }
+@keyframes cmdIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 #vote { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); padding: 10px 14px; border: 2px solid var(--gold); text-align: center; }
 #vote .t { font: 600 17px 'Pixelify Sans', monospace; color: var(--gold); margin-bottom: 8px; }
 #vote .o { display: inline-flex; flex-direction: column; align-items: center; width: 200px; margin: 0 4px; padding: 6px 8px; background: rgba(255,255,255,.05); border-radius: 8px; }

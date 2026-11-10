@@ -30,6 +30,14 @@ const MONSTER_LOOK: Record<string, Look> = {
   mimique: { model: 'sk_rogue', scale: 0.9, tint: 0xffd060 },
   ogre: { model: 'q_ogre', scale: 1.45, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xff9a60, emissive: 0x401000 } },
   gros_zombie: { model: 'q_champignon', scale: 1.3, tint: 0xc8e0b0, repli: { model: 'sk_minion', scale: 1.8, tint: 0xa0ffb0, emissive: 0x003010 } },
+  yeti: { model: 'q_yeti', scale: 1.15, repli: { model: 'sk_warrior', scale: 1.2, tint: 0xd0e8ff } },
+  chaman: { model: 'q_chaman', scale: 0.95, repli: { model: 'sk_mage', scale: 1, tint: 0xb0e080 } },
+  marais: { model: 'q_crapaud', scale: 1.0, tint: 0x9ac070, repli: { model: 'sk_minion', scale: 1.1, tint: 0x80b060 } },
+  golem: { model: 'q_golem', scale: 0.95, tint: 0xd8b088, repli: { model: 'sk_warrior', scale: 1.3, tint: 0x9a7a50 } },
+  lezard: { model: 'q_lezard', scale: 1.05, repli: { model: 'sk_rogue', scale: 1.05, tint: 0x80d090 } },
+  yeti_ancien: { model: 'q_yeti', scale: 1.6, tint: 0xd8ecff, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xd0e8ff } },
+  dragon: { model: 'q_dragon', scale: 1.5, emissive: 0x301000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff8040, emissive: 0x401000 } },
+  crapaud_roi: { model: 'q_crapaud', scale: 1.6, tint: 0xc0e090, repli: { model: 'sk_minion', scale: 1.8, tint: 0x90c070 } },
   gros_demon: { model: 'q_diablotin', scale: 1.3, emissive: 0x501000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff5050, emissive: 0x400000 } },
 };
 

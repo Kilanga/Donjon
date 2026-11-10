@@ -17,7 +17,7 @@ export type PieceName = (typeof PIECES)[number];
 
 export const CHARACTERS = ['chevalier', 'barbare', 'mage', 'voleur', 'sk_minion', 'sk_warrior', 'sk_mage', 'sk_rogue'] as const;
 /** Monstres Quaternius (fichiers assets/3d/monstres/<nom>.glb), désignés « q_<nom> ». */
-export const MONSTER_MODELS = ['gobelin', 'diablotin', 'demon', 'orque', 'orque_chef', 'slime', 'ogre', 'champignon'] as const;
+export const MONSTER_MODELS = ['gobelin', 'diablotin', 'demon', 'orque', 'orque_chef', 'slime', 'ogre', 'champignon', 'yeti', 'chaman', 'crapaud', 'golem', 'lezard', 'dragon'] as const;
 export type CharName = (typeof CHARACTERS)[number] | `q_${(typeof MONSTER_MODELS)[number]}`;
 
 /** Animations KayKit demandées par la scène -> équivalents possibles chez Quaternius (le premier trouvé gagne). */

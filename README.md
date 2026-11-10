@@ -134,6 +134,21 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 
 Pour tester vite seul : `"turnSeconds": 5`, `"floorMinutes": 5`, puis `npm run bots -- 6` dans un second terminal.
 
+## Étages et profondeurs
+
+Chaque étage est généré au hasard quand le premier joueur y arrive : plan, salles spéciales (trésor, pièges, arène), monstres
+et boss. Il grandit avec le nombre de joueurs (20 salles minimum, 2 par joueur) et durcit à chaque niveau (PV, attaque,
+défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
+
+- **Nouvelles créatures en profondeur :** orques (étage 2), chefs de guerre et nécromanciens (3), yétis et chamans (4),
+  horreurs des marais et golems de boue (5), hommes-lézards assassins (6). Plus on descend, plus les monstres faibles disparaissent.
+- **Boss :** Grondak, Moragh et Baal-Zéphor aux étages 1 à 3, puis Grimfrost le Yéti Ancien (4), Vorthrax le dragon (5)
+  et Gorgoth le Crapaud-Roi (6).
+- **Thèmes avec effets :** *inondé* (un déplacement sur trois glisse), *en feu* (braises : −2 PV de temps en temps hors safe room),
+  *plongé dans le noir* (−2 pour toucher, mais fuir est plus facile), *moisi* (les monstres regagnent 1 PV par tour),
+  *hanté* (des fantômes volent un peu d'or et le cachent ailleurs). L'effet est annoncé à la création de l'étage
+  et rappelé au survol du thème sur la page joueur.
+
 ## PNJ figurants
 
 Pour qu'il y ait toujours de la vie dans le donjon, le serveur fait jouer jusqu'à **10 PNJ** (Brunhilde, Gorim Barbe-Grise,
@@ -154,6 +169,8 @@ plan large quand c'est calme, bandeau « EN DIRECT » sur les moments forts, cla
 
 - Adresse : `http://localhost:3000/stream.html?cle=<clé de la régie>` (lien « Vue stream 3D » dans la régie).
 - Pour suivre un seul crawler : ajoute `&suivre=Pseudo`.
+- Le bandeau « Commandes du chat » montre chaque commande avec ✓ ou ✗ (et la raison) : les joueurs Twitch voient
+  si leur commande est passée, puisque le jeu ne peut pas leur répondre dans le chat.
 - **Dans OBS** : Sources → « Navigateur », URL ci-dessus, largeur 1920, hauteur 1080. Le HUD est prévu pour ce format
   et se réduit tout seul dans une fenêtre plus petite (partage d'écran Discord, par exemple).
 - C'est la page la plus gourmande : il faut une carte graphique correcte. Si elle saccade, reste sur la vue 2D de la régie.

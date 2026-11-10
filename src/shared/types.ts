@@ -190,7 +190,7 @@ export type ServerMsg =
   | PlayerViewMsg
   | { type: 'events'; events: GameEvent[] }
   | { type: 'feedback'; ok: boolean; text: string }
-  | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number }
+  | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number; ok?: boolean; reply?: string; src?: 'web' | 'twitch' }
   | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number }; // position libre d'un crawler dans sa salle
 
 export type ClientMsg =

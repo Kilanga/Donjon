@@ -2,6 +2,7 @@
 import type { ClientMsg, GameEvent, Item, PlayerViewMsg, RoomView, ServerMsg } from '../../src/shared/types';
 import { MapRenderer } from './map';
 import { PRODUCTION_EVENTS } from '../../src/server/game/production';
+import { THEME_EFFECTS } from '../../src/shared/themes';
 import { Stage } from './stage';
 import { CLASS_SPRITE, Tiles } from './tiles';
 import { initTelemetry, telemetryReady } from './telemetry';
@@ -79,7 +80,7 @@ function onMessage(m: ServerMsg) {
     logLine(m.text, m.ok ? 'k-prive' : 'k-feedback-ko');
     if (!m.ok && !state?.me) $('login-msg').textContent = m.text;
   } else if (m.type === 'chat') {
-    chatLine(m.from, m.text, !!m.cmd);
+    chatLine(m.from, m.text + (m.cmd && m.ok === false ? ' ✗' : ''), !!m.cmd);
     if (!m.cmd) map.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
     map.remotePos(m.name, m.floor, m.roomId, m.x, m.y);
@@ -155,7 +156,8 @@ function render() {
   }
 
   $('hud-floor').textContent = f ? `Étage ${f.n}` : 'Étage —';
-  $('hud-theme').textContent = f ? `thème : ${f.theme}` : '';
+  $('hud-theme').textContent = f ? `thème : ${f.theme}${THEME_EFFECTS[f.theme] ? ' ⚠' : ''}` : '';
+  $('hud-theme').title = f ? THEME_EFFECTS[f.theme] ?? '' : '';
   $('hud-online').textContent = `${s.online} connecté(s)`;
   map.setFloor(f);
   renderShared(s);

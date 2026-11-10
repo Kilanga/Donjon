@@ -52,9 +52,23 @@ function onMessage(m: ServerMsg) {
     for (const e of fresh) onEvent(e);
   } else if (m.type === 'chat' && !m.cmd) {
     world.bubble(m.from, m.text);
+  } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
+    showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
   } else if (m.type === 'feedback' && !m.ok) {
     $('load-msg').textContent = m.text + ' Ajoute ?cle=<clé de la régie> à l\'adresse.';
   }
+}
+
+/** Bandeau des commandes du chat : le joueur Twitch voit si sa commande est passée (✓) ou pourquoi elle a échoué (✗). */
+function showCommand(from: string, text: string, ok: boolean, reply: string, twitch: boolean) {
+  $('cmds').classList.remove('hidden');
+  const list = $('cmds-list');
+  const row = document.createElement('div');
+  row.className = `c ${ok ? 'ok' : 'ko'}${twitch ? ' tw' : ''}`;
+  const why = !ok && reply ? `<span class="why">${esc(reply)}</span>` : '';
+  row.innerHTML = `<span class="v">${ok ? '✓' : '✗'}</span><b>${esc(from)}</b> <code>${esc(text.slice(0, 40))}</code>${why}`;
+  list.prepend(row);
+  while (list.children.length > 6) list.lastElementChild!.remove();
 }
 
 /** Le stream montre l'étage où il y a le plus de crawlers vivants. */

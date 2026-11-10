@@ -9,6 +9,7 @@ import {
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
 import { MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
+import { THEME_EFFECTS } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
@@ -136,7 +137,8 @@ export class Game {
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
       f = generateFloor(n, rooms, this.rng, this.nextId);
       this.state.floors[n] = f;
-      this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} vient d'être creusé (${f.rooms.length} salles, thème : ${f.theme}).`, scope: 'global', drama: 5 });
+      const effect = THEME_EFFECTS[f.theme];
+      this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} vient d'être creusé (${f.rooms.length} salles, thème : ${f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
   }
@@ -527,6 +529,7 @@ export class Game {
       }
       if (treachery) bonus += 5;
     } else bonus = (att as { m: MonsterState }).m.atk;
+    if (this.state.floors[floorN]?.theme === 'plongé dans le noir') bonus -= 2; // on y voit mal
     const nat = this.rng.die(20);
     const total = nat + bonus;
     const defRoll = dp ? this.rng.die(20) + dp.stats.agi + half(dp.level) + (dp.armor?.def ?? 0) : this.rng.die(20) + (def as { m: MonsterState }).m.def;
@@ -878,14 +881,14 @@ export class Game {
     const r = f.rooms[p.roomId];
     const target = r.doors[dir];
     if (target === undefined) return this.say(p, `Il n'y a pas de porte au ${DIR_LABEL[dir]}. Juste un mur, très convaincant.`);
-    if (this.state.turn < this.state.floodUntil && r.type !== 'safe' && this.rng.chance(1 / 3)) {
+    if ((this.state.turn < this.state.floodUntil || f.theme === 'inondé') && r.type !== 'safe' && this.rng.chance(1 / 3)) {
       return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} glisse dans l'eau en voulant aller au ${DIR_LABEL[dir]} et fait un plat magnifique.`, 15);
     }
     const hostiles = this.monstersIn(p.floor, p.roomId).filter((m) => m.distracted <= 0);
     if (hostiles.length && r.type !== 'safe') {
       if (p.buffs.smoke) p.buffs.smoke = false;
       else {
-        const dc = 10 + Math.max(...hostiles.map((m) => m.atk));
+        const dc = 10 + Math.max(...hostiles.map((m) => m.atk)) - (f.theme === 'plongé dans le noir' ? 3 : 0);
         const c = this.check(p, 'agi', dc);
         if (!c.ok) {
           const m = this.rng.pick(hostiles);
@@ -962,12 +965,41 @@ export class Game {
       this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} réapparaît dans la safe room de l'étage ${f.n}, l'air vexé. Immunisé ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
+    this.themeEffects(players);
     // Le marchand rappelle une règle toutes les 4 tours, s'il a du public
     if (this.state.turn % 4 === 0) {
       const tip = MERCHANT_TIPS[(this.state.turn / 4) % MERCHANT_TIPS.length];
       for (const f of Object.values(this.state.floors)) {
         if (f.collapsed) continue;
         for (const r of f.rooms) if (r.type === 'safe' && this.playersIn(f.n, r.id).length) this.merchantSays(f.n, r.id, tip);
+      }
+    }
+  }
+
+  /** Effets des thèmes d'étage, à chaque fin de tour. */
+  private themeEffects(players: PlayerState[]) {
+    for (const f of Object.values(this.state.floors)) {
+      if (f.collapsed) continue;
+      const here = players.filter((p) => p.alive && p.floor === f.n);
+      if (!here.length) continue;
+      if (f.theme === 'en feu') {
+        for (const p of here) {
+          if (f.rooms[p.roomId].type === 'safe' || !this.rng.chance(0.12)) continue;
+          this.roomEvent(p, f.n, p.roomId, 'piege', `Une braise jaillit du sol et ${p.name} se brûle les orteils. (−2 PV)`, 15, [], { kind: 'trap', dst: `p:${p.name}` });
+          this.damagePlayer(p, 2, 'les flammes de l\'étage', null);
+        }
+      } else if (f.theme === 'moisi') {
+        for (const m of f.monsters) if (m.hp > 0 && m.hp < m.maxHp) m.hp++;
+      } else if (f.theme === 'hanté' && this.rng.chance(0.15)) {
+        const rich = here.filter((p) => p.gold > 0 && f.rooms[p.roomId].type !== 'safe');
+        if (rich.length) {
+          const p = this.rng.pick(rich);
+          const n = Math.min(p.gold, this.rng.int(2, 6));
+          p.gold -= n;
+          const hide = this.rng.pick(f.rooms.filter((r) => r.type !== 'safe'));
+          hide.groundGold += n;
+          this.roomEvent(p, f.n, p.roomId, 'drole', `Un fantôme chapardeur subtilise ${n} po à ${p.name} et file les cacher dans une autre salle. Bouh.`, 25);
+        }
       }
     }
   }
