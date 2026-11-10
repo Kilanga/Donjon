@@ -151,7 +151,9 @@ défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
 
 ## Fin du donjon et Légendes
 
-Le **dernier étage** (6 par défaut, réglable : `"finalFloor": 5` dans `config.json` ou `FINAL_FLOOR=5`) ne s'effondre pas.
+Le **dernier étage** (6 par défaut, réglable : `"finalFloor": 5` dans `config.json` ou `FINAL_FLOOR=5`) a son chrono
+comme les autres, mais **son effondrement termine la saison** : la partie se fige, le stream affiche « FIN DE LA SAISON »
+avec les Légendes, et les commandes répondent que la saison est finie (« Nouvelle partie » dans la régie pour recommencer).
 Son boss garde la **sortie** : une fois vaincu, la sortie reste ouverte **6 tours** — `!descendre` dans sa salle fait sortir
 du donjon et entrer dans la **Légende** (carton « VICTOIRE ! » sur le stream). Ensuite le gardien se relève : les suivants
 devront le battre à leur tour, pas de passage gratuit.

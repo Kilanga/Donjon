@@ -137,6 +137,14 @@ function itemLine(it: Item) {
 function render() {
   if (!state) return;
   const s = state;
+  // Fin de saison : bandeau en haut de la page
+  let banner = document.getElementById('season-banner');
+  if (s.seasonOver && !banner) {
+    banner = document.createElement('div');
+    banner.id = 'season-banner';
+    banner.textContent = 'FIN DE LA SAISON : le dernier étage s\'est effondré. Merci d\'avoir joué ! Les Légendes sont dans le journal.';
+    document.body.prepend(banner);
+  } else if (!s.seasonOver && banner) banner.remove();
   const me = s.me;
   const f = s.floor;
 

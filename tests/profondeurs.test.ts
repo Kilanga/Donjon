@@ -85,7 +85,7 @@ describe('thèmes d\'étage', () => {
 });
 
 describe('dernier étage et légendes', () => {
-  it('le dernier étage ne s\'effondre pas, et son escalier fait entrer dans la Légende', () => {
+  it('l\'escalier du dernier étage fait entrer dans la Légende', () => {
     const g = new Game({ ...DEFAULT_CONFIG, seed: 4, finalFloor: 2 });
     g.submit('ana', '!join barbare', T0);
     const p = g.player('ana')!;
@@ -93,7 +93,6 @@ describe('dernier étage et légendes', () => {
     p.floor = 2;
     p.roomId = f2.bossRoom;
     for (const m of f2.monsters) if (m.roomId === f2.bossRoom) m.hp = 0;
-    expect(f2.collapseAt).toBeNull();
     g.submit('ana', '!descendre', T0 + 1);
     const ev = g.tick(T0 + 20_000);
     const win = ev.find((e) => e.victory);
@@ -101,5 +100,24 @@ describe('dernier étage et légendes', () => {
     expect(g.state.champions).toHaveLength(1);
     expect(g.player('ana')).toBeUndefined(); // sorti de la partie
     expect(g.floor(3)).toBeUndefined(); // pas d'étage au-delà
+  });
+
+  it('l\'effondrement du dernier étage termine la saison et fige la partie', () => {
+    const g = new Game({ ...DEFAULT_CONFIG, seed: 4, finalFloor: 2, floorMinutes: 1 });
+    g.submit('ana', '!join barbare', T0);
+    const p = g.player('ana')!;
+    const f2 = g.freshFloor(2);
+    p.floor = 2;
+    p.roomId = f2.spawnRoom;
+    f2.startedAt = T0;
+    f2.collapseAt = T0 + 60_000;
+    const ev = g.tick(T0 + 61_000);
+    expect(ev.some((e) => e.seasonEnd)).toBe(true);
+    expect(g.state.seasonOver).toBe(true);
+    expect(p.floor).toBe(2); // pas de chute : la saison est finie
+    expect(g.tick(T0 + 81_000)).toHaveLength(0);
+    expect(g.submit('ana', '!nord', T0 + 82_000).text).toContain('saison est terminée');
+    g.reset();
+    expect(g.state.seasonOver).toBe(false);
   });
 });

@@ -137,7 +137,7 @@ export class Game {
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
       f = generateFloor(n, rooms, this.rng, this.nextId);
       this.state.floors[n] = f;
-      const effect = (n >= this.cfg.finalFloor ? 'DERNIER ÉTAGE : battez le boss et prenez la sortie pour entrer dans la Légende. ' : '') + (THEME_EFFECTS[f.theme] ?? '');
+      const effect = (n >= this.cfg.finalFloor ? 'DERNIER ÉTAGE : battez le boss et prenez la sortie pour entrer dans la Légende. Son effondrement termine la saison ! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} vient d'être creusé (${f.rooms.length} salles, thème : ${f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
@@ -146,7 +146,6 @@ export class Game {
   /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (les PNJ figurants ne le déclenchent pas). */
   private startTimer(f: FloorState, p?: PlayerState) {
     if (p?.bot) return;
-    if (f.n >= this.cfg.finalFloor) return; // le dernier étage ne s'effondre pas : on y gagne ou on y reste
     if (f.startedAt === null) {
       f.startedAt = this.now;
       f.collapseAt = this.now + this.cfg.floorMinutes * 60_000;
@@ -177,6 +176,7 @@ export class Game {
   submit(name: string, raw: string, now = Date.now()): SubmitResult {
     this.now = now;
     const cmd = parseCommand(raw);
+    if (this.state.seasonOver && cmd?.name !== 'help') return { ok: false, text: 'La saison est terminée : merci d\'avoir joué ! Rendez-vous à la prochaine.' };
     if (!cmd) {
       const guess = suggestCommand(raw);
       return { ok: false, text: guess ? `Commande inconnue. Tu voulais dire ${guess} ?` : 'Commande inconnue. Tape !aide pour la liste.' };
@@ -315,6 +315,7 @@ export class Game {
   tick(now = Date.now()): GameEvent[] {
     this.now = now;
     this.out = [];
+    if (this.state.seasonOver) return []; // saison terminée : plus rien ne bouge
     this.state.turn++;
     const players = Object.values(this.state.players);
 
@@ -1025,6 +1026,17 @@ export class Game {
     }
   }
 
+  /** Le dernier étage s'effondre : la saison est terminée, la partie se fige (la régie peut relancer une nouvelle partie). */
+  private endSeason(f: FloorState) {
+    this.state.seasonOver = true;
+    const stuck = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive).map((p) => p.name);
+    const champs = this.state.champions.map((c) => c.name);
+    this.emit({
+      floor: f.n, kind: 'systeme', scope: 'global', drama: 200, seasonEnd: true,
+      text: `FIN DE LA SAISON ! L'étage ${f.n} s'effondre et le Donjon se referme.${stuck.length ? ` ${stuck.join(', ')} y restent enfermés pour toujours (ou jusqu'à la prochaine saison).` : ''} ${champs.length ? `Légendes de la saison : ${champs.join(', ')}.` : 'Personne n\'est sorti : le Donjon a gagné.'}`,
+    });
+  }
+
   /** Sortie du donjon par l'escalier du dernier étage : le crawler entre dans la Légende et quitte la partie. */
   private finish(p: PlayerState) {
     const legend: Legend = {
@@ -1046,6 +1058,7 @@ export class Game {
   /** Effondrement : ceux qui sont restés tombent à l'étage suivant (PV et or perdus, équipement gardé). */
   private collapse(f: FloorState) {
     f.collapsed = true;
+    if (f.n >= this.cfg.finalFloor) return this.endSeason(f);
     const victims = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive);
     this.emit({ floor: f.n, kind: 'systeme', text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${victims.length ? `${victims.map((v) => v.name).join(', ')} n'ont pas trouvé la sortie et passent à travers le plancher.` : 'Personne n\'est resté coincé, bravo.'}`, scope: 'global', drama: 70 });
     if (!victims.length) return;

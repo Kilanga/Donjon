@@ -153,7 +153,14 @@ function renderHud(s: PlayerViewMsg) {
   const f = s.floor;
   const alive = s.leaderboard.filter((r) => r.alive).length;
   $('meta').innerHTML = f ? `Étage <b>${f.n}</b> · ${esc(f.theme)} · <b>${alive}</b> crawlers en vie` : '—';
-  $('pause').classList.toggle('hidden', !s.paused);
+  $('pause').classList.toggle('hidden', !s.paused || !!s.seasonOver);
+  // Fin de saison : écran final avec les Légendes de la saison
+  if (s.seasonOver) {
+    const champs = s.champions ?? [];
+    $('season').classList.remove('hidden');
+    $('season-sub').textContent = champs.length ? `${champs.length} légende${champs.length > 1 ? 's' : ''} cette saison` : 'Personne n\'est sorti : le Donjon a gagné.';
+    $('season-list').innerHTML = champs.map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(PNJ)</small>' : ''}</b><span>niv ${c.level} · ${c.kills} monstres · ${c.deaths} morts</span></div>`).join('');
+  } else $('season').classList.add('hidden');
   // Les étages : qui est où, et combien de temps avant l'effondrement
   if (s.floors && s.floors.length > 1) {
     $('floors').classList.remove('hidden');

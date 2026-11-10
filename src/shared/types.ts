@@ -122,6 +122,7 @@ export interface GameEvent {
   narrator?: boolean; // commentaire généré par l'IA du donjon
   npc?: 'marchand'; // réplique d'un PNJ (bulle au-dessus de lui)
   victory?: Legend; // un crawler sort du donjon par le dernier escalier
+  seasonEnd?: boolean; // le dernier étage s'effondre : fin de la saison
   // Effet visuel/sonore : entités 'p:<nom affiché>' ou 'm:<id monstre>'
   fx?: GameFx;
 }
@@ -187,6 +188,8 @@ export interface PlayerViewMsg {
   effects: EffectsView;
   obituary: { turn: number; text: string }[];
   floors?: FloorSummary[]; // étages debout et qui y est (vue stream, régie)
+  seasonOver?: boolean; // saison terminée (effondrement du dernier étage)
+  champions?: Legend[]; // vainqueurs de cette saison (vue stream)
 }
 
 /** Un crawler sorti vivant par l'escalier du dernier étage. */
