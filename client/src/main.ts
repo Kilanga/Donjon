@@ -1,6 +1,7 @@
 // Page joueur : connexion, affichage de l'état, envoi des commandes.
 import type { ClientMsg, GameEvent, Item, PlayerViewMsg, RoomView, ServerMsg } from '../../src/shared/types';
 import { MapRenderer } from './map';
+import { Stage } from './stage';
 import { CLASS_SPRITE, Tiles } from './tiles';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,6 +19,7 @@ const params = new URLSearchParams(location.search);
 const spectatorKey = params.get('spectateur');
 const tiles = new Tiles();
 const map = new MapRenderer($('map') as HTMLCanvasElement, tiles);
+const stage = new Stage(map, $('map-wrap'), spectatorKey !== null);
 let ws: WebSocket | null = null;
 let state: PlayerViewMsg | null = null;
 let clockOffset = 0;
@@ -85,7 +87,7 @@ function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
   logLine(e.text, e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
-  if (e.drama >= 80) map.shake = Math.max(map.shake, 4);
+  stage.onEvent(e);
 }
 function chatLine(from: string, text: string, isCmd = false) {
   const box = $('chat');
@@ -131,6 +133,7 @@ function render() {
   $('hud-theme').textContent = f ? `thème : ${f.theme}` : '';
   $('hud-online').textContent = `${s.online} connecté(s)`;
   map.setFloor(f);
+  stage.onState(s);
 
   if (s.spectator) return renderSpectator();
   if (!me || !f) return;
@@ -232,10 +235,11 @@ function renderSpectator() {
   $('inv-card').classList.add('hidden');
   const bar = $('spectator-bar');
   bar.classList.remove('hidden');
-  if (f) bar.innerHTML = `<b>Vue spectateur</b> <button data-floor="${f.n - 1}">◀</button> étage ${f.n} <button data-floor="${f.n + 1}">▶</button>`;
+  if (!bar.querySelector('#spec-floor')) bar.innerHTML = '<b>Vue spectateur</b> <span id="spec-floor"></span> <span id="spec-tools"></span>';
+  if (f) $('spec-floor').innerHTML = `<button data-floor="${f.n - 1}">◀</button> étage ${f.n} <button data-floor="${f.n + 1}">▶</button>`;
   if (!f) return;
   const all = f.rooms.flatMap((r) => (r.players ?? []).map((p) => ({ ...p, room: r.id })));
-  $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
+  $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Suivre ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
   const mons = f.rooms.flatMap((r) => r.monsters ?? []);
   $('room-card').innerHTML = `<div class="card-title">Étage ${f.n}</div><div class="desc">${f.rooms.length} salles · ${mons.length} monstres · boss : ${mons.find((m) => m.boss)?.name ?? 'vaincu'}</div>`;
   $('pending').className = 'pending hidden';
@@ -246,6 +250,7 @@ function tickHud() {
     const now = Date.now() + clockOffset;
     const left = Math.max(0, (state.turnEndsAt - now) / 1000);
     $('hud-turn').textContent = `Tour ${state.turn} · ${Math.ceil(left)} s`;
+    stage.onTick(left);
     ($('turn-bar') as HTMLElement).style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = state.floor?.collapseInSec;
     const el = $('hud-collapse');
@@ -325,6 +330,7 @@ document.addEventListener('keydown', (e) => {
   if (spectatorKey) $('login').classList.add('hidden');
   connect();
   const loop = (t: number) => {
+    stage.update();
     map.draw(t / 1000);
     requestAnimationFrame(loop);
   };

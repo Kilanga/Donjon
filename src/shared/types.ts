@@ -117,6 +117,14 @@ export interface GameEvent {
   to?: string; // joueur destinataire pour 'prive'
   actors?: string[]; // joueurs concernés (alliés de ces joueurs voient aussi l'évènement)
   drama: number; // score de drame (pour le futur réalisateur)
+  // Effet visuel/sonore : entités 'p:<nom affiché>' ou 'm:<id monstre>'
+  fx?: GameFx;
+}
+
+export interface GameFx {
+  kind: 'hit' | 'miss' | 'crit' | 'gag' | 'death' | 'kill' | 'loot' | 'levelup' | 'trap' | 'heal';
+  src?: string;
+  dst?: string;
 }
 
 export interface PlayerViewMsg {
