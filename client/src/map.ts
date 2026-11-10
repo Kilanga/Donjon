@@ -52,6 +52,8 @@ export class MapRenderer {
   onManual?: () => void; // glisser/molette : la caméra auto se désactive
   private visibleKeys = new Set<string>();
   private bubbles = new Map<string, { text: string; t0: number; dur: number }>();
+  private floorAt = 0; // réception de l'étage (pour décompter le scellé de l'escalier)
+  private stairsMark: { x: number; y: number; bossAlive: boolean } | null = null;
 
   /** Bulle de dialogue au-dessus d'un crawler (6,5 s). */
   bubble(name: string, text: string) {
@@ -139,6 +141,7 @@ export class MapRenderer {
   setFloor(f: FloorView | null) {
     const prevN = this.floor?.n;
     this.floor = f;
+    this.floorAt = performance.now();
     if (!f) return;
     // Nombres flottants : différences de PV depuis le dernier état
     const now = performance.now();
@@ -404,7 +407,25 @@ export class MapRenderer {
     const known = new Map(f.rooms.map((r) => [r.id, r]));
     // Couloirs vers l'inconnu d'abord, puis salles
     for (const r of f.rooms) this.drawCorridors(r, known);
+    this.stairsMark = null;
     for (const r of f.rooms) this.drawRoom(r, t, f.theme);
+    const stairs = this.stairsMark as { x: number; y: number; bossAlive: boolean } | null;
+    const seal = Math.max(0, (f.stairsInSec ?? 0) - (performance.now() - this.floorAt) / 1000);
+    const sealed = f.stairsInSec === null || seal > 0;
+    if (stairs) {
+      // Halo qui pulse : doré quand on peut descendre, violet tant que c'est scellé ou gardé
+      const open = !sealed && !stairs.bossAlive;
+      const pulse = 0.55 + 0.45 * Math.sin(t * (open ? 5 : 2.5));
+      const rad = PX * (open ? 3.4 : 2.8);
+      const g = ctx.createRadialGradient(stairs.x, stairs.y, 2, stairs.x, stairs.y, rad);
+      g.addColorStop(0, open ? `rgba(255,214,90,${0.75 * pulse})` : `rgba(170,110,255,${0.55 * pulse})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = g;
+      ctx.fillRect(stairs.x - rad, stairs.y - rad, rad * 2, rad * 2);
+      ctx.restore();
+    }
     const nowFx = performance.now();
     const vis = this.visibleKeys;
     this.fx.update(nowFx, (key) => vis.has(key));
@@ -429,6 +450,7 @@ export class MapRenderer {
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLabels((x, y) => [ox + x * s, oy + y * s]);
+    const sign = stairs ? [ox + stairs.x * s, oy + (stairs.y - PX * 1.6) * s, w, h, t, sealed ? (f.stairsInSec === null ? -1 : seal) : 0, stairs.bossAlive] as const : null;
     this.fx.drawScreen(ctx, nowFx, (x, y) => [ox + x * s, oy + y * s]);
 
     // Teinte du thème + vignette
@@ -446,6 +468,7 @@ export class MapRenderer {
       ctx.fillStyle = `rgba(255,244,214,${this.fx.screenFlash})`;
       ctx.fillRect(0, 0, w, h);
     }
+    if (sign) this.drawStairsSign(...sign); // par-dessus la vignette : toujours bien lisible
   }
 
   private drawCorridors(r: RoomView, known: Map<number, RoomView>) {
@@ -540,7 +563,10 @@ export class MapRenderer {
     ctx.fillRect((ox + 1) * PX, (oy + 2) * PX, IW * PX, 4); // ombre sous la façade
 
     // Objets de la salle
-    if (r.stairs) tiles.tile(ctx, 'floor_stairs', midCol, oy + 2);
+    if (r.stairs) {
+      for (let dy = 0; dy < 2; dy++) for (let dx = -1; dx <= 1; dx++) tiles.tile(ctx, 'floor_stairs', midCol + dx, oy + 2 + dy);
+      this.stairsMark = { x: (midCol + 0.5) * PX, y: (oy + 3) * PX, bossAlive: !!r.bossAlive };
+    }
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
     if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
     if (r.merchant) {
@@ -632,6 +658,73 @@ export class MapRenderer {
     this.labels.push({ text: text.length > 18 ? text.slice(0, 17) + '…' : text, x, y, color, hp, maxHp });
   }
 
+  /** Panneau « ESCALIER » bien visible au-dessus des marches, avec son état ; flèche au bord de l'écran s'il est hors champ. */
+  private drawStairsSign(x: number, y: number, w: number, h: number, t: number, seal: number, bossAlive: boolean) {
+    const { ctx } = this;
+    const dpr = devicePixelRatio;
+    const status = seal < 0 ? '🔒 scellé (saison pas commencée)' : seal > 0 ? `🔒 s'ouvre dans ${Math.floor(seal / 60)}:${String(Math.floor(seal % 60)).padStart(2, '0')}` : bossAlive ? '⚔ battez le boss pour passer' : '🔓 OUVERT : !descendre';
+    const open = seal === 0 && !bossAlive;
+    const color = open ? '#ffd65a' : '#c9a8ff';
+    const m = 40 * dpr;
+    const off = x < m || x > w - m || y < m + 60 * dpr || y > h - m;
+    if (off) {
+      // Hors champ : flèche dans la direction de l'escalier, posée sur une ellipse à l'intérieur de la carte
+      // (pas collée au bord, où les barres de l'interface la cacheraient)
+      const cx = w / 2;
+      const cy = h / 2;
+      const a = Math.atan2(y - cy, x - cx);
+      const rx = Math.max(60 * dpr, w / 2 - 110 * dpr);
+      const ry = Math.max(50 * dpr, h / 2 - 90 * dpr);
+      const ax = cx + Math.cos(a) * rx;
+      const ay = cy + Math.sin(a) * ry;
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(a);
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#120c1c';
+      ctx.lineWidth = 3 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(16 * dpr, 0);
+      ctx.lineTo(-8 * dpr, -11 * dpr);
+      ctx.lineTo(-8 * dpr, 11 * dpr);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.restore();
+      ctx.font = `700 ${Math.round(12 * dpr)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      const lx = Math.min(w - 50 * dpr, Math.max(50 * dpr, ax - Math.cos(a) * 30 * dpr));
+      const ly = Math.min(h - 12 * dpr, Math.max(20 * dpr, ay - Math.sin(a) * 24 * dpr));
+      ctx.fillStyle = 'rgba(8,6,14,0.8)';
+      const tw = ctx.measureText('ESCALIER').width + 10 * dpr;
+      ctx.fillRect(lx - tw / 2, ly - 13 * dpr, tw, 17 * dpr);
+      ctx.fillStyle = color;
+      ctx.fillText('ESCALIER', lx, ly);
+      return;
+    }
+    const bob = Math.sin(t * 4) * 3 * dpr;
+    const big = Math.round(15 * dpr);
+    const small = Math.round(11 * dpr);
+    ctx.textAlign = 'center';
+    ctx.font = `800 ${big}px Inter, system-ui, sans-serif`;
+    const title = '▼ ESCALIER ▼';
+    const tw = Math.max(ctx.measureText(title).width, (ctx.font = `600 ${small}px Inter, system-ui, sans-serif`, ctx.measureText(status).width)) + 16 * dpr;
+    const top = y - 40 * dpr + bob;
+    ctx.fillStyle = 'rgba(12,8,20,0.88)';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    ctx.roundRect(x - tw / 2, top, tw, 38 * dpr, 7 * dpr);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = `800 ${big}px Inter, system-ui, sans-serif`;
+    ctx.fillText(title, x, top + 17 * dpr);
+    ctx.font = `600 ${small}px Inter, system-ui, sans-serif`;
+    ctx.fillStyle = '#f2ecff';
+    ctx.fillText(status, x, top + 32 * dpr);
+  }
+
   /** Noms et barres de vie dessinés en résolution écran, pour rester nets. */
   private drawLabels(toScreen: (x: number, y: number) => [number, number]) {
     const { ctx } = this;
@@ -691,7 +784,8 @@ export class MapRenderer {
 function wrap(text: string, max: number): string[] {
   const out: string[] = [];
   let line = '';
-  for (const w of text.split(' ')) {
+  const words = text.split(' ').flatMap((w) => (w.length > max ? w.match(new RegExp(`.{1,${max}}`, 'g')) ?? [w] : [w]));
+  for (const w of words) {
     if ((line + ' ' + w).trim().length > max && line) {
       out.push(line);
       line = w;
