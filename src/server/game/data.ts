@@ -171,7 +171,7 @@ export const MERCHANT_RESPAWN = [
 ];
 export const MERCHANT_TIPS = [
   "Une seule commande par tour, et c'est la dernière tapée qui compte. Comme à la taverne.",
-  "Les coups passent avant tout le reste : fuir ou boire une potion, c'est APRÈS avoir encaissé.",
+  "Une potion se boit avant les coups du tour. Fuir, par contre, c'est APRÈS avoir encaissé.",
   "Si tu ne tapes rien, tu continues de frapper ta cible. Ou tu ripostes. Ou tu admires le plafond.",
   "!fouille ramasse ce qui traîne, ouvre les coffres et désarme les pièges. Mon outil préféré.",
   "Un mort laisse tout son loot au sol. !ramasse. Je ne juge pas.",

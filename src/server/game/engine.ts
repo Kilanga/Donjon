@@ -325,8 +325,15 @@ export class Game {
       actions.set(p.key, a);
     }
 
-    // Ordre du tour : 1. attaques (toujours en premier), 2. ripostes, 3. objets/commerce/ramassage,
-    // 4. fouilles, 5. déplacements. On ne peut donc pas fuir ni boire une potion avant d'avoir encaissé.
+    // Ordre du tour : 0. potions et objets utilisés/équipés, 1. attaques, 2. ripostes,
+    // 3. commerce/repos/ramassage, 4. fouilles, 5. déplacements. On boit avant les coups, mais on ne fuit pas avant.
+
+    // 0. Objets utilisés ou équipés (potions, fumigène, cape…) : avant les coups
+    for (const p of players) {
+      const a = actions.get(p.key);
+      if (!a || !p.alive) continue;
+      if (a.name === 'use' || a.name === 'equip') this.doUse(p, a.arg, a.name === 'equip');
+    }
 
     // 1. Combats : joueurs et monstres, par ordre d'initiative
     // Initiative = d20 + Agilité (joueur) ou d20 + attaque (monstre) ; égalité : la meilleure base, puis au hasard.
@@ -388,12 +395,11 @@ export class Game {
       }
     }
 
-    // 3. Actions utilitaires (objets, commerce, repos, ramassage) : après les coups
+    // 3. Commerce, repos, ramassage : après les coups (une victime ne ramasse rien en mourant)
     for (const p of players) {
       const a = actions.get(p.key);
       if (!a || !p.alive) continue;
-      if (a.name === 'use' || a.name === 'equip') this.doUse(p, a.arg, a.name === 'equip');
-      else if (a.name === 'buy') this.doBuy(p, a.arg);
+      if (a.name === 'buy') this.doBuy(p, a.arg);
       else if (a.name === 'sell') this.doSell(p, a.arg);
       else if (a.name === 'rest') this.doRest(p);
       else if (a.name === 'pickup') this.doPickup(p, a.arg);

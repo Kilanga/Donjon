@@ -157,9 +157,9 @@ Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent s
 
 ## Commandes
 
-**Ordre d'un tour :** 1. les attaques, par initiative (d20 + Agilité pour les joueurs, d20 + attaque pour les monstres ;
-égalité : la meilleure base, puis le hasard) ; 2. les ripostes des joueurs attaqués sans ordre ; 3. objets, commerce, repos,
-ramassage ; 4. fouilles ; 5. déplacements. On ne peut donc pas fuir ni boire une potion avant d'avoir encaissé les coups du tour.
+**Ordre d'un tour :** 1. potions et objets utilisés ou équipés ; 2. les attaques, par initiative (d20 + Agilité pour les
+joueurs, d20 + attaque pour les monstres ; égalité : la meilleure base, puis le hasard) ; 3. les ripostes des joueurs attaqués
+sans ordre ; 4. commerce, repos, ramassage ; 5. fouilles ; 6. déplacements. On peut boire avant d'être frappé, mais pas fuir avant.
 
 
 | Commande | Alias anglais | Effet |

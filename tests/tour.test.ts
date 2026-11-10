@@ -41,14 +41,16 @@ describe('ordre du tour', () => {
     }
   });
 
-  it('une potion bue ce tour-ci arrive après les coups', () => {
-    const { g, a, b } = duel();
+  it('une potion bue ce tour-ci passe avant les coups', () => {
+    const { g, b } = duel();
     b.hp = 1;
-    a.stats.for = 20; // touche et tue à coup sûr
     g.submit('a', '!attaque b', T0 + 1);
     g.submit('b', '!utilise potion', T0 + 1);
-    g.tick(T0 + 20_000);
-    expect(b.alive).toBe(false);
+    const ev = g.tick(T0 + 20_000);
+    const drink = ev.findIndex((e) => e.fx?.kind === 'heal' && e.fx.dst === 'p:b');
+    const blow = ev.findIndex((e) => e.fx?.src === 'p:a');
+    expect(drink).toBeGreaterThanOrEqual(0);
+    expect(blow).toBeGreaterThan(drink);
   });
 });
 
