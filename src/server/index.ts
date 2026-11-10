@@ -1,7 +1,9 @@
 // Serveur du Donjon : sert la page joueur, gère les WebSockets et fait tourner les tours.
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import util from 'node:util';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMsg, GameEvent, ServerMsg } from '../shared/types.js';
 import { loadConfig } from './config.js';
@@ -11,6 +13,8 @@ import { connectTwitch } from './twitch.js';
 import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
+import { Journal, errInfo } from './journal.js';
+import { buildReport } from './report.js';
 
 const cfg = loadConfig();
 const root = process.cwd();
@@ -57,6 +61,46 @@ if (cfg.spectatorKey === 'regie' && !process.env.SPECTATOR_KEY) {
 const game = new Game(cfg, process.argv.includes('--nouvelle-partie') ? undefined : loadSave());
 game.ensureFloor(1);
 
+// ---------------------------------------------------------------- journal
+// Tout ce qui se passe est noté dans logs/ (LOGS=0 pour désactiver) ; rapport via la régie ou « npm run rapport ».
+const logsDir = path.join(root, 'logs');
+const journal = new Journal(logsDir, process.env.LOGS !== '0');
+journal.turn = () => game.state.turn;
+journal.secrets = [cfg.spectatorKey, process.env.ANTHROPIC_API_KEY ?? ''];
+// Les messages de la console partent aussi dans le journal
+const origLog = console.log.bind(console);
+const origError = console.error.bind(console);
+console.log = (...a: unknown[]) => {
+  origLog(...a);
+  journal.write('log', { text: util.format(...a).slice(0, 2000) });
+};
+console.error = (...a: unknown[]) => {
+  origError(...a);
+  const err = a.find((x) => x instanceof Error);
+  journal.write('error', {
+    source: 'serveur',
+    message: util.format(...a.filter((x) => !(x instanceof Error))).slice(0, 500) + (err ? ' ' + (err as Error).message : ''),
+    stack: err ? errInfo(err).stack : undefined,
+  });
+};
+function gitCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return '';
+  }
+}
+let pkgVersion = '';
+try {
+  pkgVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+} catch {
+  /* sans importance */
+}
+journal.write('start', {
+  version: pkgVersion, commit: gitCommit(), node: process.version, platform: `${process.platform} ${process.arch}`,
+  config: { ...cfg, spectatorKey: undefined }, players: Object.keys(game.state.players).length,
+});
+
 // ------------------------------------------------------------------- HTTP
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
@@ -64,6 +108,7 @@ const MIME: Record<string, string> = {
 };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
+  if (url.pathname.startsWith('/journaux')) return journaux(url, res);
   if (url.pathname === '/bilan') {
     if (url.searchParams.get('cle') !== cfg.spectatorKey) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
@@ -89,6 +134,70 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
+// Journaux de session (régie) : page de téléchargement, rapport Markdown, journal brut
+function journaux(url: URL, res: http.ServerResponse) {
+  const key = url.searchParams.get('cle');
+  if (key !== cfg.spectatorKey) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
+    return;
+  }
+  if (url.pathname === '/journaux/rapport.md') journal.write('snapshot', { leaderboard: game.leaderboard() });
+  journal.flush();
+  const q = `cle=${encodeURIComponent(key)}`;
+  const day = new Date().toISOString().slice(0, 10);
+  const pick = () => {
+    const nom = url.searchParams.get('nom');
+    if (nom && Journal.list(logsDir).includes(nom)) return [path.join(logsDir, nom)];
+    return Journal.lastEvening(logsDir);
+  };
+  if (url.pathname === '/journaux/rapport.md') {
+    const files = pick();
+    res.writeHead(200, {
+      'content-type': 'text/markdown; charset=utf-8',
+      'content-disposition': `${url.searchParams.has('voir') ? 'inline' : 'attachment'}; filename="donjon-rapport-${day}.md"`,
+    });
+    res.end(buildReport(Journal.read(files), files));
+    return;
+  }
+  if (url.pathname === '/journaux/journal.jsonl') {
+    res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'content-disposition': `attachment; filename="donjon-journal-${day}.jsonl"` });
+    const files = pick();
+    const next = () => {
+      const f = files.shift();
+      if (!f) return res.end();
+      const rs = fs.createReadStream(f);
+      rs.on('error', next);
+      rs.on('end', next);
+      rs.pipe(res, { end: false });
+    };
+    next();
+    return;
+  }
+  const esc = (x: string) => x.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
+  const files = Journal.list(logsDir).reverse();
+  const evening = new Set(Journal.lastEvening(logsDir).map((f) => path.basename(f)));
+  const rows = files
+    .map((f) => {
+      const size = fs.statSync(path.join(logsDir, f)).size;
+      const n = encodeURIComponent(f);
+      return `<tr><td>${evening.has(f) ? '★ ' : ''}${esc(f)}</td><td>${(size / 1024).toFixed(0)} Ko</td><td><a href="/journaux/rapport.md?${q}&nom=${n}&voir">rapport</a> · <a href="/journaux/journal.jsonl?${q}&nom=${n}">brut</a></td></tr>`;
+    })
+    .join('');
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Journaux — Le Donjon</title>
+<style>body{font:15px system-ui;background:#16121c;color:#eee;max-width:760px;margin:30px auto;padding:0 16px}a{color:#f6b73c}
+.big{display:inline-block;margin:8px 8px 8px 0;padding:12px 16px;background:#2a2233;border:1px solid #f6b73c;border-radius:8px;text-decoration:none;font-weight:600}
+table{border-collapse:collapse;width:100%;margin-top:20px}td{padding:6px;border-bottom:1px solid #333;font-size:13px}p{color:#bbb}</style>
+<h1>Journaux de session</h1>
+<p>À la fin de la soirée, télécharge ces deux fichiers et glisse-les dans la conversation avec Claude.
+Ils couvrent la dernière soirée (★ : ${evening.size} fichier(s), un par démarrage du serveur).</p>
+<a class="big" href="/journaux/rapport.md?${q}">⬇ Rapport (Markdown)</a>
+<a class="big" href="/journaux/journal.jsonl?${q}">⬇ Journal complet (.jsonl)</a>
+<a class="big" href="/journaux/rapport.md?${q}&voir">👁 Voir le rapport</a>
+<table>${rows || '<tr><td>Aucun journal pour l’instant.</td></tr>'}</table>
+<p>Les fichiers sont aussi dans le dossier <code>logs/</code> du jeu. Ils contiennent les pseudos et messages du chat, mais jamais la clé de régie.</p>`);
+}
+
 // -------------------------------------------------------------- WebSocket
 interface Client {
   ws: WebSocket;
@@ -96,7 +205,15 @@ interface Client {
   spectator: boolean;
   floor: number | null; // étage regardé (spectateur)
   recent: number[]; // horodatages des derniers messages (anti-spam)
+  id: number; // numéro de connexion (journal)
+  ua: string;
+  mobile: boolean;
+  since: number;
+  errors: number; // erreurs navigateur déjà notées (plafonnées)
 }
+let nextClientId = 1;
+/** Dernières commandes de chaque joueur (contexte des !bug). */
+const lastCmds = new Map<string, string[]>();
 const clients = new Set<Client>();
 const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -124,6 +241,8 @@ function sendState(c: Client) {
 }
 
 function deliver(events: GameEvent[]) {
+  for (const e of events)
+    journal.write('event', { id: e.id, kind: e.kind, scope: e.scope, floor: e.floor, roomId: e.roomId, to: e.to, drama: e.drama, fx: e.fx, narrator: e.narrator, text: e.text });
   for (const c of clients) {
     const key = c.spectator ? null : c.name ? playerKey(c.name) : null;
     if (!c.spectator && !c.name) continue;
@@ -140,12 +259,18 @@ const narrator = new Narrator(game, ai, (evs) => deliver(evs));
 function say(name: string, text: string) {
   const clean = text.replace(/\s+/g, ' ').trim().slice(0, 140);
   if (!clean) return;
+  journal.write('say', { name, text: clean });
   const p = game.player(name);
   for (const c of clients) send(c, { type: 'chat', from: name, text: clean, floor: p?.floor, roomId: p?.alive ? p.roomId : undefined });
 }
 
 /** Traite une commande, qu'elle vienne de la page ou du chat Twitch. */
 function command(name: string, text: string, from?: Client) {
+  const src = from ? 'web' : 'twitch';
+  const fb = text.match(/^!(bug|avis|feedback)\b\s*(.*)$/i);
+  if (fb) return feedback(name, fb[1].toLowerCase() === 'bug' ? 'bug' : 'avis', fb[2], src, from);
+  const k = playerKey(name);
+  if (text.startsWith('!')) lastCmds.set(k, [...(lastCmds.get(k) ?? []), text.slice(0, 80)].slice(-5));
   const dis = text.match(/^!(dis|say|parler)\s+(.+)/i);
   if (dis) return say(name, dis[2]);
   if (!text.startsWith('!')) return say(name, text);
@@ -158,18 +283,21 @@ function command(name: string, text: string, from?: Client) {
       console.error('[ia] !parle :', e);
       r = { ok: false, text: 'Le marchand fait semblant de ne pas t\'entendre.' };
     }
+    journal.write('cmd', { name, text, src, ok: r.ok, reply: r.text, ms: 0 });
     if (from) send(from, { type: 'feedback', ok: r.ok, text: r.text });
     for (const c of clients) send(c, { type: 'chat', from: name, text, cmd: true });
     return r;
   }
   const before = game.state.nextId;
   let res;
+  const t0 = performance.now();
   try {
     res = game.submit(name, text);
   } catch (e) {
     console.error('[commande] erreur sur', name, text, e);
     res = { ok: false, text: 'Oups, le donjon a eu un hoquet sur cette commande. Réessaie.' };
   }
+  journal.write('cmd', { name, text, src, ok: res.ok, reply: res.text, ms: Math.round(performance.now() - t0) });
   const fresh = game.state.events.filter((e) => e.id >= before);
   if (fresh.length) deliver(fresh);
   if (from) send(from, { type: 'feedback', ok: res.ok, text: res.text });
@@ -179,8 +307,31 @@ function command(name: string, text: string, from?: Client) {
   return res;
 }
 
-wss.on('connection', (ws) => {
-  const c: Client = { ws, name: null, spectator: false, floor: null, recent: [] };
+/** !bug / !avis : noté dans le journal avec le contexte du joueur, et signalé à la régie. */
+function feedback(name: string, kind: 'bug' | 'avis', text: string, src: string, from?: Client) {
+  const clean = text.replace(/\s+/g, ' ').trim().slice(0, 500);
+  if (!clean) {
+    if (from) send(from, { type: 'feedback', ok: false, text: kind === 'bug' ? 'Décris le souci après la commande, ex. : !bug je ne peux pas ramasser l\'épée' : 'Écris ton avis après la commande, ex. : !avis les tours sont trop longs' });
+    return { ok: false, text: '' };
+  }
+  const p = game.player(name);
+  const k = playerKey(name);
+  const ctx = {
+    ...(p ? { cls: p.cls, level: p.level, floor: p.floor, roomId: p.roomId, hp: p.hp, maxHp: p.maxHp, alive: p.alive, gold: p.gold, items: p.items.map((i) => i.name) } : {}),
+    device: from ? (from.mobile ? 'téléphone' : 'ordinateur') : 'twitch',
+    commands: lastCmds.get(k) ?? [],
+    recent: game.state.events.filter((e) => game.isRelevant(e, k)).slice(-5).map((e) => e.text),
+  };
+  journal.write(kind, { name, text: clean, src, ua: from?.ua, ctx });
+  const reply = kind === 'bug' ? 'Merci ! Bug noté avec ta situation actuelle, on regarde ça après la session.' : 'Merci pour ton avis, c\'est noté !';
+  if (from) send(from, { type: 'feedback', ok: true, text: reply });
+  for (const c of clients) if (c.spectator) send(c, { type: 'feedback', ok: true, text: `${kind === 'bug' ? '🐞 Bug' : '💬 Avis'} de ${name} : ${clean}` });
+  return { ok: true, text: reply };
+}
+
+wss.on('connection', (ws, req) => {
+  const ua = String(req.headers['user-agent'] ?? '').slice(0, 200);
+  const c: Client = { ws, name: null, spectator: false, floor: null, recent: [], id: nextClientId++, ua, mobile: /Mobi|Android|iPhone|iPad/i.test(ua), since: Date.now(), errors: 0 };
   clients.add(c);
   ws.on('message', (data) => {
     try {
@@ -189,7 +340,10 @@ wss.on('connection', (ws) => {
       console.error('[ws] message ignoré :', e);
     }
   });
-  ws.on('close', () => clients.delete(c));
+  ws.on('close', () => {
+    clients.delete(c);
+    if (c.name || c.spectator) journal.write('disconnect', { cid: c.id, name: c.name, spectator: c.spectator, secs: Math.round((Date.now() - c.since) / 1000) });
+  });
 });
 
 function onClientMessage(c: Client, msg: ClientMsg) {
@@ -203,13 +357,18 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         if (!playerKey(name)) return send(c, { type: 'feedback', ok: false, text: 'Choisis un pseudo valide.' });
         c.name = name;
       }
+      c.since = Date.now();
+      journal.write('connect', { cid: c.id, name: c.name, spectator: c.spectator, mobile: c.mobile, ua: c.ua, known: c.name ? !!game.player(c.name) : undefined });
       const key = c.spectator ? null : playerKey(c.name!);
       send(c, { type: 'events', events: game.state.events.filter((e) => game.isRelevant(e, key)).slice(-40) });
       sendState(c);
     } else if ((msg.type === 'cmd' || msg.type === 'say') && c.name) {
       const now = Date.now();
       c.recent = c.recent.filter((t) => now - t < 3000);
-      if (c.recent.length >= 8) return send(c, { type: 'feedback', ok: false, text: 'Doucement ! Trop de messages d\'un coup.' }); // anti-spam
+      if (c.recent.length >= 8) {
+        journal.write('spam', { name: c.name });
+        return send(c, { type: 'feedback', ok: false, text: 'Doucement ! Trop de messages d\'un coup.' }); // anti-spam
+      }
       c.recent.push(now);
       const text = String(msg.text ?? '').slice(0, 200);
       if (msg.type === 'say') say(c.name, text);
@@ -219,6 +378,14 @@ function onClientMessage(c: Client, msg: ClientMsg) {
       sendState(c);
     } else if (msg.type === 'admin' && c.spectator) {
       admin(c, msg.action, msg.arg);
+    } else if (msg.type === 'clientError') {
+      if (++c.errors > 30) return; // une page qui boucle sur une erreur ne remplit pas le disque
+      journal.write('clientError', {
+        cid: c.id, name: c.name, spectator: c.spectator, ua: c.ua, page: String(msg.page ?? '').slice(0, 100),
+        message: String(msg.message ?? '').slice(0, 500), stack: String(msg.stack ?? '').slice(0, 1500), where: String(msg.where ?? '').slice(0, 200),
+      });
+    } else if (msg.type === 'clientPerf') {
+      journal.write('clientPerf', { cid: c.id, name: c.name, spectator: c.spectator, page: String(msg.page ?? '').slice(0, 100), fps: Number(msg.fps) || 0, w: Number(msg.w) || 0, h: Number(msg.h) || 0, mobile: c.mobile });
     }
   }
 }
@@ -281,6 +448,7 @@ function admin(c: Client, action: string, arg?: string | number) {
     default:
       return;
   }
+  journal.write('admin', { action, arg, msg });
   console.log(`[régie] ${msg}`);
   deliver(game.flush());
   send(c, { type: 'feedback', ok: true, text: `Régie : ${msg}` });
@@ -294,13 +462,21 @@ function admin(c: Client, action: string, arg?: string | number) {
 
 // ------------------------------------------------------------------ tours
 function runTurn() {
+  const late = Date.now() - turnEndsAt;
   turnEndsAt = Date.now() + cfg.turnSeconds * 1000;
   let events: GameEvent[] = [];
+  const t0 = performance.now();
   try {
     events = game.tick(Date.now());
   } catch (e) {
     console.error(`[tour ${game.state.turn}] erreur, la partie continue :`, e);
   }
+  const ms = Math.round(performance.now() - t0);
+  const all = Object.values(game.state.players);
+  const floors: Record<number, number> = {};
+  for (const p of all) if (p.alive) floors[p.floor] = (floors[p.floor] ?? 0) + 1;
+  journal.write('turn', { ms, late, events: events.length, players: all.length, alive: all.filter((p) => p.alive).length, online: clients.size, floors });
+  if (game.state.turn % 10 === 0) journal.write('snapshot', { leaderboard: game.leaderboard() });
   deliver(events);
   narrator.onTurn(events);
   for (const c of clients) sendState(c);
@@ -337,14 +513,19 @@ server.listen(cfg.port, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
   console.log(`  Régie (vue spectateur + maître du jeu, NE PAS PARTAGER) : http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Tour : ${cfg.turnSeconds} s · étage : ${cfg.floorMinutes} min · Twitch : ${cfg.twitchChannel || 'désactivé'}`);
-  console.log(`  IA du donjon : ${ai.describe()}\n`);
+  console.log(`  IA du donjon : ${ai.describe()}`);
+  console.log(`  Journaux de la soirée (à renvoyer à Claude) : http://localhost:${cfg.port}/journaux?cle=${cfg.spectatorKey}\n`);
 });
 
 process.on('uncaughtException', (e) => console.error('[serveur] erreur inattendue (la partie continue) :', e));
 process.on('unhandledRejection', (e) => console.error('[serveur] promesse rejetée :', e));
 
+process.on('exit', () => journal.flush());
+
 process.on('SIGINT', () => {
   try {
+    journal.write('snapshot', { leaderboard: game.leaderboard() });
+    journal.write('stop', { players: Object.keys(game.state.players).length });
     save();
     console.log('\n[sauvegarde] partie enregistrée. À bientôt !');
   } finally {

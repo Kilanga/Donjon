@@ -85,4 +85,5 @@ export const HELP_TEXT = [
   '!monte <for|agi|int|cha> — dépenser un point de stat',
   '!descendre — prendre l\'escalier (salle du boss vaincu)',
   '!vote <n°> — voter pour l\'événement proposé par la production',
+  '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',
 ];

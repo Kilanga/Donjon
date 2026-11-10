@@ -194,6 +194,8 @@ export type ClientMsg =
   | { type: 'cmd'; text: string }
   | { type: 'say'; text: string } // message libre (bulle au-dessus du crawler)
   | { type: 'floor'; n: number } // spectateur : changer d'étage affiché
-  | { type: 'admin'; action: AdminAction; arg?: string | number };
+  | { type: 'admin'; action: AdminAction; arg?: string | number }
+  | { type: 'clientError'; message: string; stack?: string; where?: string; page?: string } // erreur JS de la page (journal)
+  | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string }; // images/seconde (journal)
 
 export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick';

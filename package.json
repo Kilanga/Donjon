@@ -15,7 +15,8 @@
     "test": "vitest run",
     "simulate": "tsx scripts/simulate.ts",
     "bots": "tsx scripts/bots.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rapport": "tsx scripts/rapport.ts"
   },
   "dependencies": {
     "three": "^0.160.0",

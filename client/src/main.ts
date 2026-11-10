@@ -4,6 +4,7 @@ import { MapRenderer } from './map';
 import { PRODUCTION_EVENTS } from '../../src/server/game/production';
 import { Stage } from './stage';
 import { CLASS_SPRITE, Tiles } from './tiles';
+import { initTelemetry, telemetryReady } from './telemetry';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -33,6 +34,7 @@ function connect() {
   ws.onopen = () => {
     if (spectatorKey) send({ type: 'hello', name: '', spectatorKey });
     else if (myName) send({ type: 'hello', name: myName });
+    telemetryReady();
   };
   ws.onmessage = (e) => onMessage(JSON.parse(e.data) as ServerMsg);
   ws.onclose = () => {
@@ -40,9 +42,12 @@ function connect() {
     setTimeout(connect, 2000);
   };
 }
-function send(m: ClientMsg) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+function send(m: ClientMsg): boolean {
+  if (ws?.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(m));
+  return true;
 }
+initTelemetry(send, spectatorKey !== null ? 'régie' : 'joueur');
 function cmd(text: string) {
   send({ type: 'cmd', text });
 }
@@ -288,7 +293,7 @@ function renderShared(s: PlayerViewMsg) {
     <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Déclencher</button></div>
     <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
     <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>
-    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée ↗</a></div>`;
+    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée ↗</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Journaux pour Claude ↗</a></div>`;
 }
 
 function adminAction(action: string) {
