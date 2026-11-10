@@ -52,6 +52,8 @@ function onMessage(m: ServerMsg) {
     for (const e of fresh) onEvent(e);
   } else if (m.type === 'chat' && !m.cmd) {
     world.bubble(m.from, m.text);
+  } else if (m.type === 'pos') {
+    world.setPos(m.name, m.floor, m.roomId, m.x, m.y);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
     showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
   } else if (m.type === 'feedback' && !m.ok) {

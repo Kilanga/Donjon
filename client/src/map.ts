@@ -230,12 +230,26 @@ export class MapRenderer {
       const list = r.monsters ?? [];
       const i = list.findIndex((m) => `m:${m.id}` === key);
       if (i < 0) return null;
-      return slot(ox, oy, i, list.length, 1.9);
+      return this.monsterSpot(r, list[i], i, list.length).p;
     }
     const list = r.players ?? [];
     const i = list.findIndex((p) => `p:${p.name}` === key);
     if (i < 0) return null;
     return this.playerSpot(r, list[i], i, list.length);
+  }
+
+  /** Un monstre flâne autour de sa place (dérive lente et propre à chacun) ; renvoie aussi son sens de marche. */
+  private monsterSpot(r: RoomView, m: MonsterView, i: number, n: number): { p: { x: number; y: number }; flip: boolean } {
+    const base = slot((r.x * CW + 1) * PX, (r.y * CH + 2) * PX, i, n, m.boss ? 2.6 : 1.9);
+    if (m.hp <= 0) return { p: base, flip: false };
+    const seed = hash(m.id.split('').reduce((s, ch) => s * 31 + ch.charCodeAt(0), 7)) % 1000;
+    const t = performance.now() / 1000;
+    const amp = m.boss ? 4 : 11;
+    const w = 0.25 + (seed % 7) * 0.03;
+    const x = base.x + Math.sin(t * w + seed) * amp + Math.sin(t * w * 2.3 + seed * 0.7) * amp * 0.3;
+    const y = base.y + Math.sin(t * w * 0.8 + seed * 1.3) * (m.boss ? 2 : 5);
+    const vx = Math.cos(t * w + seed) * w * amp + Math.cos(t * w * 2.3 + seed * 0.7) * w * 2.3 * amp * 0.3;
+    return { p: { x, y }, flip: vx < 0 };
   }
 
   /** Où dessiner un crawler : sa position libre (moi, ou relayée) sinon sa place par défaut. */
@@ -332,7 +346,7 @@ export class MapRenderer {
     const oy = (r.y * CH + 2) * PX;
     const ms = r.monsters ?? [];
     for (let i = 0; i < ms.length; i++) {
-      const p = slot(ox, oy, i, ms.length, ms[i].boss ? 2.6 : 1.9);
+      const p = this.monsterSpot(r, ms[i], i, ms.length).p;
       const h = ms[i].boss ? 40 : 26;
       if (Math.abs(wx - p.x) < (ms[i].boss ? 18 : 11) && wy > p.y - h && wy < p.y + 5) {
         this.onAttackMonster?.(i + 1, ms[i].name);
@@ -560,11 +574,11 @@ export class MapRenderer {
     const now = performance.now();
     ms.forEach((m, i) => {
       const key = `m:${m.id}`;
-      const p = slot(ox, oy, i, ms.length, m.boss ? 2.6 : 1.9);
+      const { p, flip } = this.monsterSpot(r, m, i, ms.length);
       this.fx.lastPos.set(key, p);
       this.visibleKeys.add(key);
       const o = this.fx.offset(key, now);
-      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + i * 0.37, false, now);
+      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + i * 0.37, flip, now);
       this.label(m.name, p.x, p.y - (m.boss ? 38 : 20), m.boss ? '#ffcf4a' : '#ff9a9a', m.hp, m.maxHp);
     });
     ps.forEach((pl, i) => {

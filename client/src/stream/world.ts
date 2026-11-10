@@ -57,6 +57,10 @@ interface Ent {
   roomId: number;
   path: THREE.Vector3[];
   yaw: number;
+  slow: boolean; // marche tranquille (flânerie, déplacement libre) plutôt que trajet de salle en salle
+  wanderAt: number; // prochaine flânerie d'un monstre (ms)
+  freePos: THREE.Vector3 | null; // position libre d'un joueur dans sa salle (ZQSD / clic sur sa page)
+  freeUntil: number;
   hp: number;
   maxHp: number;
   boss: boolean;
@@ -359,6 +363,7 @@ export class World {
       this.labels.appendChild(label);
       e = {
         key, name, model, obj, mixer: new THREE.AnimationMixer(obj), current: null, base: m ? 'Idle' : 'Idle', roomId: r.id, path: [], yaw: 0,
+        slow: false, wanderAt: performance.now() + 1500 + Math.random() * 4000, freePos: null, freeUntil: 0,
         hp: 0, maxHp: 1, boss: !!m?.boss, player: !!p, label, bubble: null, dyingUntil: 0, busyUntil: 0, color: '#fff',
       };
       this.ents.set(key, e);
@@ -367,9 +372,19 @@ export class World {
     } else if (e.roomId !== r.id) {
       const from = this.floor?.rooms.find((x) => x.id === e!.roomId);
       e.path = from ? this.route(from, r, target) : [target];
+      e.slow = false;
+      e.freePos = null;
       if (!from) e.obj.position.copy(target);
       e.roomId = r.id;
-    } else if (!e.path.length && e.obj.position.distanceTo(target) > 0.3) e.path = [target];
+    } else if (!e.path.length) {
+      // Même salle : un joueur garde sa position libre ; un monstre peut flâner autour de sa place
+      const anchor = e.freePos && e.freeUntil > performance.now() ? e.freePos : target;
+      const leash = e.player ? 0.3 : 2.8;
+      if (e.obj.position.distanceTo(anchor) > leash) {
+        e.path = [anchor.clone()];
+        e.slow = !e.player;
+      }
+    }
     e.hp = p ? p.hp : m!.hp;
     e.maxHp = p ? p.maxHp : m!.maxHp;
     e.color = p ? (p.traitor ? '#ff4d8d' : p.immune ? '#8cd0ff' : p.bot ? '#a9b8cc' : '#ffffff') : m!.boss ? '#ffcf4a' : '#ffb0b0';
@@ -390,6 +405,38 @@ export class World {
       new THREE.Vector3(cb.x - v[0] * (HALF - 1), 0, cb.z - v[1] * (HALF - 1)),
       end,
     ];
+  }
+
+  /** Un monstre au repos fait quelques pas dans sa salle, pour que la scène vive entre deux tours. */
+  private wander(e: Ent, now: number) {
+    e.wanderAt = now + 2500 + Math.random() * 5000;
+    const room = this.floor?.rooms.find((r) => r.id === e.roomId);
+    if (!room || Math.random() < 0.3) return; // parfois, il reste planté là
+    const c = center(room);
+    const busy = (room.players ?? []).length > 0; // devant des joueurs, il bouge moins
+    const radius = e.boss ? 0.9 : busy ? 1.2 : 2.2;
+    const a = Math.random() * Math.PI * 2;
+    const lim = HALF - 1.3;
+    const x = Math.max(c.x - lim, Math.min(c.x + lim, e.obj.position.x + Math.cos(a) * radius));
+    const z = Math.max(c.z - lim, Math.min(c.z + lim, e.obj.position.z + Math.sin(a) * radius));
+    e.path = [new THREE.Vector3(x, 0, z)];
+    e.slow = true;
+  }
+
+  /** Position libre d'un joueur (ZQSD / clic sur sa page, ou PNJ qui s'agite), 0..1 dans sa salle. */
+  setPos(name: string, floor: number, roomId: number, nx: number, ny: number) {
+    if (!this.floor || this.floor.n !== floor) return;
+    const e = this.ents.get(`p:${name}`);
+    const room = this.floor.rooms.find((r) => r.id === roomId);
+    if (!e || !room || e.roomId !== roomId || e.dyingUntil > performance.now()) return;
+    const c = center(room);
+    const lim = HALF - 1.2;
+    const cl = (v: number) => Math.max(0, Math.min(1, v));
+    const pt = new THREE.Vector3(c.x + (cl(nx) - 0.5) * 2 * lim, 0, c.z + (cl(ny) - 0.5) * 2 * lim);
+    e.freePos = pt;
+    e.freeUntil = performance.now() + 120_000;
+    e.path = [pt.clone()];
+    e.slow = true;
   }
 
   private removeEnt(e: Ent) {
@@ -639,17 +686,23 @@ export class World {
         const t = e.path[0];
         const d = t.clone().sub(e.obj.position);
         d.y = 0;
-        const step = 5 * dt;
+        const step = (e.slow ? 1.7 : 5) * dt;
         if (d.length() <= step) {
           e.obj.position.copy(t);
           e.path.shift();
-          if (!e.path.length) e.yaw = 0;
+          if (!e.path.length) {
+            e.yaw = 0;
+            e.slow = false;
+          }
         } else {
           e.obj.position.addScaledVector(d.normalize(), step);
           e.yaw = Math.atan2(d.x, d.z);
         }
         if (now > e.busyUntil) this.play(e, 'Walking_A');
-      } else if (now > e.busyUntil && e.dyingUntil < now) this.play(e, 'Idle');
+      } else if (now > e.busyUntil && e.dyingUntil < now) {
+        this.play(e, 'Idle');
+        if (!e.player && now > e.wanderAt) this.wander(e, now);
+      }
       let df = e.yaw - e.obj.rotation.y;
       df = Math.atan2(Math.sin(df), Math.cos(df));
       e.obj.rotation.y += df * Math.min(1, dt * 8);
