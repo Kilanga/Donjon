@@ -134,6 +134,19 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 
 Pour tester vite seul : `"turnSeconds": 5`, `"floorMinutes": 5`, puis `npm run bots -- 6` dans un second terminal.
 
+## Vue stream 3D (bonus, à tester)
+
+Une deuxième page montre la partie en 3D, façon émission : caméra « réalisateur » qui va là où ça chauffe,
+plan large quand c'est calme, bandeau « EN DIRECT » sur les moments forts, classement, vote en cours, bulles du chat.
+
+- Adresse : `http://localhost:3000/stream.html?cle=<clé de la régie>` (lien « Vue stream 3D » dans la régie).
+- Pour suivre un seul crawler : ajoute `&suivre=Pseudo`.
+- **Dans OBS** : Sources → « Navigateur », URL ci-dessus, largeur 1920, hauteur 1080. Le HUD est prévu pour ce format
+  et se réduit tout seul dans une fenêtre plus petite (partage d'écran Discord, par exemple).
+- C'est la page la plus gourmande : il faut une carte graphique correcte. Si elle saccade, reste sur la vue 2D de la régie.
+  Sa fluidité est notée dans le journal de session.
+- Modèles 3D : KayKit (Kay Lousberg, licence CC0).
+
 ## Brancher le vrai chat Twitch
 
 Mets ton nom de chaîne dans `config.json` (`"twitchChannel": "tachaine"`) et relance.
@@ -256,6 +269,7 @@ src/server/game/   moteur : engine.ts (tours, combats, votes…), dungeon.ts (g�
 src/server/ai.ts   appels à l'IA (Ollama / API Claude) ; narrator.ts : narration et marchand
 src/server/journal.ts  journal de session (logs/*.jsonl) ; report.ts : rapport Markdown
 client/            page joueur (Vite) : main.ts (interface), map.ts (rendu pixel art), tiles.ts (planche de sprites)
+client/src/stream/ page stream 3D (three.js) : world.ts (scène, réalisateur, étiquettes), assets.ts (modèles KayKit)
 scripts/           simulation et bots de test
 tests/             tests Vitest
 ```

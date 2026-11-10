@@ -52,7 +52,7 @@ export function initTelemetry(send: Sender, pageName: string) {
   requestAnimationFrame(count);
   setInterval(() => {
     const now = performance.now();
-    const fps = Math.round((frames * 1000) / (now - t0));
+    const fps = Math.round((frames * 10000) / (now - t0)) / 10;
     frames = 0;
     t0 = now;
     if (document.hidden) return; // onglet en arrière-plan : mesure sans intérêt
