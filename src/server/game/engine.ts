@@ -1,14 +1,14 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, suggestCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, EffectsView, FloorSummary, ForecastRoom, Legend, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
+  ClassId, Dir, EffectsView, FloorSummary, ForecastRoom, ForgeOffer, Legend, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
   CLASSES, CRIT_TEXTS, DEATH_TEXTS, FIASCO_TEXTS, GAG_TEXTS, RARITY_LABEL, SEARCH_FAIL_TEXTS, STAT_LABELS, TRAP_TEXTS,
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
-import { BOSSES, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
+import { BOSSES, FORGE_LINES, FORGE_MAX, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
 import { THEME_EFFECTS } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
@@ -169,6 +169,18 @@ export class Game {
     }
   }
 
+  /** Tours décalés : un « tour du monde » (state.turn) dure turnSeconds / 2 ; chaque étage joue un tour sur deux,
+   *  les impairs et les pairs en alternance. Les durées exprimées en tours (prime, inondation, retour du boss…)
+   *  sont multipliées par `phases` pour garder le même temps réel. */
+  get phases(): number {
+    return this.cfg.staggered ? 2 : 1;
+  }
+
+  /** Cet étage joue-t-il au tour du monde indiqué (par défaut, le tour en cours) ? */
+  plays(floorN: number, turn = this.state.turn): boolean {
+    return !this.cfg.staggered || (floorN + turn) % 2 === 0;
+  }
+
   /** L'escalier n'est descellé que pendant les dernières minutes de l'étage (et jamais avant le début de la saison). */
   stairsOpen(f: FloorState): boolean {
     return this.stairsInMs(f) === 0;
@@ -226,6 +238,9 @@ export class Game {
         return { ok: true, text: this.statusText(p) };
       case 'shop':
         return this.shopText(p);
+      case 'forge':
+        if (!cmd.arg) return this.forgeText(p); // sans précision : les prix, tout de suite
+        break;
       case 'levelup':
         return this.levelUp(p, cmd.arg);
       case 'ally':
@@ -273,6 +288,7 @@ export class Game {
   }
 
   private shopText(p: PlayerState): SubmitResult {
+    if (this.room(p).forge) return this.forgeText(p);
     const r = this.room(p);
     if (r.type !== 'safe') return { ok: false, text: 'Il n\'y a pas de marchand ici. Cherche une safe room.' };
     if (!r.merchant.length) return { ok: true, text: 'Le marchand n\'a plus rien. Il te vend son regard, gratuitement.' };
@@ -350,7 +366,8 @@ export class Game {
     this.out = [];
     if (this.state.seasonOver) return []; // saison terminée : plus rien ne bouge
     this.state.turn++;
-    const players = Object.values(this.state.players);
+    // Tours décalés : seuls les crawlers des étages qui jouent ce tour-ci agissent (les autres gardent leur commande)
+    const players = Object.values(this.state.players).filter((p) => this.plays(p.floor));
 
     // Actions de chaque joueur vivant (ou action par défaut s'il est inactif)
     const actions = new Map<string, ParsedCommand | null>();
@@ -396,7 +413,7 @@ export class Game {
       if (a?.name === 'attack' && p.alive) intents.push({ init: this.rng.die(20) + p.stats.agi, base: p.stats.agi, tie: this.rng.next(), attacker: { kind: 'player', p }, arg: a.arg });
     }
     for (const f of Object.values(this.state.floors)) {
-      if (f.collapsed) continue;
+      if (f.collapsed || !this.plays(f.n)) continue;
       for (const m of f.monsters) {
         if (m.hp <= 0) continue;
         const r = f.rooms[m.roomId];
@@ -450,7 +467,8 @@ export class Game {
     for (const p of players) {
       const a = actions.get(p.key);
       if (!a || !p.alive) continue;
-      if (a.name === 'buy') this.doBuy(p, a.arg);
+      if (a.name === 'forge') this.doForge(p, a.arg);
+      else if (a.name === 'buy') this.doBuy(p, a.arg);
       else if (a.name === 'sell') this.doSell(p, a.arg);
       else if (a.name === 'rest') this.doRest(p);
       else if (a.name === 'pickup') this.doPickup(p, a.arg);
@@ -472,7 +490,7 @@ export class Game {
 
     // 6. Monstres errants
     for (const f of Object.values(this.state.floors)) {
-      if (f.collapsed) continue;
+      if (f.collapsed || !this.plays(f.n)) continue;
       for (const m of f.monsters) {
         if (m.distracted > 0) m.distracted--;
         if (!m.wanderer || m.hp <= 0 || this.playersIn(f.n, m.roomId).length) continue;
@@ -637,7 +655,7 @@ export class Game {
   private betray(a: PlayerState, v: PlayerState) {
     a.betrayals++;
     this.leaveAlliance(a, false);
-    a.traitorUntilTurn = this.state.turn + 10;
+    a.traitorUntilTurn = this.state.turn + 10 * this.phases;
     this.emit({ floor: a.floor, roomId: a.roomId, kind: 'trahison', text: `TRAHISON ! ${a.name} plante une dague dans le dos de son allié ${v.name}. Il est marqué TRAÎTRE pour 10 tours.`, scope: 'global', actors: [a.key, v.key], drama: 100 });
   }
 
@@ -691,7 +709,7 @@ export class Game {
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
-    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 3, kind: m.kind });
+    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 3 * this.phases, kind: m.kind });
     if (!killer) return;
     killer.kills++;
     killer.gold += m.gold;
@@ -705,7 +723,7 @@ export class Game {
     const sealed = wait !== 0 ? ` Mais l'escalier est encore scellé${wait ? ` (ouverture dans ${fmtWait(wait)})` : ''}.` : '';
     if (m.boss && floorN >= this.cfg.finalFloor) {
       // Dernier étage : le gardien se relève au bout de 6 tours (la sortie n'est ouverte qu'à ceux qui viennent de le battre)
-      f.bossBackTurn = this.state.turn + 6;
+      f.bossBackTurn = this.state.turn + 6 * this.phases;
       this.emit({
         floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 100,
         text: sealed
@@ -813,8 +831,56 @@ export class Game {
     }
   }
 
+  // --------------------------------------------------------------- forgeron
+
+  /** Prix d'une amélioration : plus cher à chaque niveau, et plus bas dans le donjon. */
+  forgeCost(item: Item, floorN: number): number {
+    return Math.round((30 + 25 * (item.plus ?? 0)) * (1 + 0.5 * (floorN - 1)));
+  }
+
+  forgeOffer(p: PlayerState): ForgeOffer {
+    const offer = (it: Item | null) => (it && (it.plus ?? 0) < FORGE_MAX ? { name: it.name, plus: it.plus ?? 0, cost: this.forgeCost(it, p.floor) } : null);
+    return { weapon: offer(p.weapon), armor: offer(p.armor) };
+  }
+
+  private forgeText(p: PlayerState): SubmitResult {
+    if (!this.room(p).forge) return { ok: false, text: 'Il n\'y a pas de forge ici. Elle est quelque part à mi-chemin du boss : cherche l\'enclume.' };
+    const o = this.forgeOffer(p);
+    const line = (label: string, x: ForgeOffer['weapon']) => (x ? `${label} ${x.name} → +${x.plus + 1} pour ${x.cost} po` : `${label} : rien à améliorer`);
+    return { ok: true, text: `Forgeron : ${line('!forge arme :', o.weapon)} | ${line('!forge armure :', o.armor)} (max +${FORGE_MAX})` };
+  }
+
+  private forgeSays(floor: number, roomId: number, line: string) {
+    this.emit({ floor, roomId, kind: 'info', text: `Le forgeron : « ${line} »`, scope: 'salle', drama: 0, npc: 'marchand' });
+  }
+
+  private doForge(p: PlayerState, arg: string) {
+    const r = this.room(p);
+    if (!r.forge) return this.say(p, 'Il n\'y a pas de forge ici. Elle est à mi-chemin du boss : cherche l\'enclume.');
+    const armor = /^armu|^armor|^def/i.test(arg.trim());
+    const it = armor ? p.armor : p.weapon;
+    if (!it) return this.say(p, armor ? 'Tu n\'as pas d\'armure équipée.' : 'Tu n\'as pas d\'arme équipée.');
+    const plus = it.plus ?? 0;
+    if (plus >= FORGE_MAX) return this.forgeSays(p.floor, r.id, `${it.name} ? On ne peut pas faire mieux. Même moi.`);
+    const cost = this.forgeCost(it, p.floor);
+    if (p.gold < cost) return this.say(p, `Il te manque ${cost - p.gold} po. Le forgeron ne bat pas le fer à crédit.`);
+    p.gold -= cost;
+    it.plus = plus + 1;
+    if (armor) it.def = (it.def ?? 0) + 1;
+    else {
+      it.hit = (it.hit ?? 0) + 1;
+      it.dmg = (it.dmg ?? 4) + 2; // dé de dégâts : d6 → d8 → d10…
+    }
+    it.name = `${it.name.replace(/ \+\d+$/, '')} +${it.plus}`;
+    it.value += Math.round(cost / 2);
+    const bonus = armor ? '+1 défense' : '+1 au jet, dégâts d' + it.dmg;
+    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} fait reforger son équipement : ${it.name} (${bonus}) pour ${cost} po.`, 25, [], { kind: 'levelup', dst: `p:${p.name}` });
+    this.forgeSays(p.floor, r.id, this.rng.pick(FORGE_LINES));
+  }
+
   private doBuy(p: PlayerState, arg: string) {
     const r = this.room(p);
+    if (r.forge) return this.say(p, 'Ici, c\'est la forge : !forge arme ou !forge armure. Le marchand est dans l\'autre safe room.');
     if (r.type !== 'safe') return this.say(p, 'Pas de marchand ici.');
     const item = this.findItem(r.merchant, arg);
     if (!item) return this.say(p, 'Le marchand n\'a pas ça. Tape !marchand pour voir son stock.');
@@ -1017,6 +1083,12 @@ export class Game {
       }
       if (left <= 0) this.collapse(f);
     }
+    // Fin de saison à heure fixe (n × floorMinutes), même si personne n'a atteint le dernier étage
+    if (!this.state.seasonOver && this.state.seasonStart !== null && this.now >= this.state.seasonStart + this.cfg.finalFloor * this.cfg.floorMinutes * 60_000) {
+      const last = this.state.floors[this.cfg.finalFloor];
+      if (last && !last.collapsed) this.collapse(last);
+      else this.endSeason(last ?? { n: this.cfg.finalFloor } as FloorState);
+    }
     if (this.state.seasonOver) return; // la saison vient de se terminer : plus rien ne bouge
     // Réapparitions
     for (const p of players) {
@@ -1051,11 +1123,11 @@ export class Game {
       this.emit({ floor: f.n, roomId: f.bossRoom, kind: 'systeme', text: `${boss.name} se relève et garde à nouveau la sortie. Il faudra le mériter.`, scope: 'global', drama: 60 });
     }
     // Le marchand rappelle une règle toutes les 4 tours, s'il a du public
-    if (this.state.turn % 4 === 0) {
-      const tip = MERCHANT_TIPS[(this.state.turn / 4) % MERCHANT_TIPS.length];
+    if (this.state.turn % (4 * this.phases) === 0) {
+      const tip = MERCHANT_TIPS[Math.floor(this.state.turn / (4 * this.phases)) % MERCHANT_TIPS.length];
       for (const f of Object.values(this.state.floors)) {
         if (f.collapsed) continue;
-        for (const r of f.rooms) if (r.type === 'safe' && this.playersIn(f.n, r.id).length) this.merchantSays(f.n, r.id, tip);
+        for (const r of f.rooms) if (r.type === 'safe' && !r.forge && this.playersIn(f.n, r.id).length) this.merchantSays(f.n, r.id, tip);
       }
     }
   }
@@ -1089,6 +1161,14 @@ export class Game {
   }
 
   /** Le dernier étage s'effondre : la saison est terminée, la partie se fige (la régie peut relancer une nouvelle partie). */
+  /** Éliminé : le crawler quitte la partie (il peut refaire !join pour recommencer avec un nouveau perso). */
+  private gameOver(p: PlayerState) {
+    this.leaveAlliance(p, false);
+    delete this.state.players[p.key];
+    for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
+    p.alive = false; // la suite du tour l'ignore
+  }
+
   private endSeason(f: FloorState) {
     this.state.seasonOver = true;
     const stuck = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive).map((p) => p.name);
@@ -1121,8 +1201,18 @@ export class Game {
   private collapse(f: FloorState) {
     f.collapsed = true;
     if (f.n >= this.cfg.finalFloor) return this.endSeason(f);
-    const victims = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive);
-    this.emit({ floor: f.n, kind: 'systeme', text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${victims.length ? `${victims.map((v) => v.name).join(', ')} n'ont pas trouvé la sortie et passent à travers le plancher.` : 'Personne n\'est resté coincé, bravo.'}`, scope: 'global', drama: 70 });
+    // GAME OVER pour ceux qui n'ont pas pris l'escalier à temps (vivants ou fantômes) ; seuls les retardataires,
+    // l'équipe de fermeture du donjon, tombent à l'étage suivant
+    const here = Object.values(this.state.players).filter((p) => p.floor === f.n);
+    const lost = here.filter((p) => !p.closer);
+    const victims = here.filter((p) => p.closer && p.alive);
+    for (const p of lost) this.gameOver(p);
+    const humans = lost.filter((p) => !p.bot).map((p) => p.name);
+    const npcs = lost.filter((p) => p.bot).length;
+    this.emit({
+      floor: f.n, kind: 'systeme', scope: 'global', drama: lost.length ? 90 : 60,
+      text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${lost.length ? `GAME OVER pour ${[...humans, ...(npcs ? [`${npcs} PNJ`] : [])].join(', ')} : resté${lost.length > 1 ? 's' : ''} à l'intérieur. Tapez !join pour recommencer à l'étage 1.` : 'Personne n\'est resté coincé, bravo.'}`,
+    });
     if (!victims.length) return;
     const next = this.freshFloor(f.n + 1);
     const landing = next.rooms.filter((r) => r.type !== 'safe' && r.type !== 'boss' && !next.monsters.some((m) => m.hp > 0 && m.roomId === r.id));
@@ -1154,7 +1244,7 @@ export class Game {
   }
 
   private voteEvery(): number {
-    return Math.max(3, Math.round((this.cfg.voteEveryMinutes * 60) / this.cfg.turnSeconds));
+    return Math.max(3, Math.round((this.cfg.voteEveryMinutes * 60 * this.phases) / this.cfg.turnSeconds));
   }
 
   private castVote(p: PlayerState, arg: string): SubmitResult {
@@ -1180,7 +1270,7 @@ export class Game {
       return true;
     }).map((e) => e.key);
     const options = this.rng.shuffle(pool).slice(0, 3);
-    this.state.vote = { options, votes: {}, endTurn: this.state.turn + this.cfg.voteTurns };
+    this.state.vote = { options, votes: {}, endTurn: this.state.turn + this.cfg.voteTurns * this.phases };
     this.emit({
       floor: 0, kind: 'systeme', scope: 'global', drama: 30,
       text: `LA PRODUCTION PROPOSE UN VOTE (${this.cfg.voteTurns} tours) : ${options.map((k, i) => `!vote ${i + 1} ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}`,
@@ -1243,8 +1333,8 @@ export class Game {
         detail = 'Une fournée de monstres errants est lâchée dans les couloirs.';
         break;
       case 'happy_hour':
-        st.happyHourUntil = st.turn + 10;
-        for (const f of live) for (const r of f.rooms) if (r.type === 'safe') for (let i = 0; i < 2; i++) r.merchant.push(randomLoot(this.rng, this.nextId, f.n, true));
+        st.happyHourUntil = st.turn + 10 * this.phases;
+        for (const f of live) for (const r of f.rooms) if (r.type === 'safe' && !r.forge) for (let i = 0; i < 2; i++) r.merchant.push(randomLoot(this.rng, this.nextId, f.n, true));
         detail = 'Les marchands bradent tout à −50 % pendant 10 tours (et ont reçu du stock).';
         break;
       case 'resurrection': {
@@ -1261,13 +1351,13 @@ export class Game {
         const target = Object.values(st.players).filter((p) => p.alive).sort((a, b) => b.kills - a.kills)[0];
         if (target && target.kills > 0) {
           const gold = 50 * target.floor + 20 * target.kills;
-          st.bounty = { target: target.key, gold, untilTurn: st.turn + 15 };
+          st.bounty = { target: target.key, gold, untilTurn: st.turn + 15 * this.phases };
           detail = `${gold} po pour qui tuera ${target.name} (${target.kills} kills) dans les 15 prochains tours.`;
         } else detail = 'Personne ne mérite de prime. Quelle bande de pacifistes.';
         break;
       }
       case 'inondation':
-        st.floodUntil = st.turn + 5;
+        st.floodUntil = st.turn + 5 * this.phases;
         detail = 'Le donjon est inondé pendant 5 tours : un déplacement sur trois finit en glissade.';
         break;
       case 'festin':
@@ -1330,7 +1420,7 @@ export class Game {
     const count = (k: string) => Object.values(v.votes).filter((x) => x === k).length;
     return {
       options: v.options.map((k, i) => ({ n: i + 1, key: k, label: PRODUCTION_BY_KEY[k].label, desc: PRODUCTION_BY_KEY[k].desc, votes: count(k) })),
-      turnsLeft: Math.max(0, v.endTurn - this.state.turn),
+      turnsLeft: Math.max(0, Math.ceil((v.endTurn - this.state.turn) / this.phases)),
       myVote: key ? v.votes[key] ?? null : null,
     };
   }
@@ -1418,7 +1508,7 @@ export class Game {
       name: p.name, cls: p.cls, level: p.level, xp: p.xp, xpNext: xpNext(p.level), hp: p.hp, maxHp: p.maxHp, stats: { ...p.stats },
       statPoints: p.statPoints, gold: p.gold, weapon: p.weapon, armor: p.armor, items: p.items, alive: p.alive,
       respawnInTurns: p.alive ? 0 : p.respawnIn, immuneSeconds: Math.max(0, Math.ceil((p.immuneUntil - this.now) / 1000)),
-      traitorTurns: p.traitorUntilTurn ? Math.max(0, p.traitorUntilTurn - this.state.turn) : 0,
+      traitorTurns: p.traitorUntilTurn ? Math.max(0, Math.ceil((p.traitorUntilTurn - this.state.turn) / this.phases)) : 0,
       alliance: this.alliesOf(p).map((k) => this.state.players[k]?.name ?? k), pendingAllianceFrom: p.allyProposals.map((k) => this.state.players[k]?.name ?? k),
       floor: p.floor, roomId: p.roomId, pending: p.pending?.raw ?? null, kills: p.kills, deaths: p.deaths,
     };
@@ -1436,7 +1526,7 @@ export class Game {
     const v: RoomView = {
       id: r.id, x: r.x, y: r.y, type: r.type, doors: r.doors, current, stairs: r.stairs,
       bossAlive: f.monsters.some((m) => m.boss && m.roomId === r.id && m.hp > 0), chest: r.chest, searched: !!r.searchedBy,
-      trapArmed: r.trapArmed && (r.trapRevealed || !viewer), merchant: r.type === 'safe',
+      trapArmed: r.trapArmed && (r.trapRevealed || !viewer), merchant: r.type === 'safe' && !r.forge, ...(r.forge ? { forge: true } : {}),
     };
     if (current || !viewer) v.desc = r.desc;
     if (withOccupants) {
@@ -1464,14 +1554,22 @@ export class Game {
     return { n: f.n, uid: f.uid, theme: f.theme, collapseInSec, stairsInSec: st === null ? null : Math.ceil(st / 1000), rooms };
   }
 
-  viewFor(name: string, now = Date.now()): { me: MeView | null; floor: FloorView | null; merchant: MerchantOffer[] | null } {
+  viewFor(name: string, now = Date.now()): { me: MeView | null; floor: FloorView | null; merchant: MerchantOffer[] | null; forge?: ForgeOffer | null } {
     this.now = now;
     const p = this.player(name);
     if (!p) return { me: null, floor: null, merchant: null };
     const f = this.state.floors[p.floor];
     const r = f?.rooms[p.roomId];
-    const merchant = r && r.type === 'safe' && p.alive ? r.merchant.map((item, i) => ({ index: i + 1, item, price: this.price(item) })) : null;
-    return { me: this.meView(p), floor: f ? this.floorView(f, p) : null, merchant };
+    const merchant = r && r.type === 'safe' && !r.forge && p.alive ? r.merchant.map((item, i) => ({ index: i + 1, item, price: this.price(item) })) : null;
+    const forge = r?.forge && p.alive ? this.forgeOffer(p) : null;
+    return { me: this.meView(p), floor: f ? this.floorView(f, p) : null, merchant, forge };
+  }
+
+  /** Vue d'un étage précis, s'il est debout (sinon null). */
+  liveFloorView(n: number, now = Date.now()): FloorView | null {
+    this.now = now;
+    const f = this.state.floors[n];
+    return f && !f.collapsed ? this.floorView(f, null) : null;
   }
 
   spectatorView(n: number | null, now = Date.now()): FloorView | null {

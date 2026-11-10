@@ -580,6 +580,18 @@ export class MapRenderer {
     }
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
     if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
+    if (r.forge) {
+      // La forge : un feu de forge dans le mur, le forgeron (nain) et ses caisses
+      tiles.tile(ctx, 'wall_fountain_mid_red_anim', ox + 2, oy + 1, t);
+      tiles.tile(ctx, 'wall_fountain_top_1', ox + 2, oy);
+      tiles.tile(ctx, 'wall_fountain_basin_red_anim', ox + 2, oy + 2, t);
+      tiles.drawAnchored(ctx, 'crate', (ox + IW - 0.5) * PX, (oy + 3.4) * PX);
+      tiles.drawAnchored(ctx, 'dwarf_m_idle_anim', (ox + 3.6) * PX, (oy + 3.6) * PX, t);
+      ctx.fillStyle = `rgba(255,120,40,${0.18 + 0.08 * Math.sin(t * 6)})`; // lueur du feu
+      ctx.fillRect((ox + 1) * PX, (oy + 2) * PX, 3 * PX, 2 * PX);
+      const b = this.bubbles.get(`marchand:${r.id}`);
+      if (b) this.bubblePos.push({ text: b.text, x: (ox + 3.6) * PX, y: (oy + 3.6) * PX - 30, t0: b.t0, dur: b.dur, npc: true });
+    }
     if (r.merchant) {
       tiles.drawAnchored(ctx, 'doc_idle_anim', (ox + 2.5) * PX, (oy + 3.2) * PX, t);
       const b = this.bubbles.get(`marchand:${r.id}`);

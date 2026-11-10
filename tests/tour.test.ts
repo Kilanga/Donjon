@@ -8,7 +8,7 @@ const T0 = 1_000_000;
 
 /** Deux joueurs sans immunité dans une salle normale vide, avec une porte libre. */
 function duel(seed = 42) {
-  const g = new Game({ ...DEFAULT_CONFIG, seed, immunitySeconds: 0 });
+  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed, immunitySeconds: 0 });
   g.submit('a', '!join barbare', T0);
   g.submit('b', '!join mage', T0);
   const a = g.player('a')!;
@@ -81,7 +81,7 @@ describe('loot des morts', () => {
 describe('équilibrage des premiers étages', () => {
   it('un piège de l\'étage 1 fait au plus 3 PV', () => {
     for (let seed = 1; seed <= 30; seed++) {
-      const g = new Game({ ...DEFAULT_CONFIG, seed });
+      const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed });
       g.submit('a', '!join chevalier', T0);
       const p = g.player('a')!;
       const f = g.floor(1)!;
@@ -99,7 +99,7 @@ describe('équilibrage des premiers étages', () => {
   });
 
   it('les monstres errants ne s\'entassent pas à plus de 2 par salle aux étages 1-2', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, seed: 7 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 7 });
     g.submit('a', '!join', T0);
     const f = g.floor(1)!;
     for (const m of f.monsters) if (!m.boss) m.wanderer = true;
@@ -125,7 +125,7 @@ describe('fautes de frappe', () => {
     expect(suggestCommand('!xyzzy')).toBeNull();
   });
   it('le jeu répond avec la suggestion', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, seed: 1 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 1 });
     expect(g.submit('a', '!attque gobelin', T0).text).toContain('!attaque gobelin');
   });
 });

@@ -260,10 +260,17 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   if (room.type === 'piege') acts.push('<button data-cmd="!fouille">Chercher un piège</button>');
   if ((room.groundGold ?? 0) > 0 || (room.ground ?? []).length) acts.push(`<button data-cmd="!ramasse">Tout ramasser${room.groundGold ? ` (${room.groundGold} po)` : ''}</button>`);
   if (room.type === 'safe') acts.push('<button data-cmd="!repos">Se reposer</button>');
+  if (room.forge) {
+    // Le forgeron : améliorer son arme ou son armure (+1, jusqu'à +3)
+    const fo = s.forge;
+    const up = (cmd: string, label: string, x: { name: string; plus: number; cost: number } | null | undefined) =>
+      x ? `<button data-cmd="${cmd}" ${x.cost > me.gold ? 'disabled' : ''} title="${esc(x.name)} → +${x.plus + 1}">${label} +${x.plus + 1} · ${x.cost} po</button>` : `<button disabled>${label} : au maximum</button>`;
+    acts.push(up('!forge arme', '⚒ Arme', fo?.weapon), up('!forge armure', '⚒ Armure', fo?.armor));
+  }
   if (room.stairs) acts.push(`<button data-cmd="!descendre" ${room.bossAlive ? 'disabled title="Le boss bloque l\'escalier"' : ''}>Descendre</button>`);
 
   $('room-card').innerHTML = `
-    <div class="card-title">${ROOM_LABEL[room.type]} <span class="muted">salle ${room.id}</span></div>
+    <div class="card-title">${room.forge ? 'Forge' : ROOM_LABEL[room.type]} <span class="muted">salle ${room.id}</span></div>
     ${room.desc ? `<div class="desc">${esc(room.desc)}</div>` : ''}
     <div class="actions">${acts.join('')}</div>
     ${monsters ? `<div class="section-label">Monstres</div>${monsters}` : ''}

@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, type GameConfig } from '../src/server/config.js';
 import { Game } from '../src/server/game/engine.js';
 
 const T0 = 1_000_000;
-const make = (over: Partial<GameConfig> = {}) => new Game({ ...DEFAULT_CONFIG, seed: 3, voteEveryMinutes: 1, voteTurns: 2, turnSeconds: 20, ...over });
+const make = (over: Partial<GameConfig> = {}) => new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 3, voteEveryMinutes: 1, voteTurns: 2, turnSeconds: 20, ...over });
 
 describe('votes de la production', () => {
   it('lance un vote, compte les voix et applique le gagnant', () => {
@@ -93,7 +93,7 @@ describe('classement et régie', () => {
     g.submit('a', '!join', T0);
     expect(g.adminCollapse(1, T0)).toBe(true);
     g.tick(T0 + 20_000);
-    expect(g.player('a')!.floor).toBe(2); // tombé à l'étage suivant
+    expect(g.player('a')).toBeUndefined(); // resté dans l'étage effondré : game over
     const lastId = g.state.nextId;
     g.reset();
     expect(Object.keys(g.state.players)).toHaveLength(0);

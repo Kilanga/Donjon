@@ -15,7 +15,11 @@ const key = params.get('cle') ?? params.get('spectateur') ?? '';
 const follow = params.get('suivre');
 
 const assets = new Assets();
-let world: World;
+// Deux scènes 3D, une par étage actif ; une seule est visible et rendue. Bascule instantanée de l'une à l'autre.
+const worlds: World[] = [];
+const slotFloor: (number | null)[] = [null, null];
+let visible = 0;
+let world: World; // la scène visible
 let ws: WebSocket | null = null;
 let state: PlayerViewMsg | null = null;
 let clockOffset = 0;
@@ -73,13 +77,22 @@ function onMessage(m: ServerMsg) {
   if (m.type === 'state') {
     state = m;
     clockOffset = m.serverNow - Date.now();
-    if (m.floor) world.setFloor(m.floor);
+    if (m.floor) {
+      if (slotFloor[visible] !== m.floor.n && slotFloor[1 - visible] === m.floor.n) visible = 1 - visible;
+      slotFloor[visible] = m.floor.n;
+      worlds[visible].setFloor(m.floor);
+    }
+    if (m.standby) {
+      slotFloor[1 - visible] = m.standby.n;
+      worlds[1 - visible].setFloor(m.standby);
+    }
+    applyVisible();
     renderHud(m);
     pickFloor(m);
   } else if (m.type === 'events') {
     const fresh = m.events.filter((e) => !seen.has(e.id));
     fresh.forEach((e) => seen.add(e.id));
-    world.onEvents(fresh);
+    for (const w of worlds) w.onEvents(fresh); // chaque scène ne garde que les évènements de son étage
     for (const e of fresh) onEvent(e);
     for (const e of fresh) heatFloor(e);
     const win = fresh.find((e) => e.victory);
@@ -88,14 +101,23 @@ function onMessage(m: ServerMsg) {
     if (first) return;
     if (win?.victory) showCard('VICTOIRE !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
   } else if (m.type === 'chat' && !m.cmd) {
-    world.bubble(m.from, m.text);
+    for (const w of worlds) w.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
-    world.setPos(m.name, m.floor, m.roomId, m.x, m.y);
+    for (const w of worlds) w.setPos(m.name, m.floor, m.roomId, m.x, m.y);
   } else if (m.type === 'forecast') {
-    // Anticipation : la caméra part vers l'action avant la fin du tour, et l'étage le plus chaud peut être choisi d'avance
-    world.onForecast(m.rooms);
+    // Anticipation : 5 s avant que l'étage joue, la caméra part vers l'action ; si l'action est sur l'autre étage chargé,
+    // on bascule dessus (tours décalés : un étage, puis l'autre, toutes les 10 s)
+    for (const w of worlds) w.onForecast(m.rooms);
     const now = performance.now();
     for (const r of m.rooms) floorHeat.set(r.floor, { s: heatOf(r.floor, now) + r.score * 0.5, t: now });
+    const top = m.rooms[0];
+    const other = 1 - visible;
+    if (top && top.score >= 12 && slotFloor[other] === top.floor && state) {
+      const sum = state.floors ?? [];
+      const humansThere = sum.find((f) => f.n === top.floor)?.humans ?? 0;
+      const humansHere = sum.find((f) => f.n === slotFloor[visible])?.humans ?? 0;
+      if (humansThere > 0 || humansHere === 0 || top.score >= 30) switchTo(other); // vrais joueurs d'abord, sauf gros moment ailleurs
+    }
     if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
     showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
@@ -157,42 +179,73 @@ function showCard(n: number | string, sub: string) {
   cardTimer = window.setTimeout(() => card.classList.add('hidden'), 2700);
 }
 
-/** Choisit l'étage montré : il faut que ça vaille le déplacement (et au moins 25 s sur un étage). */
+/** Les deux étages les plus intéressants restent chargés (vrais joueurs d'abord, puis l'action) ; on montre le meilleur. */
 function pickFloor(s: PlayerViewMsg) {
-  const floors = s.floors;
-  if (floors?.length) {
-    const now = performance.now();
-    const score = (f: { n: number; humans: number; bots: number }) => f.humans * 12 + f.bots * 2 + heatOf(f.n, now);
-    const occupied = floors.filter((f) => f.humans + f.bots > 0);
-    if (!occupied.length) return;
-    const best = occupied.reduce((a, b) => (score(b) > score(a) ? b : a));
-    const cur = floors.find((f) => f.n === s.floor?.n);
-    const curEmpty = !cur || cur.humans + cur.bots === 0;
-    const worth = curEmpty || (now - floorSince > 25000 && score(best) > score(cur!) * 1.3 + 10);
-    if (best.n !== s.floor?.n && best.n !== wantedFloor && worth) {
-      wantedFloor = best.n;
-      floorSince = now;
-      send({ type: 'floor', n: best.n });
-      const who = [best.humans ? `${best.humans} aventurier${best.humans > 1 ? 's' : ''}` : '', best.bots ? `${best.bots} PNJ` : ''].filter(Boolean).join(' · ');
-      showCard(best.n, `${who} · ${best.theme}`);
+  const floors = s.floors ?? [];
+  const occupied = floors.filter((f) => f.humans + f.bots > 0);
+  if (!occupied.length) return;
+  const now = performance.now();
+  const score = (f: { n: number; humans: number; bots: number }) => f.humans * 12 + f.bots * 2 + heatOf(f.n, now);
+  const ranked = [...occupied].sort((a, b) => score(b) - score(a)).slice(0, 2).map((f) => f.n);
+  let changed = false;
+  // On garde les scènes déjà chargées sur un étage voulu ; on recharge la scène cachée en priorité
+  for (const n of ranked) {
+    if (slotFloor.includes(n)) continue;
+    const free = [1 - visible, visible].find((i) => slotFloor[i] === null || !ranked.includes(slotFloor[i]!));
+    if (free === undefined) continue;
+    slotFloor[free] = n;
+    changed = true;
+  }
+  // L'étage visible n'est plus intéressant (vide, effondré) : on montre le meilleur
+  if (!ranked.includes(slotFloor[visible]!) || !occupied.some((f) => f.n === slotFloor[visible])) {
+    const best = slotFloor.indexOf(ranked[0]);
+    if (best >= 0 && best !== visible) {
+      visible = best;
+      changed = true;
+      const f = floors.find((x) => x.n === ranked[0]);
+      if (f) showCard(f.n, [f.humans ? `${f.humans} aventurier${f.humans > 1 ? 's' : ''}` : '', f.bots ? `${f.bots} PNJ` : ''].filter(Boolean).join(' · ') + ` · ${f.theme}`);
     }
-    return;
   }
-  const count = new Map<number, number>();
-  for (const r of s.leaderboard) if (r.alive) count.set(r.floor, (count.get(r.floor) ?? 0) + 1);
-  let best: number | null = null;
-  let n = 0;
-  for (const [f, c] of count) if (c > n) [best, n] = [f, c];
-  if (best !== null && best !== s.floor?.n && best !== wantedFloor) {
-    wantedFloor = best;
-    send({ type: 'floor', n: best });
-  }
+  if (changed || slotFloor[visible] !== wantedFloor) requestFloors();
+}
+
+/** Dit au serveur quels étages envoyer : le visible et celui gardé chargé. */
+function requestFloors() {
+  const n = slotFloor[visible];
+  if (n === null) return;
+  wantedFloor = n;
+  floorSince = performance.now();
+  const sb = slotFloor[1 - visible];
+  send({ type: 'floor', n, ...(sb !== null ? { standby: sb } : {}) });
+}
+
+/** Bascule instantanée vers l'autre étage chargé. */
+function switchTo(i: number) {
+  if (i === visible || slotFloor[i] === null) return;
+  visible = i;
+  applyVisible();
+  requestFloors();
+  $('shot').textContent = `Étage ${slotFloor[i]}`;
+}
+
+function applyVisible() {
+  world = worlds[visible];
+  $('c').classList.toggle('off', visible !== 0);
+  $('labels').classList.toggle('off', visible !== 0);
+  $('c2').classList.toggle('off', visible !== 1);
+  $('labels2').classList.toggle('off', visible !== 1);
+}
+
+/** Vue (et fin de tour) de l'étage visible, que le serveur l'ait envoyé comme principal ou comme second. */
+function shown(s: PlayerViewMsg): { floor: PlayerViewMsg['floor']; turnEndsAt: number } {
+  if (s.standby && s.standby.n === slotFloor[visible]) return { floor: s.standby, turnEndsAt: s.standbyTurnEndsAt ?? s.turnEndsAt };
+  return { floor: s.floor, turnEndsAt: s.turnEndsAt };
 }
 
 // ------------------------------------------------------------------ habillage
 
 function renderHud(s: PlayerViewMsg) {
-  const f = s.floor;
+  const f = shown(s).floor;
   const alive = s.leaderboard.filter((r) => r.alive).length;
   $('meta').innerHTML = f ? `Étage <b>${f.n}</b> · ${esc(f.theme)} · <b>${alive}</b> crawlers en vie` : '—';
   $('pause').classList.toggle('hidden', !s.paused || !!s.seasonOver);
@@ -261,18 +314,19 @@ function onEvent(e: GameEvent) {
 function tickHud() {
   if (state) {
     const now = Date.now() + clockOffset;
-    const left = Math.max(0, (state.turnEndsAt - now) / 1000);
+    const view = shown(state);
+    const left = Math.max(0, (view.turnEndsAt - now) / 1000);
     $('turn').textContent = `Tour ${state.turn} · ${Math.ceil(left)} s`;
     $('turn-bar').style.width = `${100 - (100 * left) / state.turnSeconds}%`;
-    const c = state.floor?.collapseInSec;
+    const c = view.floor?.collapseInSec;
     if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
-      const st = state.floor?.stairsInSec;
+      const st = view.floor?.stairsInSec;
       const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
       $('collapse').textContent = seal > 0 ? `🔒 Escalier scellé ${fmt(seal)} · effondrement ${fmt(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmt(rest)}`;
       $('collapse').classList.toggle('urgent', rest < 60);
-    } else $('collapse').textContent = state.floor ? 'Chrono en attente d\'un aventurier' : '';
+    } else $('collapse').textContent = view.floor ? 'Chrono en attente d\'un aventurier' : '';
   }
 }
 
@@ -285,14 +339,19 @@ function tickHud() {
   await assets.load((d, t) => {
     $('load-bar').style.width = `${(100 * d) / t}%`;
   });
-  world = new World($('c') as HTMLCanvasElement, $('labels'), assets);
-  if (follow) world.followName = follow;
-  world.onShot = (label) => ($('shot').textContent = label);
-  if (params.has('debug')) (window as unknown as { world: World }).world = world;
+  worlds.push(new World($('c') as HTMLCanvasElement, $('labels'), assets), new World($('c2') as HTMLCanvasElement, $('labels2'), assets));
+  world = worlds[0];
+  for (const w of worlds) {
+    if (follow) w.followName = follow;
+    w.onShot = (label) => {
+      if (w === world) $('shot').textContent = label;
+    };
+  }
+  if (params.has('debug')) Object.assign(window as unknown as Record<string, unknown>, { world: worlds[0], worlds, switchTo });
   // Le HUD est dessiné pour du 1920×1080 : on le réduit dans une fenêtre plus petite
   const ui = document.querySelector('.ui') as HTMLElement;
   const resize = () => {
-    world.resize(innerWidth, innerHeight);
+    for (const w of worlds) w.resize(innerWidth, innerHeight);
     const s = Math.min(1, innerWidth / 1600, innerHeight / 900);
     ui.style.transform = s < 1 ? `scale(${s})` : '';
     ui.style.transformOrigin = '0 0';

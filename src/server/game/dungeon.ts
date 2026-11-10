@@ -67,6 +67,13 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
     const far = free().sort((a, b) => dist[b.id] - dist[a.id])[Math.floor(count / 6)];
     if (far) setType(far, 'safe');
   }
+  // La forge : une seconde safe room, à mi-chemin entre l'entrée et le boss
+  const half = dist[boss.id] / 2;
+  const forge = free().filter((r) => dist[r.id] >= 2).sort((a, b) => Math.abs(dist[a.id] - half) - Math.abs(dist[b.id] - half))[0];
+  if (forge) {
+    setType(forge, 'safe');
+    forge.forge = true;
+  }
   const arena = free()[0];
   if (arena) setType(arena, 'arene');
   const treasures = Math.max(1, Math.round(count / 20));
@@ -87,7 +94,7 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
 
   for (const r of rooms) {
     r.desc = rng.pick(ROOM_DESCRIPTIONS[r.type]);
-    if (r.type === 'safe') r.merchant = merchantStock(n, rng, nextId);
+    if (r.type === 'safe' && !r.forge) r.merchant = merchantStock(n, rng, nextId);
   }
 
   // Monstres

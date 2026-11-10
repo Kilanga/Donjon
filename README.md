@@ -162,18 +162,27 @@ Un viewer qui joue déjà par le chat entre **son pseudo Twitch** sur la page : 
 `!lien 1234` dans le chat Twitch, et la page est reliée à son perso (un autre viewer ne peut pas valider à sa place ;
 la page garde un jeton, donc pas de nouveau code au rechargement). Les pseudos jamais vus sur Twitch sont libres.
 
-## Rythme d'une saison (≈ 2 h 40)
+## Le forgeron
+
+Chaque étage a une **forge** : une seconde safe room, à mi-chemin entre l'entrée et le boss (foyer rougeoyant,
+enclume, forgeron nain). `!forge` donne les prix, `!forge arme` (+1 au jet et dé de dégâts plus gros) ou
+`!forge armure` (+1 défense) améliore l'équipement porté, jusqu'à +3. Le prix monte à chaque niveau et avec la
+profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dans la forge.
+
+## Rythme d'une saison (≈ 1 h 20)
 
 La saison démarre quand le premier vrai joueur entre. Ensuite tout est **à heure fixe** : l'étage *n* s'effondre
-*n* × 20 min plus tard, quel que soit le rythme du chat. Sur chaque étage :
+*n* × 10 min plus tard, et la saison se termine à 8 × 10 = 80 min, quoi qu'il arrive. Sur chaque étage :
 
-1. **Escalier scellé** (10 premières minutes) : on explore, on pille, on prend des niveaux. `!descendre` répond dans combien
-   de temps il s'ouvre. Il faut vraiment ce temps : les étages profonds cognent fort.
-2. **« L'escalier se descelle ! »** (10 dernières minutes) : on bat le boss et on descend avant l'effondrement.
+1. **Escalier scellé** (5 premières minutes) : on explore, on pille, on passe à la forge, on prend des niveaux.
+2. **« L'escalier se descelle ! »** (5 dernières minutes) : on bat le boss et on descend avant l'effondrement.
+3. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
+   Seuls les retardataires, l'équipe de fermeture, tombent à l'étage suivant.
 
-Avec 8 étages, la saison dure 2 h 40 : la sortie finale s'ouvre vers 2 h 30, la fin tombe à 2 h 40. Pour plus court ou plus
-long : `floorMinutes` (ex. 22 → ~2 h 55) ou `finalFloor`. Les retardataires arrivés en cours de route trouvent un étage 1
-recreusé qui garde au moins `floorMinutes` de vie.
+**Tours décalés** : chaque étage a des tours de 20 s, mais les étages pairs jouent 10 s après les impairs. Le stream a
+donc une action toutes les 10 s, et la caméra passe d'un étage à l'autre (les deux étages actifs restent chargés en 3D,
+la bascule est instantanée). Réglages : `floorMinutes`, `stairsOpenMinutes`, `staggered` (false pour revenir au tour unique).
+Les monstres tués reviennent 3 tours plus tard ailleurs sur l'étage ; tuer un crawler rapporte moins qu'un monstre.
 
 ## Fin du donjon et Légendes
 

@@ -10,6 +10,7 @@ export type CommandName =
   | 'use'
   | 'equip'
   | 'buy'
+  | 'forge'
   | 'sell'
   | 'shop'
   | 'rest'
@@ -40,6 +41,7 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   utilise: { name: 'use' }, utiliser: { name: 'use' }, use: { name: 'use' }, bois: { name: 'use' }, drink: { name: 'use' },
   equipe: { name: 'equip' }, equiper: { name: 'equip' }, equip: { name: 'equip' },
   achete: { name: 'buy' }, acheter: { name: 'buy' }, buy: { name: 'buy' },
+  forge: { name: 'forge' }, forger: { name: 'forge' }, ameliore: { name: 'forge' }, ameliorer: { name: 'forge' }, upgrade: { name: 'forge' },
   vends: { name: 'sell' }, vendre: { name: 'sell' }, sell: { name: 'sell' },
   marchand: { name: 'shop' }, shop: { name: 'shop' },
   repos: { name: 'rest' }, rest: { name: 'rest' },
@@ -114,6 +116,7 @@ export const HELP_TEXT = [
   '!utilise <objet> / !equipe <objet> — utiliser ou équiper',
   '!marchand, !achete <n°>, !vends <objet> — commerce (safe room)',
   '!repos — se soigner (safe room)',
+  '!forge arme / !forge armure — améliorer son équipement chez le forgeron (+1, jusqu\'à +3, contre de l\'or)',
   '!parle <message> — discuter avec le marchand (safe room)',
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',

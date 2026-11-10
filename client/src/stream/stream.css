@@ -1,8 +1,10 @@
 :root { --glass: rgba(14,10,24,0.78); --line: rgba(255,255,255,0.1); --txt: #f3eefc; --mut: #a79fbd; --gold: #ffd65a; --pink: #ff4d8d; --violet: #8a5cff; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0812; color: var(--txt); font-family: Inter, system-ui, sans-serif; }
-canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+canvas#c, canvas#c2 { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#labels, #labels2 { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+/* Deux étages chargés en même temps : un seul visible (bascule instantanée, sans rechargement) */
+canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 .tag3d { position: absolute; left: 0; top: 0; text-align: center; white-space: nowrap; will-change: transform; }
 .tag3d .n { font: 700 14px Inter, sans-serif; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,0.9); }
 .tag3d .hp { width: 46px; height: 4px; margin: 2px auto 0; background: rgba(60,10,15,0.85); border-radius: 2px; overflow: hidden; }

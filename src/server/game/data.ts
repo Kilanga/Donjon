@@ -183,6 +183,17 @@ export const MERCHANT_RESPAWN = [
   "Déjà de retour ? Tu es intouchable 3 minutes. Profites-en pour !repos… ah non, tu es déjà en pleine forme.",
   "La mort, c'est surtout vexant. Tes affaires t'attendent au sol, là-bas.",
 ];
+/** Le forgeron : améliorations d'équipement (+1 par passage, jusqu'à FORGE_MAX). */
+export const FORGE_MAX = 3;
+export const FORGE_LINES = [
+  'Voilà. Essaie de ne pas le casser sur le premier gobelin venu.',
+  'Du beau travail. Le mien, pas le tien.',
+  'Trempé trois fois, béni zéro fois. Ça devrait tenir.',
+  'Reviens quand tu auras plus d\'or. Ou plus de talent.',
+  'Il chante quand on le frappe. C\'est bon signe. Je crois.',
+  'Ne me remercie pas, paie-moi. Ah, c\'est fait ? Alors merci.',
+];
+
 export const MERCHANT_TIPS = [
   "Une seule commande par tour, et c'est la dernière tapée qui compte. Comme à la taverne.",
   "Une potion se boit avant les coups du tour. Fuir, par contre, c'est APRÈS avoir encaissé.",
@@ -196,6 +207,7 @@ export const MERCHANT_TIPS = [
   "!repos te soigne, mais seulement ici. !marchand pour voir mon stock. Les prix sont honnêtes. Presque.",
   "Quand tu gagnes un niveau : !monte for, agi, int ou cha. Ne garde pas tes points pour tes vieux jours.",
   "Un souci ? !bug suivi de ce qui cloche. Les dieux du donjon lisent tout.",
+  "Il y a un forgeron à chaque étage, à mi-chemin du boss : !forge arme ou !forge armure, contre de l'or.",
   "La production propose des votes : !vote 1, 2 ou 3. Les dieux du spectacle aiment qu'on les écoute.",
   "Fuir un monstre demande un jet d'Agilité. Les voleurs adorent. Les chevaliers, moins.",
   "Les salles piégées se désarment avec !fouille et un peu d'Intelligence. Ou beaucoup de chance.",

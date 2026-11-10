@@ -78,6 +78,7 @@ export interface RoomState {
   trapArmed: boolean;
   trapRevealed: boolean;
   merchant: Item[];
+  forge?: boolean; // la forge de l'étage (safe room du forgeron)
   stairs: boolean;
   ground: Item[];
   groundGold: number;

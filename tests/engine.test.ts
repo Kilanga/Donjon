@@ -5,7 +5,7 @@ import { bfs, generateFloor } from '../src/server/game/dungeon.js';
 import { Game, xpNext } from '../src/server/game/engine.js';
 import { Rng } from '../src/server/game/rng.js';
 
-const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, seed: 42, ...over });
+const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, seed: 42, ...over });
 const T0 = 1_000_000;
 
 function setup(over: Partial<GameConfig> = {}) {
@@ -180,28 +180,35 @@ describe('progression', () => {
 });
 
 describe('étages', () => {
-  it('effondrement : les joueurs restés tombent vivants à l\'étage suivant, les nouveaux entrent dans un étage 1 recreusé', () => {
+  it('effondrement : GAME OVER pour les joueurs restés (ils peuvent refaire !join), les nouveaux entrent dans un étage 1 recreusé', () => {
     const g = setup({ floorMinutes: 1, respawnTurns: 1 });
     g.submit('a', '!join', T0);
-    const p = g.player('a')!;
-    p.gold = 50;
-    const weapon = p.weapon;
     const oldUid = g.floor(1)!.uid;
-    expect(p.floor).toBe(1);
     const ev = g.tick(T0 + 61_000);
-    expect(ev.some((e) => e.text.includes('EFFONDRE'))).toBe(true);
-    expect(ev.some((e) => e.text.includes('traverse le plancher'))).toBe(true);
-    expect(p.alive).toBe(true);
-    expect(p.floor).toBe(2);
-    expect(p.hp).toBeLessThan(p.maxHp);
-    expect(p.gold).toBe(30); // 40 % perdus
-    expect(p.weapon).toBe(weapon); // équipement gardé
-    expect(p.stunned).toBe(true);
-    // Un nouveau joueur entre à l'étage 1, recreusé à neuf
+    expect(ev.some((e) => /EFFONDRE/.test(e.text) && /GAME OVER pour a/.test(e.text))).toBe(true);
+    expect(g.player('a')).toBeUndefined(); // éliminé
+    // Il recommence (et un nouveau joueur aussi) à l'étage 1, recreusé à neuf
+    expect(g.submit('a', '!join', T0 + 82_000).ok).toBe(true);
     g.submit('c', '!join', T0 + 82_000);
     expect(g.player('c')!.floor).toBe(1);
     expect(g.floor(1)!.collapsed).toBe(false);
     expect(g.floor(1)!.uid).not.toBe(oldUid);
+  });
+
+  it('effondrement : un retardataire, lui, tombe vivant à l\'étage suivant (PV et or perdus, équipement gardé)', () => {
+    const g = setup({ floorMinutes: 1, respawnTurns: 1 });
+    g.submit('a', '!join', T0);
+    g.joinBot('Firmin', 'barbare', true);
+    const p = g.player('Firmin')!;
+    p.gold = 50;
+    const weapon = p.weapon;
+    const ev = g.tick(T0 + 61_000);
+    expect(ev.some((e) => e.text.includes('traverse le plancher'))).toBe(true);
+    expect(p.alive).toBe(true);
+    expect(p.floor).toBe(2);
+    expect(p.gold).toBe(30); // 40 % perdus
+    expect(p.weapon).toBe(weapon);
+    expect(p.stunned).toBe(true);
   });
 
   it('on ne descend pas tant que le boss est vivant', () => {
@@ -271,7 +278,8 @@ describe('inactivité', () => {
     g.submit('a', '!attaque sac', T0);
     g.tick(T0 + 20_000);
     const hp1 = f.monsters.find((m) => m.id === 'sac')!.hp;
-    g.tick(T0 + 40_000); // aucune commande
+    // aucune commande pendant 3 tours : il continue de frapper (un 1 naturel peut rater un tour, pas les trois)
+    for (const k of [2, 3, 4]) g.tick(T0 + k * 20_000);
     const hp2 = f.monsters.find((m) => m.id === 'sac')!.hp;
     expect(hp2).toBeLessThan(hp1);
   });

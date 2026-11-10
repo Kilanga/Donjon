@@ -181,6 +181,7 @@ export class World {
     }
     for (const fl of this.flames) this.scene.remove(fl.sprite);
     this.flames = [];
+    const forges: THREE.Vector3[] = [];
     const b = new InstancedBuilder(this.assets);
     const byPos = new Map(f.rooms.map((r) => [`${r.x},${r.y}`, r]));
     for (const r of f.rooms) {
@@ -222,6 +223,14 @@ export class World {
       const corner = (dx: number, dz: number) => [c.x + dx, c.z + dz] as const;
       switch (r.type) {
         case 'safe': {
+          if (r.forge) {
+            // La forge : un foyer rougeoyant contre le mur nord, une enclume, des tonneaux d'eau et des caisses de minerai
+            b.add('banner_patternA_red', c.x + 2, 0, c.z - HALF);
+            b.add('barrel_large', c.x + 4.4, 0, c.z - 4.2, 0, [0.8, 0.8, 0.8]);
+            b.add('crates_stacked', c.x - 4.4, 0, c.z + 4.2, 0.6, [0.8, 0.8, 0.8]);
+            forges.push(c.clone());
+            break;
+          }
           b.add('banner_shield_blue', c.x - 1.5, 0, c.z - HALF);
           b.add('table_long_decorated_A', c.x + 2.5, 0, c.z - 3, 0);
           b.add('stool', c.x + 1, 0, c.z - 1.5, 0.4);
@@ -253,6 +262,7 @@ export class World {
     }
     this.static = b.build();
     this.scene.add(this.static);
+    for (const c of forges) this.buildForge(c);
     // Socle sombre sous l'étage
     const xs = f.rooms.map((r) => r.x);
     const ys = f.rooms.map((r) => r.y);
@@ -262,6 +272,30 @@ export class World {
     base.position.set(((Math.min(...xs) + Math.max(...xs)) / 2) * CELL, -1.6, ((Math.min(...ys) + Math.max(...ys)) / 2) * CELL);
     base.receiveShadow = true;
     this.static.add(base);
+  }
+
+  /** Foyer et enclume de la forge (formes simples, pas de modèle dans le pack). */
+  private buildForge(c: THREE.Vector3) {
+    const stone = new THREE.MeshStandardMaterial({ color: 0x8a7a80, roughness: 0.95 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.45, metalness: 0.25 });
+    const ember = new THREE.MeshStandardMaterial({ color: 0x401000, emissive: 0xff5a10, emissiveIntensity: 1.6 });
+    const hearth = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 1.8), stone);
+    hearth.position.set(c.x - 2.6, 0.65, c.z - HALF + 1.3);
+    const coals = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 1.1), ember);
+    coals.position.set(c.x - 2.6, 1.35, c.z - HALF + 1.3);
+    const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.6, 2.2, 4), stone);
+    hood.position.set(c.x - 2.6, 3.4, c.z - HALF + 1.2);
+    hood.rotation.y = Math.PI / 4;
+    const anvilBase = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.7), metal);
+    anvilBase.position.set(c.x + 0.6, 0.45, c.z - 1.2);
+    const anvilTop = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.45, 0.8), metal);
+    anvilTop.position.set(c.x + 0.6, 1.1, c.z - 1.2);
+    for (const m of [hearth, coals, hood, anvilBase, anvilTop]) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+      this.static!.add(m);
+    }
+    for (const dx of [-0.8, 0, 0.8]) this.addFlame(new THREE.Vector3(c.x - 2.6 + dx, 1.9, c.z - HALF + 1.3));
   }
 
   private addFlame(pos: THREE.Vector3) {
@@ -837,6 +871,7 @@ export class World {
 }
 
 export function roomLabel(r: RoomView): string {
+  if (r.forge) return 'Forge';
   return { normale: 'Salle', safe: 'Safe room', piege: 'Salle piégée', tresor: 'Salle du trésor', arene: 'Arène', boss: 'Salle du boss' }[r.type] + ` ${r.id}`;
 }
 

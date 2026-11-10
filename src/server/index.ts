@@ -249,6 +249,7 @@ interface Client {
   name: string | null; // pseudo du joueur
   spectator: boolean;
   floor: number | null; // étage regardé (spectateur)
+  standby?: number | null; // second étage gardé chargé (stream)
   recent: number[]; // horodatages des derniers messages (anti-spam)
   id: number; // numéro de connexion (journal)
   ua: string;
@@ -269,11 +270,21 @@ function send(c: Client, msg: ServerMsg) {
   if (c.ws.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify(msg));
 }
 
+/** Durée d'un « tour du monde » : un tour d'étage, ou la moitié avec les tours décalés. */
+const phaseMs = () => (cfg.turnSeconds * 1000) / game.phases;
+/** Fin du prochain tour de cet étage (avec les tours décalés, un étage sur deux joue au tour du monde suivant). */
+function floorTurnEnds(floorN: number | undefined, now: number): number {
+  const base = pausedAt ? turnEndsAt + (now - pausedAt) : turnEndsAt;
+  if (floorN === undefined || game.plays(floorN, game.state.turn + 1)) return base;
+  return base + phaseMs();
+}
+
 function sendState(c: Client) {
   const now = Date.now();
   const key = c.name ? playerKey(c.name) : null;
+  const shownFloor = c.spectator ? (c.floor ?? game.spectatorView(c.floor, now)?.n) : c.name ? game.player(c.name)?.floor : undefined;
   const base = {
-    type: 'state' as const, turn: game.state.turn, turnEndsAt: pausedAt ? turnEndsAt + (now - pausedAt) : turnEndsAt,
+    type: 'state' as const, turn: Math.ceil(game.state.turn / game.phases), turnEndsAt: floorTurnEnds(shownFloor ?? undefined, now),
     turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
     seasonOver: game.state.seasonOver,
@@ -281,7 +292,9 @@ function sendState(c: Client) {
     ...(c.spectator ? { floors: game.floorsSummary(now), champions: game.state.champions } : {}),
   };
   if (c.spectator) {
-    send(c, { ...base, me: null, floor: game.spectatorView(c.floor, now), merchant: null, spectator: true });
+    const shown = game.spectatorView(c.floor, now);
+    const standby = c.standby != null && c.standby !== shown?.n ? game.liveFloorView(c.standby, now) : null;
+    send(c, { ...base, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
   } else if (c.name) {
     const v = game.viewFor(c.name, now);
     send(c, { ...base, ...v, spectator: false });
@@ -538,6 +551,7 @@ function onClientMessage(c: Client, msg: ClientMsg) {
       else command(c.name, text, c);
     } else if (msg.type === 'floor' && c.spectator) {
       c.floor = Number(msg.n);
+      c.standby = msg.standby !== undefined && Number.isFinite(Number(msg.standby)) ? Number(msg.standby) : null;
       sendState(c);
     } else if (msg.type === 'admin' && c.spectator) {
       admin(c, msg.action, msg.arg);
@@ -601,7 +615,7 @@ function admin(c: Client, action: string, arg?: string | number) {
     case 'turnSeconds': {
       const v = Math.max(3, Math.min(120, Number(arg) || cfg.turnSeconds));
       cfg.turnSeconds = v;
-      turnEndsAt = Math.min(turnEndsAt, now + v * 1000);
+      turnEndsAt = Math.min(turnEndsAt, now + phaseMs());
       msg = `Durée du tour : ${v} s.`;
       break;
     }
@@ -629,7 +643,7 @@ function admin(c: Client, action: string, arg?: string | number) {
     case 'reset':
       game.reset();
       pausedAt = null;
-      turnEndsAt = now + cfg.turnSeconds * 1000;
+      turnEndsAt = now + phaseMs();
       for (const cl of clients) send(cl, { type: 'events', events: game.state.events.slice(-1) });
       msg = 'Nouvelle partie !';
       break;
@@ -651,7 +665,7 @@ function admin(c: Client, action: string, arg?: string | number) {
 // ------------------------------------------------------------------ tours
 function runTurn() {
   const late = Date.now() - turnEndsAt;
-  turnEndsAt = Date.now() + cfg.turnSeconds * 1000;
+  turnEndsAt = Date.now() + phaseMs();
   let events: GameEvent[] = [];
   const t0 = performance.now();
   try {
@@ -698,12 +712,12 @@ function broadcastState() {
 let forecastTurn = -1;
 setInterval(() => {
   if (pausedAt !== null || game.state.seasonOver || forecastTurn === game.state.turn) return;
-  const lead = Math.min(5000, cfg.turnSeconds * 400);
+  const lead = Math.min(5000, phaseMs() * 0.5);
   if (turnEndsAt - Date.now() > lead) return;
   forecastTurn = game.state.turn;
   let rooms;
   try {
-    rooms = game.forecast();
+    rooms = game.forecast().filter((r) => game.plays(r.floor, game.state.turn + 1)); // seulement les étages qui vont jouer
   } catch (e) {
     console.error('[caméra] prévision impossible :', e);
     return;

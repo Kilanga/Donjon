@@ -4,7 +4,7 @@ import { Game } from '../src/server/game/engine.js';
 import { BotManager } from '../src/server/bots.js';
 
 function setup(target: number, humans: Set<string>, closers = 0, cfg: Partial<typeof DEFAULT_CONFIG> = {}) {
-  const g = new Game({ ...DEFAULT_CONFIG, seed: 3, ...cfg });
+  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 3, ...cfg });
   const said: string[] = [];
   const bots = new BotManager(g, {
     submit: (name, text) => void g.submit(name, text),

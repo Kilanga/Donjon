@@ -18,6 +18,7 @@ export interface Item {
   dmg?: number; // arme : dé de dégâts (d4 = 4)
   hit?: number; // arme : bonus au jet
   def?: number; // armure : bonus de défense
+  plus?: number; // améliorations du forgeron (0 à 3)
   desc: string;
   sprite: string; // nom de sprite dans la planche 0x72
 }
@@ -58,6 +59,7 @@ export interface RoomView {
   chest: 'aucun' | 'ferme' | 'ouvert';
   searched: boolean;
   trapArmed: boolean;
+  forge?: boolean; // la forge de l'étage (!forge arme / armure)
   merchant: boolean;
   desc?: string; // description (salle courante)
   // Occupants : seulement pour la salle courante et celles des alliés
@@ -179,7 +181,10 @@ export interface PlayerViewMsg {
   serverNow: number;
   me: MeView | null;
   floor: FloorView | null;
+  standby?: FloorView | null; // stream : second étage gardé chargé (bascule instantanée)
+  standbyTurnEndsAt?: number;
   merchant: MerchantOffer[] | null;
+  forge?: ForgeOffer | null; // dans la forge : ce que le forgeron peut améliorer, et à quel prix
   spectator: boolean;
   online: number;
   paused: boolean;
@@ -207,6 +212,12 @@ export interface Legend {
   date: string; // ISO
   turn: number;
   floor: number; // dernier étage
+}
+
+/** Offre du forgeron pour l'équipement du joueur (null : pas d'objet, ou déjà au maximum). */
+export interface ForgeOffer {
+  weapon: { name: string; plus: number; cost: number } | null;
+  armor: { name: string; plus: number; cost: number } | null;
 }
 
 /** Prévision de la caméra : salle où l'action du tour va probablement se passer. */
@@ -239,7 +250,7 @@ export type ClientMsg =
   | { type: 'hello'; name: string; spectatorKey?: string; token?: string } // token : jeton de liaison Twitch gardé par la page
   | { type: 'cmd'; text: string }
   | { type: 'say'; text: string } // message libre (bulle au-dessus du crawler)
-  | { type: 'floor'; n: number } // spectateur : changer d'étage affiché
+  | { type: 'floor'; n: number; standby?: number } // spectateur : étage affiché (+ second étage gardé chargé, pour le stream)
   | { type: 'admin'; action: AdminAction; arg?: string | number }
   | { type: 'clientError'; message: string; stack?: string; where?: string; page?: string } // erreur JS de la page (journal)
   | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string } // images/seconde (journal)
