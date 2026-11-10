@@ -171,10 +171,18 @@ Elwyn…). Ils suivent les mêmes règles que les joueurs : ils explorent, tapen
 ramassent, votent, descendent, et lâchent une phrase de temps en temps. Ils sont **pacifiques** (jamais d'attaque contre un
 joueur, mais on peut les attaquer) et marqués **PNJ** partout.
 
-- Chaque vrai joueur actif (page ouverte, ou commande dans les 10 dernières minutes) fait partir un PNJ, un par tour.
+- Ils **restent** quand de vrais joueurs arrivent (le donjon ne se vide jamais).
 - Si un joueur choisit le pseudo d'un PNJ, le PNJ s'en va et lui laisse la place.
 - Réglage : `"bots": 10` dans `config.json`, variable `BOTS`, ou en direct dans la régie (0 pour les retirer).
-- Ils ne démarrent pas le chrono des étages : seul un vrai joueur le lance.
+- Ils ne démarrent pas le chrono des étages : seul un vrai joueur (ou un retardataire) le lance.
+
+### Les retardataires
+
+En plus, **4 retardataires** (Gaspard le Traînard, Mamie Odette, Firmin, Hubert le Lent…) entrent juste après le premier
+vrai joueur. Ils ne prennent **jamais** l'escalier : ils explorent, tapent, et tombent avec chaque étage qui s'effondre.
+Comme ils lancent le chrono des étages où ils atterrissent, la saison va toujours jusqu'à l'effondrement du dernier étage,
+même si le chat ralentit : environ 1 h 30 au maximum avec `"floorMinutes": 15` (moins si des joueurs foncent au 6e).
+Réglage : `"closers": 4` dans `config.json` ou variable `CLOSERS`.
 - Ils sont exclus des statistiques de participation du rapport de session.
 
 ## Vue stream 3D (bonus, à tester)

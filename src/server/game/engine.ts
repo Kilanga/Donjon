@@ -143,9 +143,9 @@ export class Game {
     return f;
   }
 
-  /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (les PNJ figurants ne le déclenchent pas). */
+  /** Démarre le chrono de l'étage à l'arrivée du premier vrai joueur (ou d'un retardataire ; les autres PNJ ne le déclenchent pas). */
   private startTimer(f: FloorState, p?: PlayerState) {
-    if (p?.bot) return;
+    if (p?.bot && !p.closer) return;
     if (f.startedAt === null) {
       f.startedAt = this.now;
       f.collapseAt = this.now + this.cfg.floorMinutes * 60_000;
@@ -1313,11 +1313,15 @@ export class Game {
   }
 
   /** Un PNJ figurant entre dans le donjon (mêmes règles qu'un joueur, marqué PNJ). */
-  joinBot(name: string, cls: string): boolean {
+  joinBot(name: string, cls: string, closer = false): boolean {
     if (this.player(name)) return false;
     const r = this.join(name, cls, true);
     const p = this.player(name);
     if (!r.ok || !p) return false;
+    if (closer) {
+      p.closer = true;
+      this.startTimer(this.floor(p.floor)!, p);
+    }
     // Pas de discours d'accueil du marchand pour un figurant
     this.state.events = this.state.events.filter((e) => !(e.npc && e.to === p.key));
     this.out = this.out.filter((e) => !(e.npc && e.to === p.key));

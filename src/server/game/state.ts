@@ -42,7 +42,8 @@ export interface PlayerState {
   betrayals: number;
   deepest: number; // étage le plus profond atteint
   joinedTurn: number;
-  bot?: boolean; // PNJ figurant piloté par le serveur (remplacé par les vrais joueurs)
+  bot?: boolean; // PNJ figurant piloté par le serveur
+  closer?: boolean; // PNJ « retardataire » : ne descend jamais, ferme chaque étage en tombant avec lui
 }
 
 export interface MonsterState {

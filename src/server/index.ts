@@ -514,7 +514,7 @@ function admin(c: Client, action: string, arg?: string | number) {
     case 'bots': {
       bots.target = Math.max(0, Math.min(30, Math.round(Number(arg)) || 0));
       cfg.bots = bots.target;
-      msg = `PNJ figurants : ${bots.target} au maximum (ils arrivent ou partent un par tour, et cèdent la place aux vrais joueurs).`;
+      msg = `PNJ figurants : ${bots.target} (ils arrivent ou partent un par tour, et restent même quand de vrais joueurs arrivent). Retardataires : ${bots.closers}.`;
       break;
     }
     case 'kick':
@@ -621,6 +621,7 @@ const bots: BotManager = new BotManager(
     humanActive: (p): boolean => [...clients].some((c) => c.name && playerKey(c.name) === p.key) || bots.recentlyActive(p),
   },
   cfg.bots,
+  cfg.closers,
 );
 setInterval(() => {
   if (pausedAt === null) bots.fidget();

@@ -1,6 +1,9 @@
 // PNJ figurants : des crawlers pilotés par le serveur pour qu'il y ait toujours de la vie dans le donjon.
-// Ils jouent avec les mêmes règles que les joueurs (une commande par tour), restent pacifiques envers les
-// joueurs, et cèdent leur place un par un quand de vrais joueurs arrivent.
+// Ils jouent avec les mêmes règles que les joueurs (une commande par tour) et restent pacifiques envers les
+// joueurs. Ils restent même quand de vrais joueurs arrivent.
+// Les « retardataires » arrivent après le premier vrai joueur, ne prennent jamais l'escalier et tombent avec
+// chaque étage qui s'effondre : ils lancent le chrono des étages où ils atterrissent, si bien que la saison
+// va toujours jusqu'à l'effondrement du dernier étage, même si le chat ralentit.
 import type { Dir } from '../shared/types.js';
 import { bfs } from './game/dungeon.js';
 import type { Game } from './game/engine.js';
@@ -10,6 +13,7 @@ const NAMES = [
   'Brunhilde', 'Gorim Barbe-Grise', 'Elwyn', 'Tobias le Pâle', 'Morgane', 'Krag', 'Sire Bertrand', 'Pippa',
   'Zoltan', 'Ysolde', 'Fennick', 'Agathe la Rouge', 'Hector', 'Lysandra', 'Bodo', 'Ragnhild', 'Corwin', 'Mélisande',
 ];
+const CLOSER_NAMES = ['Gaspard le Traînard', 'Mamie Odette', 'Firmin', 'Hubert le Lent', 'Dame Pétronille', 'Toinou', 'Frère Anselme', 'Bertille'];
 const CLASSES = ['barbare', 'chevalier', 'voleur', 'mage'];
 const LINES = {
   idle: [
@@ -21,6 +25,10 @@ const LINES = {
   loot: ['De l\'or ! Enfin !', 'Ça, c\'est à moi.', 'Joli butin.'],
   safe: ['Ah, un peu de repos.', 'Marchand, tes prix sont une honte.', 'On respire un peu.'],
   welcome: ['Bienvenue, l\'aventurier !', 'Enfin du renfort !', 'Fais attention aux pièges.'],
+  closer: [
+    'Attendez-moi !', 'Dernier sorti, on éteint la lumière.', 'On n\'est pas pressés, nous.', 'Quelqu\'un a vu mes lunettes ?',
+    'Ça tremble un peu, non ?', 'L\'escalier ? Jamais. On fait la fermeture.', 'Je range et j\'arrive.', 'Encore un étage à fermer…',
+  ],
 };
 const DIR_CMD: Record<Dir, string> = { n: '!nord', s: '!sud', e: '!est', o: '!ouest' };
 
@@ -39,12 +47,14 @@ export interface BotHooks {
 
 export class BotManager {
   target: number;
+  closers: number;
   private lastHuman = new Map<string, number>(); // joueur réel -> dernière commande (ms)
   private visited = new Map<string, Set<string>>(); // PNJ -> salles vues (étage:salle)
   private lastSay = new Map<string, number>();
 
-  constructor(private game: Game, private hooks: BotHooks, target: number) {
+  constructor(private game: Game, private hooks: BotHooks, target: number, closers = 0) {
     this.target = Math.max(0, Math.min(30, target));
+    this.closers = Math.max(0, Math.min(10, closers));
   }
 
   /** Un vrai joueur vient d'agir (page ou chat Twitch). */
@@ -65,10 +75,16 @@ export class BotManager {
     return Object.values(this.game.state.players).filter((p) => !p.bot && this.hooks.humanActive(p));
   }
 
-  /** Ajuste le nombre de PNJ : target moins les vrais joueurs actifs. Un arrivant ou un départ par tour, pour que ce soit naturel. */
+  /** Ajuste le nombre de PNJ vers la cible (un arrivant ou un départ par tour, pour que ce soit naturel).
+   *  Les vrais joueurs ne les font plus partir. Les retardataires n'arrivent qu'une fois qu'un vrai joueur est entré. */
   balance() {
-    const want = Math.max(0, this.target - this.humans().length);
-    const bots = this.bots();
+    const all = this.bots();
+    this.adjust(all.filter((b) => !b.closer), this.target, false);
+    const started = Object.values(this.game.state.players).some((p) => !p.bot) || this.game.state.champions.length > 0;
+    if (started) this.adjust(all.filter((b) => b.closer), this.closers, true);
+  }
+
+  private adjust(bots: PlayerState[], want: number, closer: boolean) {
     if (bots.length > want) {
       // On retire d'abord un PNJ mort, en safe room, ou sinon le plus faible
       const pick = bots.find((b) => !b.alive) ?? bots.find((b) => b.alive && this.game.room(b).type === 'safe') ?? [...bots].sort((a, b) => a.level - b.level)[0];
@@ -76,12 +92,13 @@ export class BotManager {
       this.visited.delete(pick.key);
     } else if (bots.length < want) {
       const used = new Set(Object.values(this.game.state.players).map((p) => p.name));
-      const name = NAMES.find((n) => !used.has(n)) ?? `Mercenaire ${Math.floor(Math.random() * 900 + 100)}`;
+      const name = (closer ? CLOSER_NAMES : NAMES).find((n) => !used.has(n)) ?? `${closer ? 'Traînard' : 'Mercenaire'} ${Math.floor(Math.random() * 900 + 100)}`;
       const cls = CLASSES[Math.floor(Math.random() * CLASSES.length)];
-      if (this.game.joinBot(name, cls)) {
+      if (this.game.joinBot(name, cls, closer)) {
         const p = this.game.player(name)!;
         this.hooks.pos(name, 0.3 + Math.random() * 0.4, 0.5 + Math.random() * 0.4);
-        if (this.humans().some((h) => h.alive && h.floor === p.floor && h.roomId === p.roomId)) this.talk(p, 'welcome', 0.25);
+        if (closer) this.talk(p, 'closer', 1);
+        else if (this.humans().some((h) => h.alive && h.floor === p.floor && h.roomId === p.roomId)) this.talk(p, 'welcome', 0.25);
       }
     }
   }
@@ -155,13 +172,14 @@ export class BotManager {
       return '!ramasse';
     }
     if (r.type === 'tresor' && r.chest === 'ferme') return '!fouille';
-    if (r.stairs && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
+    if (r.stairs && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
     if (r.type !== 'safe' && !r.searchedBy && !r.trapArmed && Math.random() < 0.5) return '!fouille';
     if (g.state.vote && !g.state.vote.votes[p.key] && Math.random() < 0.3) return `!vote ${1 + Math.floor(Math.random() * g.state.vote.options.length)}`;
 
     // Déplacement : vers l'escalier si l'étage presse, sinon vers une salle encore inconnue
+    // (les retardataires, eux, ne cherchent jamais l'escalier : ils restent jusqu'à l'effondrement)
     const pressing = f.collapseAt !== null && f.collapseAt - Date.now() < 6 * 60_000;
-    let dest: number | null = pressing || p.level >= 3 ? f.bossRoom : null;
+    let dest: number | null = !p.closer && (pressing || p.level >= 3) ? f.bossRoom : null;
     if (dest === null) {
       const dist = bfs(f.rooms, r.id);
       let best = Infinity;
@@ -176,7 +194,7 @@ export class BotManager {
     }
     if (dest === null) dest = f.rooms[Math.floor(Math.random() * f.rooms.length)].id;
     if (dest === r.id) return Math.random() < 0.3 ? '!fouille' : null;
-    this.talk(p, 'idle', 0.06);
+    this.talk(p, p.closer ? 'closer' : 'idle', p.closer ? 0.05 : 0.06);
     const dir = this.stepToward(p, dest);
     return dir ? DIR_CMD[dir] : null;
   }

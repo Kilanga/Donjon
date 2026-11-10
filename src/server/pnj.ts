@@ -33,6 +33,15 @@ export const PERSONAS: Record<string, Persona> = {
   'Ragnhild': { trait: 'berserker qui cherche une mort glorieuse et trouve tout trop calme', style: 'dramatique, parle de Valhalla' },
   'Corwin': { trait: 'noble ruiné qui joue encore les grands seigneurs', style: 'condescendant, rappelle ses titres' },
   'Mélisande': { trait: 'druidesse qui préfère les animaux aux gens', style: 'douce, parle aux monstres, reproche aux joueurs de les taper' },
+  // Les retardataires : toujours derniers, ils « ferment » chaque étage en tombant avec lui
+  'Gaspard le Traînard': { trait: 'aventurier toujours en retard, qui a fait de la lenteur un art de vivre', style: 'nonchalant, dit « on a le temps »' },
+  'Mamie Odette': { trait: 'vieille aventurière increvable qui a survécu à tous les effondrements', style: 'appelle tout le monde « mon petit », raconte ses chutes' },
+  'Firmin': { trait: 'concierge du donjon qui ferme chaque étage derrière les autres', style: 'râle sur le désordre, fait l\'inventaire' },
+  'Hubert le Lent': { trait: 'chevalier en armure bien trop lourde', style: 'essoufflé, demande qu\'on l\'attende' },
+  'Dame Pétronille': { trait: 'noble qui refuse de se presser par principe', style: 'précieuse, trouve l\'urgence vulgaire' },
+  'Toinou': { trait: 'gamin curieux qui s\'arrête pour tout regarder', style: 'pose des questions, s\'émerveille' },
+  'Frère Anselme': { trait: 'moine qui bénit chaque salle avant de la quitter', style: 'calme, solennel, prie pour les étages qui tombent' },
+  'Bertille': { trait: 'cartographe obsessionnelle qui veut finir sa carte avant de partir', style: 'précise, parle de ses plans' },
 };
 const DEFAULT_PERSONA: Persona = { trait: 'mercenaire discret qui cherche fortune', style: 'direct et poli' };
 
