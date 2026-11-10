@@ -151,6 +151,17 @@ défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
   *hanté* (des fantômes volent un peu d'or et le cachent ailleurs). L'effet est annoncé à la création de l'étage
   et rappelé au survol du thème sur la page joueur.
 
+## Carte perso des viewers (page 2D) : tunnel automatique
+
+Sur le stream, la caméra suit l'action : chacun suit donc son crawler sur sa **carte perso** (la page joueur).
+Avec `"tunnel": true` dans `config.json`, le jeu lance lui-même `cloudflared`, récupère l'adresse
+`https://….trycloudflare.com` et **l'affiche en bas à gauche du stream** (elle change à chaque lancement, rien à recopier).
+Première fois seulement : double-clic sur `tunnel.bat` pour installer cloudflared, puis ferme-le.
+
+Un viewer qui joue déjà par le chat entre **son pseudo Twitch** sur la page : elle lui affiche un code, il écrit
+`!lien 1234` dans le chat Twitch, et la page est reliée à son perso (un autre viewer ne peut pas valider à sa place ;
+la page garde un jeton, donc pas de nouveau code au rechargement). Les pseudos jamais vus sur Twitch sont libres.
+
 ## Rythme d'une saison (≈ 2 h 40)
 
 La saison démarre quand le premier vrai joueur entre. Ensuite tout est **à heure fixe** : l'étage *n* s'effondre

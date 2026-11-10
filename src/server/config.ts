@@ -18,7 +18,8 @@ export interface GameConfig {
   voteEveryMinutes: number; // fréquence des votes de la production (0 = jamais)
   voteTurns: number; // durée d'un vote en tours
   bots: number; // PNJ figurants, toujours présents (0 = aucun)
-  closers: number; // PNJ retardataires : arrivent après le premier joueur, ne descendent jamais et ferment chaque étage
+  closers: number;
+  tunnel: boolean; // lance cloudflared et affiche l'adresse publique sur le stream (page 2D pour les viewers) // PNJ retardataires : arrivent après le premier joueur, ne descendent jamais et ferment chaque étage
   finalFloor: number; // dernier étage : son escalier est la sortie du donjon (victoire)
   ai: AiConfig; // IA du donjon (optionnelle) ; la clé API reste dans ANTHROPIC_API_KEY
   seed?: number;
@@ -41,6 +42,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   voteTurns: 3,
   bots: 10,
   closers: 4,
+  tunnel: false,
   finalFloor: 8,
   ai: { ...DEFAULT_AI },
 };
@@ -67,6 +69,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   cfg.twitchChannel = env.TWITCH_CHANNEL ?? cfg.twitchChannel;
   if (env.FINAL_FLOOR) cfg.finalFloor = Math.max(1, Number(env.FINAL_FLOOR) || cfg.finalFloor);
   if (env.BOTS !== undefined && env.BOTS !== '') cfg.bots = Math.max(0, Math.min(30, Number(env.BOTS) || 0));
+  if (env.TUNNEL) cfg.tunnel = env.TUNNEL === '1' || env.TUNNEL === 'true';
   if (env.CLOSERS !== undefined && env.CLOSERS !== '') cfg.closers = Math.max(0, Math.min(10, Number(env.CLOSERS) || 0));
   if (env.AI_PROVIDER && ['off', 'ollama', 'anthropic'].includes(env.AI_PROVIDER)) cfg.ai.provider = env.AI_PROVIDER as AiProvider;
   if (env.OLLAMA_MODEL) cfg.ai.ollamaModel = env.OLLAMA_MODEL;

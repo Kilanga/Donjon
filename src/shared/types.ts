@@ -190,6 +190,7 @@ export interface PlayerViewMsg {
   obituary: { turn: number; text: string }[];
   floors?: FloorSummary[]; // étages debout et qui y est (vue stream, régie)
   seasonOver?: boolean; // saison terminée (effondrement du dernier étage)
+  publicUrl?: string; // adresse publique de la page joueur (tunnel), affichée sur le stream
   champions?: Legend[]; // vainqueurs de cette saison (vue stream)
 }
 
@@ -221,11 +222,13 @@ export type ServerMsg =
   | PlayerViewMsg
   | { type: 'events'; events: GameEvent[] }
   | { type: 'feedback'; ok: boolean; text: string }
+  | { type: 'link'; name: string; code: string } // pseudo d'un compte Twitch : écrire « !lien <code> » dans le chat pour le prendre
+  | { type: 'linked'; name: string; token: string } // liaison réussie : jeton à garder
   | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number; ok?: boolean; reply?: string; src?: 'web' | 'twitch' }
   | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number }; // position libre d'un crawler dans sa salle
 
 export type ClientMsg =
-  | { type: 'hello'; name: string; spectatorKey?: string }
+  | { type: 'hello'; name: string; spectatorKey?: string; token?: string } // token : jeton de liaison Twitch gardé par la page
   | { type: 'cmd'; text: string }
   | { type: 'say'; text: string } // message libre (bulle au-dessus du crawler)
   | { type: 'floor'; n: number } // spectateur : changer d'étage affiché

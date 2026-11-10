@@ -50,7 +50,7 @@ function connect() {
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onopen = () => {
     if (spectatorKey) send({ type: 'hello', name: '', spectatorKey });
-    else if (myName) send({ type: 'hello', name: myName });
+    else if (myName) send({ type: 'hello', name: myName, token: localStorage.getItem('donjon-jeton') ?? undefined });
     telemetryReady();
   };
   ws.onmessage = (e) => onMessage(JSON.parse(e.data) as ServerMsg);
@@ -84,6 +84,15 @@ function onMessage(m: ServerMsg) {
     if (!m.cmd) map.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
     map.remotePos(m.name, m.floor, m.roomId, m.x, m.y);
+  } else if (m.type === 'link') {
+    // Pseudo d'un compte Twitch : la preuve se fait dans le chat
+    $('login').classList.remove('hidden');
+    $('login-form').classList.remove('hidden');
+    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.</small>`;
+  } else if (m.type === 'linked') {
+    localStorage.setItem('donjon-jeton', m.token);
+    $('login-msg').textContent = '';
+    logLine(`Page reliée à ton compte Twitch : tu contrôles ${m.name} ici comme dans le chat.`, 'k-prive');
   }
 }
 
@@ -418,7 +427,7 @@ $('login-form').addEventListener('submit', (e) => {
   myName = ($('pseudo') as HTMLInputElement).value.trim();
   if (!myName) return;
   localStorage.setItem('donjon-pseudo', myName);
-  send({ type: 'hello', name: myName });
+  send({ type: 'hello', name: myName, token: localStorage.getItem('donjon-jeton') ?? undefined });
 });
 $('help-btn').addEventListener('click', () => $('help').classList.remove('hidden'));
 $('help').addEventListener('click', (e) => {

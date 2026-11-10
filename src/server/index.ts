@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import util from 'node:util';
 import { WebSocket, WebSocketServer } from 'ws';
+import { spawn, type ChildProcess } from 'node:child_process';
 import type { ClientMsg, GameEvent, Legend, ServerMsg } from '../shared/types.js';
 import { loadConfig } from './config.js';
 import { Game, playerKey } from './game/engine.js';
@@ -16,6 +17,7 @@ import { Narrator } from './narrator.js';
 import { BotManager } from './bots.js';
 import { maskPlayerText, nameAllowed } from './moderation.js';
 import { readJsonSafe, writeAtomic } from './fsutil.js';
+import { Links } from './links.js';
 import { NpcSociety } from './pnj.js';
 import { Journal, errInfo } from './journal.js';
 import { buildReport } from './report.js';
@@ -244,6 +246,7 @@ function sendState(c: Client) {
     turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
     seasonOver: game.state.seasonOver,
+    ...(publicUrl ? { publicUrl } : {}),
     ...(c.spectator ? { floors: game.floorsSummary(now), champions: game.state.champions } : {}),
   };
   if (c.spectator) {
@@ -298,8 +301,9 @@ function deliver(events: GameEvent[]) {
 const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
 const narrator = new Narrator(game, ai, (evs) => deliver(evs));
 
-/** Pseudos vus dans le chat Twitch (la page web ne peut pas les prendre) et viewers rendus muets par la modération Twitch. */
-const twitchSeen = new Set<string>();
+/** Pseudos vus dans le chat Twitch (la page web ne les prend qu'avec « !lien <code> ») et viewers rendus muets par la modération Twitch. */
+const links = new Links<Client>(path.join(root, 'data', 'liens.json'), cfg.twitchChannel ? [playerKey(cfg.twitchChannel)] : []);
+setInterval(() => links.save(), 10_000).unref();
 const muted = new Map<string, number>(); // pseudo -> fin du silence (ms)
 const isMuted = (name: string) => (muted.get(playerKey(name)) ?? 0) > Date.now();
 
@@ -322,6 +326,7 @@ function say(name: string, text: string) {
 function command(name: string, text: string, from?: Client) {
   const src = from ? 'web' : 'twitch';
   if (isMuted(name)) return { ok: false, text: '' };
+  if (/^!(donjon|jouer|lien)\b/i.test(text.trim())) return { ok: true, text: '' }; // commandes de Cloudbot (ou !lien hors Twitch) : pas pour le jeu
   if (game.player(name)?.bot) {
     // Un vrai joueur prend le pseudo d'un PNJ : le PNJ s'en va
     game.removeBot(name);
@@ -434,13 +439,25 @@ wss.on('connection', (ws, req) => {
       console.error('[ws] message ignoré :', e);
     }
   });
-  ws.on('close', () => clearInterval(ping));
+  ws.on('close', () => {
+    clearInterval(ping);
+    links.forget(c);
+  });
   ws.on('error', (e) => { if (++bad <= 3) console.error('[ws] connexion fermée :', e.message); }); // message trop gros, etc.
   ws.on('close', () => {
     clients.delete(c);
     if (c.name || c.spectator) journal.write('disconnect', { cid: c.id, name: c.name, spectator: c.spectator, secs: Math.round((Date.now() - c.since) / 1000) });
   });
 });
+
+/** Une page vient de s'identifier (ou d'être reliée à son compte Twitch) : on lui envoie le récent et son état. */
+function welcome(c: Client) {
+  c.since = Date.now();
+  journal.write('connect', { cid: c.id, name: c.name, spectator: c.spectator, mobile: c.mobile, ua: c.ua, known: c.name ? !!game.player(c.name) : undefined });
+  const key = c.spectator ? null : playerKey(c.name!);
+  send(c, { type: 'events', events: game.state.events.filter((e) => game.isRelevant(e, key)).slice(-40) });
+  sendState(c);
+}
 
 function onClientMessage(c: Client, msg: ClientMsg) {
   {
@@ -452,18 +469,20 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         const name = String(msg.name ?? '').replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24); // pas de HTML ni de caractères de contrôle dans un pseudo
         if (!playerKey(name)) return send(c, { type: 'feedback', ok: false, text: 'Choisis un pseudo valide.' });
         if (!nameAllowed(name)) return send(c, { type: 'feedback', ok: false, text: 'Ce pseudo ne passera pas à l\'antenne. Choisis-en un autre.' });
-        if (twitchSeen.has(playerKey(name)) || playerKey(name) === playerKey(cfg.twitchChannel)) return send(c, { type: 'feedback', ok: false, text: 'Ce pseudo est déjà utilisé dans le chat Twitch. Choisis-en un autre.' });
+        const key = playerKey(name);
+        if (links.needsLink(key) && !links.tokenOpens(typeof msg.token === 'string' ? msg.token : undefined, key)) {
+          // Pseudo d'un compte Twitch : on demande la preuve (le message « !lien <code> » doit venir de ce compte)
+          const code = links.request(key, name, c);
+          journal.write('admin', { action: 'lien demandé', arg: name });
+          return send(c, { type: 'link', name, code });
+        }
         c.name = name;
         if (game.player(name)?.bot) {
           game.removeBot(name);
           deliver(game.flush());
         }
       }
-      c.since = Date.now();
-      journal.write('connect', { cid: c.id, name: c.name, spectator: c.spectator, mobile: c.mobile, ua: c.ua, known: c.name ? !!game.player(c.name) : undefined });
-      const key = c.spectator ? null : playerKey(c.name!);
-      send(c, { type: 'events', events: game.state.events.filter((e) => game.isRelevant(e, key)).slice(-40) });
-      sendState(c);
+      welcome(c);
     } else if ((msg.type === 'cmd' || msg.type === 'say') && c.name) {
       const now = Date.now();
       c.recent = c.recent.filter((t) => now - t < 3000);
@@ -685,8 +704,20 @@ if (cfg.twitchChannel) {
     cfg.twitchChannel,
     (user, text) => {
       const k = playerKey(user);
-      twitchSeen.add(k);
+      links.sawOnTwitch(k);
       if (isMuted(user)) return; // banni ou en timeout sur Twitch : plus rien à l'antenne
+      const lien = text.match(/^!lien\s+(\d{4})\b/i);
+      if (lien) {
+        const ok = links.confirm(lien[1], k);
+        if (ok && clients.has(ok.who)) {
+          ok.who.name = ok.name;
+          send(ok.who, { type: 'linked', name: ok.name, token: ok.token });
+          journal.write('admin', { action: 'lien confirmé', arg: ok.name });
+          links.save();
+          welcome(ok.who);
+        }
+        return; // jamais affiché à l'antenne (le code est personnel)
+      }
       try {
         command(user, text);
       } catch (e) {
@@ -726,11 +757,54 @@ process.on('unhandledRejection', (e) => console.error('[serveur] promesse rejet�
 
 process.on('exit', () => journal.flush());
 
+// ---------------------------------------------------------------- tunnel public
+// Avec "tunnel": true, le jeu lance cloudflared lui-même et récupère l'adresse https://….trycloudflare.com,
+// affichée en permanence sur le stream : les viewers ouvrent leur page 2D sans que tu aies rien à recopier.
+let publicUrl = '';
+let tunnelProc: ChildProcess | null = null;
+function startTunnel() {
+  try {
+    tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${cfg.port}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) {
+    console.error('[tunnel] impossible de lancer cloudflared :', (e as Error).message);
+    return;
+  }
+  const scan = (buf: Buffer) => {
+    const m = String(buf).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (m && m[0] !== publicUrl) {
+      publicUrl = m[0];
+      console.log(`\n  ★ Adresse publique pour les viewers (affichée sur le stream) : ${publicUrl}\n`);
+      journal.write('admin', { action: 'tunnel', arg: publicUrl });
+      broadcastState();
+    }
+  };
+  tunnelProc.stdout?.on('data', scan);
+  tunnelProc.stderr?.on('data', scan);
+  tunnelProc.on('error', (e: NodeJS.ErrnoException) => {
+    console.error(e.code === 'ENOENT' ? '[tunnel] cloudflared n\'est pas installé : double-clique une fois sur tunnel.bat pour l\'installer, puis relance le jeu.' : `[tunnel] erreur : ${e.message}`);
+    tunnelProc = null;
+  });
+  tunnelProc.on('exit', (code) => {
+    if (tunnelProc === null) return;
+    console.error(`[tunnel] cloudflared s'est arrêté (code ${code}) : nouvelle tentative dans 10 s.`);
+    publicUrl = '';
+    tunnelProc = null;
+    setTimeout(startTunnel, 10_000);
+  });
+}
+if (cfg.tunnel) startTunnel();
+process.on('exit', () => {
+  const p = tunnelProc;
+  tunnelProc = null;
+  p?.kill();
+});
+
 const stop = () => {
   try {
     journal.write('snapshot', { leaderboard: game.leaderboard() });
     journal.write('stop', { players: Object.keys(game.state.players).length });
     npcs.save();
+    links.save();
     save();
     console.log('\n[sauvegarde] partie enregistrée. À bientôt !');
   } finally {

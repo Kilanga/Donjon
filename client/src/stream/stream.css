@@ -102,3 +102,5 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 #pause { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 110px 'Pixelify Sans', monospace; color: var(--gold); text-shadow: 6px 6px 0 #000; background: rgba(0,0,0,.35); }
 #load { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #0b0812; z-index: 5; transition: opacity .6s; }
 #load p { color: var(--mut); margin: 0; }
+#cta .url { font-size: 18px; margin-bottom: 4px; }
+#cta .url small { opacity: .7; font-size: 13px; }

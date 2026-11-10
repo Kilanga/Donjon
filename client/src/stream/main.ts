@@ -216,10 +216,13 @@ function renderHud(s: PlayerViewMsg) {
   const tips = [
     'Tape <b>!join</b> dans le chat pour entrer dans le donjon',
     'Classes : <b>!join barbare</b>, <b>chevalier</b>, <b>voleur</b> ou <b>mage</b>',
-    'Suis ton crawler sur la page web avec le même pseudo',
+    s.publicUrl ? 'Sur la carte, ton pseudo Twitch + <b>!lien</b> dans le chat : tu contrôles ton perso' : 'Une commande par tour : c\'est la dernière tapée qui compte',
     s.effects.bounty ? `Prime sur <b>${esc(s.effects.bounty.target)}</b> : ${s.effects.bounty.gold} po` : 'Attaquer un allié = trahison (et tout le monde le saura)',
   ];
-  $('cta').innerHTML = tips[Math.floor(Date.now() / 8000) % tips.length];
+  const tip = tips[Math.floor(Date.now() / 8000) % tips.length];
+  $('cta').innerHTML = s.publicUrl
+    ? `<div class="url">🗺️ Ta carte perso : <b>${esc(s.publicUrl.replace(/^https:\/\//, ''))}</b> <small>(ton pseudo Twitch)</small></div><div>${tip}</div>`
+    : tip;
 }
 
 let ltTimer = 0;
