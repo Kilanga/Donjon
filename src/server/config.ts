@@ -13,6 +13,8 @@ export interface GameConfig {
   spectatorKey: string; // clé pour la vue spectateur (sans brouillard)
   twitchChannel: string; // chaîne Twitch à écouter ('' = désactivé)
   savePath: string;
+  voteEveryMinutes: number; // fréquence des votes de la production (0 = jamais)
+  voteTurns: number; // durée d'un vote en tours
   seed?: number;
 }
 
@@ -28,6 +30,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   spectatorKey: 'regie',
   twitchChannel: '',
   savePath: 'data/save.json',
+  voteEveryMinutes: 4,
+  voteTurns: 3,
 };
 
 /** Charge config.json (s'il existe) puis les variables d'environnement. */

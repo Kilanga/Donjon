@@ -17,7 +17,8 @@ export type CommandName =
   | 'leave'
   | 'levelup'
   | 'status'
-  | 'help';
+  | 'help'
+  | 'vote';
 
 export interface ParsedCommand {
   name: CommandName;
@@ -47,6 +48,7 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   monte: { name: 'levelup' }, levelup: { name: 'levelup' }, up: { name: 'levelup' },
   statut: { name: 'status' }, status: { name: 'status' }, stats: { name: 'status' },
   aide: { name: 'help' }, help: { name: 'help' },
+  vote: { name: 'vote' }, voter: { name: 'vote' },
 };
 
 /** Minuscules et sans accents, pour comparer des noms tapés au clavier. */
@@ -81,4 +83,5 @@ export const HELP_TEXT = [
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',
   '!descendre — prendre l\'escalier (salle du boss vaincu)',
+  '!vote <n°> — voter pour l\'événement proposé par la production',
 ];

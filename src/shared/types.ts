@@ -119,6 +119,42 @@ export interface GameEvent {
   drama: number; // score de drame (pour le futur réalisateur)
 }
 
+export interface LeaderRow {
+  name: string;
+  cls: ClassId;
+  level: number;
+  floor: number;
+  deepest: number;
+  kills: number;
+  deaths: number;
+  betrayals: number;
+  gold: number;
+  alive: boolean;
+  traitor: boolean;
+  bounty: boolean;
+}
+
+export interface VoteOption {
+  n: number;
+  key: string;
+  label: string;
+  desc: string;
+  votes: number;
+}
+
+export interface VoteView {
+  options: VoteOption[];
+  turnsLeft: number;
+  myVote: string | null;
+}
+
+export interface EffectsView {
+  happyHourTurns: number;
+  floodTurns: number;
+  bounty: { target: string; gold: number; turns: number } | null;
+  nextVoteInTurns: number | null;
+}
+
 export interface PlayerViewMsg {
   type: 'state';
   turn: number;
@@ -130,6 +166,12 @@ export interface PlayerViewMsg {
   merchant: MerchantOffer[] | null;
   spectator: boolean;
   online: number;
+  paused: boolean;
+  admin: boolean;
+  leaderboard: LeaderRow[];
+  vote: VoteView | null;
+  effects: EffectsView;
+  obituary: { turn: number; text: string }[];
 }
 
 export type ServerMsg =
@@ -142,4 +184,7 @@ export type ClientMsg =
   | { type: 'hello'; name: string; spectatorKey?: string }
   | { type: 'cmd'; text: string }
   | { type: 'say'; text: string } // message libre (bulle au-dessus du crawler)
-  | { type: 'floor'; n: number }; // spectateur : changer d'étage affiché
+  | { type: 'floor'; n: number } // spectateur : changer d'étage affiché
+  | { type: 'admin'; action: AdminAction; arg?: string | number };
+
+export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick';

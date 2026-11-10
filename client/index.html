@@ -15,6 +15,7 @@
       <span id="hud-floor">Étage —</span>
       <span id="hud-theme" class="muted"></span>
       <span id="hud-collapse" class="collapse"></span>
+      <span id="hud-effects"></span>
       <span id="hud-online" class="muted"></span>
     </div>
     <button id="help-btn" title="Comment jouer (?)">? Aide</button>
@@ -28,6 +29,8 @@
     <section id="map-wrap">
       <canvas id="map"></canvas>
       <div id="pending" class="pending hidden"></div>
+      <div id="vote" class="vote hidden"></div>
+      <div id="paused" class="paused hidden">PAUSE</div>
       <div id="dpad">
         <button data-cmd="!nord" title="Nord">▲</button>
         <button data-cmd="!ouest" title="Ouest">◀</button>
@@ -42,6 +45,8 @@
       <div class="card" id="me-card"></div>
       <div class="card" id="room-card"></div>
       <div class="card" id="inv-card"></div>
+      <div class="card hidden" id="admin-card"></div>
+      <div class="card" id="rank-card"></div>
     </aside>
   </main>
 

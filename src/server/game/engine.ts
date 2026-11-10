@@ -1,16 +1,18 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, FloorView, GameEvent, Item, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId,
+  ClassId, Dir, EffectsView, FloorView, GameEvent, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
   CLASSES, CRIT_TEXTS, DEATH_TEXTS, FIASCO_TEXTS, GAG_TEXTS, RARITY_LABEL, SEARCH_FAIL_TEXTS, STAT_LABELS, TRAP_TEXTS,
 } from './data.js';
-import { DIR_LABEL, generateFloor, spawnMimic } from './dungeon.js';
+import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
+import { MONSTERS } from './data.js';
+import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
-import { emptyState, type FloorState, type GameState, type MonsterState, type PlayerState, type RoomState } from './state.js';
+import { emptyState, migrate, type FloorState, type GameState, type MonsterState, type PlayerState, type RoomState } from './state.js';
 
 export const INVENTORY_MAX = 8;
 export const ALLIANCE_MAX = 4;
@@ -33,8 +35,19 @@ export class Game {
 
   constructor(cfg: GameConfig, state?: GameState) {
     this.cfg = cfg;
-    this.state = state ?? emptyState(cfg.seed ?? Date.now());
+    this.state = state ? migrate(state) : emptyState(cfg.seed ?? Date.now());
     this.rng = new Rng(this.state.rng);
+  }
+
+  /** Nouvelle partie : efface tout et recrée l'étage 1. */
+  reset() {
+    const keepId = this.state.nextId; // les identifiants d'évènements restent uniques pour les pages ouvertes
+    this.state = emptyState(Date.now());
+    this.state.nextId = keepId;
+    this.rng = new Rng(this.state.rng);
+    this.ensureFloor(1);
+    this.emit({ floor: 1, kind: 'systeme', text: 'NOUVELLE SAISON ! Le donjon a été entièrement recreusé. Tapez !join pour entrer.', scope: 'global', drama: 50 });
+    this.sync();
   }
 
   // ---------------------------------------------------------------- outils
@@ -160,6 +173,8 @@ export class Game {
         return this.ally(p, cmd.arg);
       case 'leave':
         return this.leaveAlliance(p, true);
+      case 'vote':
+        return this.castVote(p, cmd.arg);
       default:
         break;
     }
@@ -182,7 +197,7 @@ export class Game {
       items: [makeItem('potion', this.nextId)], floor: f.n, roomId: f.spawnRoom, alive: true, respawnIn: 0,
       immuneUntil: this.now + this.cfg.immunitySeconds * 1000, allianceId: null, allyProposals: [], traitorUntilTurn: 0,
       pending: null, lastAction: null, stunned: false, buffs: { cloakTurns: 0, mirror: false, smoke: false, coupon: false },
-      discovered: {}, kills: 0, deaths: 0, joinedTurn: this.state.turn,
+      discovered: {}, kills: 0, deaths: 0, betrayals: 0, deepest: f.n, joinedTurn: this.state.turn,
     };
     this.state.players[key] = p;
     this.discover(p);
@@ -200,7 +215,7 @@ export class Game {
     const r = this.room(p);
     if (r.type !== 'safe') return { ok: false, text: 'Il n\'y a pas de marchand ici. Cherche une safe room.' };
     if (!r.merchant.length) return { ok: true, text: 'Le marchand n\'a plus rien. Il te vend son regard, gratuitement.' };
-    return { ok: true, text: 'Marchand : ' + r.merchant.map((it, i) => `${i + 1}. ${it.name} (${RARITY_LABEL[it.rarity]}) ${it.value} po`).join(' | ') };
+    return { ok: true, text: 'Marchand : ' + r.merchant.map((it, i) => `${i + 1}. ${it.name} (${RARITY_LABEL[it.rarity]}) ${this.price(it)} po`).join(' | ') };
   }
 
   private levelUp(p: PlayerState, arg: string): SubmitResult {
@@ -392,8 +407,9 @@ export class Game {
       }
     }
 
-    // 7. Fin de tour : effets, réapparitions, effondrements
+    // 7. Fin de tour : effets, réapparitions, effondrements, votes
     this.endOfTurn(players);
+    this.updateProduction();
     this.sync();
     return this.out;
   }
@@ -538,6 +554,7 @@ export class Game {
   }
 
   private betray(a: PlayerState, v: PlayerState) {
+    a.betrayals++;
     this.leaveAlliance(a, false);
     a.traitorUntilTurn = this.state.turn + 10;
     this.emit({ floor: a.floor, roomId: a.roomId, kind: 'trahison', text: `TRAHISON ! ${a.name} plante une dague dans le dos de son allié ${v.name}. Il est marqué TRAÎTRE pour 10 tours.`, scope: 'global', actors: [a.key, v.key], drama: 100 });
@@ -584,6 +601,7 @@ export class Game {
       this.gainXp(k, 20 * p.level * arena);
     }
     if (killer?.kind === 'monster') killer.m.aggro = null;
+    this.onPlayerKilled(p, killer);
   }
 
   private killMonster(m: MonsterState, floorN: number, killer: PlayerState | null) {
@@ -703,12 +721,13 @@ export class Game {
     if (r.type !== 'safe') return this.say(p, 'Pas de marchand ici.');
     const item = this.findItem(r.merchant, arg);
     if (!item) return this.say(p, 'Le marchand n\'a pas ça. Tape !marchand pour voir son stock.');
-    if (p.gold < item.value) return this.say(p, `Il te manque ${item.value - p.gold} po. Le marchand ne fait pas crédit.`);
+    const price = this.price(item);
+    if (p.gold < price) return this.say(p, `Il te manque ${price - p.gold} po. Le marchand ne fait pas crédit.`);
     if (p.items.length >= INVENTORY_MAX) return this.say(p, 'Inventaire plein.');
-    p.gold -= item.value;
+    p.gold -= price;
     r.merchant = r.merchant.filter((i) => i !== item);
     p.items.push(item);
-    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} achète ${item.name} pour ${item.value} po.`);
+    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} achète ${item.name} pour ${price} po.`);
   }
 
   private doSell(p: PlayerState, arg: string) {
@@ -816,6 +835,9 @@ export class Game {
     const r = f.rooms[p.roomId];
     const target = r.doors[dir];
     if (target === undefined) return this.say(p, `Il n'y a pas de porte au ${DIR_LABEL[dir]}. Juste un mur, très convaincant.`);
+    if (this.state.turn < this.state.floodUntil && r.type !== 'safe' && this.rng.chance(1 / 3)) {
+      return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} glisse dans l'eau en voulant aller au ${DIR_LABEL[dir]} et fait un plat magnifique.`, 15);
+    }
     const hostiles = this.monstersIn(p.floor, p.roomId).filter((m) => m.distracted <= 0);
     if (hostiles.length && r.type !== 'safe') {
       if (p.buffs.smoke) p.buffs.smoke = false;
@@ -850,6 +872,7 @@ export class Game {
     this.startTimer(next);
     p.floor = next.n;
     p.roomId = next.spawnRoom;
+    p.deepest = Math.max(p.deepest, next.n);
     this.discover(p);
     this.gainXp(p, 30);
     this.emit({ floor: next.n, kind: 'systeme', text: `${p.name} descend à l'étage ${next.n} (+30 XP de survie).`, scope: 'global', actors: [p.key], drama: 25 });
@@ -885,6 +908,7 @@ export class Game {
       const f = this.liveFloorFrom(p.floor);
       this.startTimer(f);
       p.floor = f.n;
+      p.deepest = Math.max(p.deepest, f.n);
       p.roomId = f.spawnRoom;
       p.alive = true;
       p.hp = p.maxHp;
@@ -903,6 +927,240 @@ export class Game {
     this.emit({ floor: f.n, kind: 'systeme', text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${victims.length ? `${victims.map((v) => v.name).join(', ')} n'ont pas trouvé la sortie.` : 'Personne n\'est resté coincé, bravo.'}`, scope: 'global', drama: 70 });
     for (const p of victims) this.killPlayer(p, `l'effondrement de l'étage ${f.n}`, null);
     // Les morts de cet étage réapparaîtront à l'étage ${next.n} (voir liveFloorFrom)
+  }
+
+  // ------------------------------------------------- production, classement, régie
+
+  /** Prix d'achat chez le marchand (moitié prix pendant l'happy hour). */
+  price(item: Item): number {
+    return this.state.turn < this.state.happyHourUntil ? Math.max(1, Math.ceil(item.value / 2)) : item.value;
+  }
+
+  private voteEvery(): number {
+    return Math.max(3, Math.round((this.cfg.voteEveryMinutes * 60) / this.cfg.turnSeconds));
+  }
+
+  private castVote(p: PlayerState, arg: string): SubmitResult {
+    const v = this.state.vote;
+    if (!v) return { ok: false, text: 'Aucun vote en cours. La production prépare le prochain.' };
+    const a = normalize(arg);
+    let key: string | undefined;
+    if (/^\d+$/.test(a)) key = v.options[Number(a) - 1];
+    else key = v.options.find((k) => normalize(PRODUCTION_BY_KEY[k].label).includes(a) || k.includes(a));
+    if (!a || !key) return { ok: false, text: `Vote : ${v.options.map((k, i) => `!vote ${i + 1} = ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}` };
+    v.votes[p.key] = key;
+    return { ok: true, text: `Vote enregistré : ${PRODUCTION_BY_KEY[key].label}.` };
+  }
+
+  startVote() {
+    const alive = Object.values(this.state.players).filter((p) => p.alive);
+    const dead = Object.values(this.state.players).some((p) => !p.alive);
+    const timed = Object.values(this.state.floors).some((f) => !f.collapsed && f.collapseAt !== null);
+    const pool = PRODUCTION_EVENTS.filter((e) => {
+      if (e.key === 'resurrection') return dead;
+      if (e.key === 'prime') return alive.some((p) => p.kills > 0) && !this.state.bounty;
+      if (e.key === 'prolongation' || e.key === 'acceleration') return timed;
+      return true;
+    }).map((e) => e.key);
+    const options = this.rng.shuffle(pool).slice(0, 3);
+    this.state.vote = { options, votes: {}, endTurn: this.state.turn + this.cfg.voteTurns };
+    this.emit({
+      floor: 0, kind: 'systeme', scope: 'global', drama: 30,
+      text: `LA PRODUCTION PROPOSE UN VOTE (${this.cfg.voteTurns} tours) : ${options.map((k, i) => `!vote ${i + 1} ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}`,
+    });
+  }
+
+  private updateProduction() {
+    const st = this.state;
+    if (st.bounty && (st.turn > st.bounty.untilTurn || !st.players[st.bounty.target])) {
+      const t = st.players[st.bounty.target];
+      if (t) this.emit({ floor: t.floor, kind: 'systeme', scope: 'global', drama: 20, text: `La prime sur ${t.name} expire. Il a survécu, le chat est déçu.` });
+      st.bounty = null;
+    }
+    if (st.vote && st.turn >= st.vote.endTurn) {
+      const tally = new Map<string, number>();
+      for (const k of Object.values(st.vote.votes)) tally.set(k, (tally.get(k) ?? 0) + 1);
+      const best = Math.max(0, ...tally.values());
+      const winners = st.vote.options.filter((k) => (tally.get(k) ?? 0) === best);
+      const key = this.rng.pick(winners);
+      const why = best === 0 ? 'personne n\'a voté, la production décide seule' : `${best} vote(s)`;
+      st.vote = null;
+      st.nextVoteTurn = st.turn + this.voteEvery();
+      this.applyProduction(key, why);
+      return;
+    }
+    if (this.cfg.voteEveryMinutes <= 0 || st.vote) return;
+    if (!st.nextVoteTurn) st.nextVoteTurn = st.turn + this.voteEvery();
+    if (st.turn >= st.nextVoteTurn && Object.values(st.players).some((p) => p.alive)) this.startVote();
+  }
+
+  applyProduction(key: string, why: string) {
+    const ev = PRODUCTION_BY_KEY[key];
+    if (!ev) return;
+    const st = this.state;
+    const live = Object.values(st.floors).filter((f) => !f.collapsed);
+    const occupied = live.filter((f) => Object.values(st.players).some((p) => p.alive && p.floor === f.n));
+    let detail = '';
+    switch (key) {
+      case 'pluie_or':
+        for (const f of occupied) {
+          const n = 4 + Object.values(st.players).filter((p) => p.floor === f.n).length;
+          const rooms = f.rooms.filter((r) => r.type !== 'safe');
+          for (let i = 0; i < n; i++) this.rng.pick(rooms).groundGold += this.rng.int(5, 20) * f.n;
+        }
+        detail = 'Des tas d\'or attendent dans des salles au hasard. Courez !';
+        break;
+      case 'lacher_monstres':
+        for (const f of occupied) {
+          const n = Math.max(2, Math.ceil(Object.values(st.players).filter((p) => p.floor === f.n).length / 2));
+          const pool = MONSTERS.filter((m) => m.minFloor <= f.n);
+          const rooms = f.rooms.filter((r) => r.type === 'normale' || r.type === 'piege' || r.type === 'tresor');
+          for (let i = 0; i < n && rooms.length; i++) {
+            const m = spawnMonster(this.rng.pick(pool), f.n, this.rng.pick(rooms).id, this.rng, this.nextId);
+            m.wanderer = true;
+            f.monsters.push(m);
+          }
+        }
+        detail = 'Une fournée de monstres errants est lâchée dans les couloirs.';
+        break;
+      case 'happy_hour':
+        st.happyHourUntil = st.turn + 10;
+        for (const f of live) for (const r of f.rooms) if (r.type === 'safe') for (let i = 0; i < 2; i++) r.merchant.push(randomLoot(this.rng, this.nextId, f.n, true));
+        detail = 'Les marchands bradent tout à −50 % pendant 10 tours (et ont reçu du stock).';
+        break;
+      case 'resurrection': {
+        let n = 0;
+        for (const p of Object.values(st.players)) if (!p.alive) {
+          p.respawnIn = 1;
+          p.deathTurn = undefined;
+          n++;
+        }
+        detail = `${n} crawler(s) reviennent d'entre les morts au prochain tour.`;
+        break;
+      }
+      case 'prime': {
+        const target = Object.values(st.players).filter((p) => p.alive).sort((a, b) => b.kills - a.kills)[0];
+        if (target && target.kills > 0) {
+          const gold = 50 * target.floor + 20 * target.kills;
+          st.bounty = { target: target.key, gold, untilTurn: st.turn + 15 };
+          detail = `${gold} po pour qui tuera ${target.name} (${target.kills} kills) dans les 15 prochains tours.`;
+        } else detail = 'Personne ne mérite de prime. Quelle bande de pacifistes.';
+        break;
+      }
+      case 'inondation':
+        st.floodUntil = st.turn + 5;
+        detail = 'Le donjon est inondé pendant 5 tours : un déplacement sur trois finit en glissade.';
+        break;
+      case 'festin':
+        for (const p of Object.values(st.players)) if (p.alive) p.hp = p.maxHp;
+        detail = 'Buffet à volonté : tous les crawlers vivants sont soignés.';
+        break;
+      case 'pieges_promo':
+        for (const f of live) {
+          for (const r of f.rooms) if (r.type === 'piege') {
+            r.trapArmed = true;
+            r.trapRevealed = false;
+          }
+          for (const r of this.rng.shuffle(f.rooms.filter((x) => x.type === 'normale')).slice(0, 3)) {
+            r.type = 'piege';
+            r.trapArmed = true;
+          }
+        }
+        detail = 'Tous les pièges sont réarmés, et trois salles de plus sont piégées.';
+        break;
+      case 'prolongation':
+        for (const f of live) if (f.collapseAt !== null) {
+          f.collapseAt += 3 * 60_000;
+          f.warned5 = f.warned1 = false;
+        }
+        detail = 'Les étages tiendront 3 minutes de plus.';
+        break;
+      case 'acceleration':
+        for (const f of live) if (f.collapseAt !== null) f.collapseAt = Math.max(this.now + 30_000, f.collapseAt - 2 * 60_000);
+        detail = 'Les étages s\'effondreront 2 minutes plus tôt. Bon courage.';
+        break;
+    }
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `LA PRODUCTION A TRANCHÉ (${why}) : ${ev.label.toUpperCase()} ! ${detail}` });
+  }
+
+  private onPlayerKilled(p: PlayerState, killer: Fighter | null) {
+    const b = this.state.bounty;
+    if (!b || b.target !== p.key) return;
+    this.state.bounty = null;
+    if (killer?.kind === 'player' && killer.p.key !== p.key) {
+      killer.p.gold += b.gold;
+      this.gainXp(killer.p, 50);
+      this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 90, actors: [killer.p.key, p.key], text: `${killer.p.name} encaisse la prime sur ${p.name} : ${b.gold} po !` });
+    } else this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 60, actors: [p.key], text: `${p.name} est mort, mais personne n'encaisse la prime. La production garde l'argent.` });
+  }
+
+  leaderboard(): LeaderRow[] {
+    const b = this.state.bounty;
+    return Object.values(this.state.players)
+      .map((p) => ({
+        name: p.name, cls: p.cls, level: p.level, floor: p.floor, deepest: p.deepest, kills: p.kills, deaths: p.deaths,
+        betrayals: p.betrayals, gold: p.gold, alive: p.alive, traitor: !!p.traitorUntilTurn, bounty: b?.target === p.key,
+      }))
+      .sort((a, b2) => b2.deepest - a.deepest || b2.level - a.level || b2.kills - a.kills || a.deaths - b2.deaths)
+      .slice(0, 50);
+  }
+
+  voteView(key: string | null): VoteView | null {
+    const v = this.state.vote;
+    if (!v) return null;
+    const count = (k: string) => Object.values(v.votes).filter((x) => x === k).length;
+    return {
+      options: v.options.map((k, i) => ({ n: i + 1, key: k, label: PRODUCTION_BY_KEY[k].label, desc: PRODUCTION_BY_KEY[k].desc, votes: count(k) })),
+      turnsLeft: Math.max(0, v.endTurn - this.state.turn),
+      myVote: key ? v.votes[key] ?? null : null,
+    };
+  }
+
+  effectsView(): EffectsView {
+    const st = this.state;
+    const b = st.bounty;
+    return {
+      happyHourTurns: Math.max(0, st.happyHourUntil - st.turn),
+      floodTurns: Math.max(0, st.floodUntil - st.turn),
+      bounty: b && st.players[b.target] ? { target: st.players[b.target].name, gold: b.gold, turns: Math.max(0, b.untilTurn - st.turn) } : null,
+      nextVoteInTurns: st.vote || this.cfg.voteEveryMinutes <= 0 ? null : Math.max(0, st.nextVoteTurn - st.turn),
+    };
+  }
+
+  obituary(): { turn: number; text: string }[] {
+    return this.state.events.filter((e) => e.kind === 'mort').slice(-8).reverse().map((e) => ({ turn: e.turn, text: e.text }));
+  }
+
+  /** Régie : déclenche l'effondrement d'un étage au prochain tour. */
+  adminCollapse(n: number, now = Date.now()) {
+    const f = this.state.floors[n];
+    if (!f || f.collapsed) return false;
+    f.startedAt ??= now;
+    f.collapseAt = now;
+    return true;
+  }
+
+  adminHealAll() {
+    for (const p of Object.values(this.state.players)) if (p.alive) p.hp = p.maxHp;
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 10, text: 'La régie soigne tout le monde. Profitez-en, ça n\'arrivera pas deux fois.' });
+  }
+
+  adminKick(name: string) {
+    const p = this.player(name);
+    if (!p) return false;
+    this.leaveAlliance(p, false);
+    delete this.state.players[p.key];
+    for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
+    this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 10, text: `${p.name} a été expulsé du donjon par la régie.` });
+    return true;
+  }
+
+  /** Vide les évènements produits hors tour (régie) pour les distribuer. */
+  flush(): GameEvent[] {
+    const out = this.out;
+    this.out = [];
+    this.sync();
+    return out;
   }
 
   // ----------------------------------------------------------------- vues
@@ -962,7 +1220,7 @@ export class Game {
     if (!p) return { me: null, floor: null, merchant: null };
     const f = this.state.floors[p.floor];
     const r = f?.rooms[p.roomId];
-    const merchant = r && r.type === 'safe' && p.alive ? r.merchant.map((item, i) => ({ index: i + 1, item, price: item.value })) : null;
+    const merchant = r && r.type === 'safe' && p.alive ? r.merchant.map((item, i) => ({ index: i + 1, item, price: this.price(item) })) : null;
     return { me: this.meView(p), floor: f ? this.floorView(f, p) : null, merchant };
   }
 

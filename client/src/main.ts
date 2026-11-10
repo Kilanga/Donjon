@@ -1,6 +1,7 @@
 // Page joueur : connexion, affichage de l'état, envoi des commandes.
 import type { ClientMsg, GameEvent, Item, PlayerViewMsg, RoomView, ServerMsg } from '../../src/shared/types';
 import { MapRenderer } from './map';
+import { PRODUCTION_EVENTS } from '../../src/server/game/production';
 import { CLASS_SPRITE, Tiles } from './tiles';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -131,6 +132,7 @@ function render() {
   $('hud-theme').textContent = f ? `thème : ${f.theme}` : '';
   $('hud-online').textContent = `${s.online} connecté(s)`;
   map.setFloor(f);
+  renderShared(s);
 
   if (s.spectator) return renderSpectator();
   if (!me || !f) return;
@@ -224,6 +226,76 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
     ${shop ? `<div class="section-label">Marchand</div>${shop}` : ''}`;
 }
 
+/** Éléments communs aux joueurs et à la régie : vote, effets, classement, régie. */
+function renderShared(s: PlayerViewMsg) {
+  // Effets en cours
+  const fx = s.effects;
+  const chips: string[] = [];
+  if (fx.happyHourTurns) chips.push(`<span class="chip hh">Happy hour ${fx.happyHourTurns} tours</span>`);
+  if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
+  if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
+  if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
+  $('hud-effects').innerHTML = chips.join('');
+  $('paused').classList.toggle('hidden', !s.paused);
+
+  // Vote de la production
+  const v = s.vote;
+  const box = $('vote');
+  if (v) {
+    box.classList.remove('hidden');
+    const opts = v.options.map((o) => {
+      const tag = s.spectator ? 'div' : 'button';
+      const attr = s.spectator ? 'class="vote-opt card"' : `class="vote-opt${v.myVote === o.key ? ' mine' : ''}" data-cmd="!vote ${o.n}"`;
+      return `<${tag} ${attr} title="${esc(o.desc)}"><span class="n">${o.votes}</span><b>${o.n}. ${esc(o.label)}</b><small>${esc(o.desc)}</small></${tag}>`;
+    }).join('');
+    box.innerHTML = `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
+  } else box.classList.add('hidden');
+
+  // Classement
+  const rows = s.leaderboard;
+  const me = s.me?.name;
+  const top = (k: 'kills' | 'betrayals' | 'deaths' | 'gold') => {
+    const r = [...rows].sort((a, b) => b[k] - a[k])[0];
+    return r && r[k] > 0 ? `<b>${esc(r.name)}</b> (${r[k]})` : '—';
+  };
+  $('rank-card').innerHTML = `<div class="card-title">Classement <span class="muted">${rows.length} crawlers</span></div>
+    <div class="titles">Boucher : ${top('kills')} · Traître en chef : ${top('betrayals')} · Abonné à la mort : ${top('deaths')} · Riche : ${top('gold')}</div>
+    <table class="rank"><tr><th>#</th><th>Crawler</th><th>Niv</th><th>Étage</th><th>Kills</th><th>Morts</th></tr>
+    ${rows.slice(0, 12).map((r, i) => `<tr class="${r.name === me ? 'me' : ''} ${r.alive ? '' : 'dead'}"><td>${i + 1}</td><td><img src="${tiles.icon(CLASS_SPRITE[r.cls], 1)}" alt=""> ${esc(r.name)}${r.traitor ? ' <span class="badge traitor">traître</span>' : ''}${r.bounty ? ' <span class="badge gold">prime</span>' : ''}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('')}
+    </table>
+    ${s.obituary.length ? `<div class="section-label">Nécrologie</div>${s.obituary.slice(0, 5).map((o) => `<div class="obit">T${o.turn} · ${esc(o.text.split(' Cause')[0])}${o.text.includes('Cause :') ? ` — ${esc(o.text.split('Cause : ')[1].split('.')[0])}` : ''}</div>`).join('')}` : ''}`;
+
+  // Panneau régie (vue spectateur avec la clé)
+  const adm = $('admin-card');
+  if (!s.admin) return adm.classList.add('hidden');
+  adm.classList.remove('hidden');
+  if (adm.dataset.ready && adm.dataset.paused === String(s.paused)) return; // ne pas réécrire pendant la saisie
+  adm.dataset.ready = '1';
+  adm.dataset.paused = String(s.paused);
+  adm.innerHTML = `<div class="card-title">Régie <span class="muted">maître du jeu</span></div>
+    <div class="admin-grid">
+      <button data-admin="${s.paused ? 'resume' : 'pause'}">${s.paused ? 'Reprendre' : 'Pause'}</button>
+      <button data-admin="next">Tour suivant</button>
+      <button data-admin="vote">Lancer un vote</button>
+      <button data-admin="healAll">Soigner tout le monde</button>
+      <button data-admin="collapse" class="danger">Effondrer l'étage affiché</button>
+      <button data-admin="reset" class="danger">Nouvelle partie</button>
+    </div>
+    <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Déclencher</button></div>
+    <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
+    <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>`;
+}
+
+function adminAction(action: string) {
+  let arg: string | number | undefined;
+  if (action === 'event') arg = ($('adm-event') as HTMLSelectElement).value;
+  if (action === 'turnSeconds') arg = Number(($('adm-turn') as HTMLInputElement).value);
+  if (action === 'kick') arg = ($('adm-kick') as HTMLInputElement).value.trim();
+  if (action === 'collapse') arg = state?.floor?.n;
+  if ((action === 'reset' || action === 'collapse' || action === 'kick') && !confirm('Sûr ? Cette action est irréversible.')) return;
+  send({ type: 'admin', action: action as never, arg });
+}
+
 function renderSpectator() {
   const s = state!;
   const f = s.floor;
@@ -265,6 +337,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.dataset.cmd) cmd(b.dataset.cmd);
   if (b.dataset.floor) send({ type: 'floor', n: Number(b.dataset.floor) });
+  if (b.dataset.admin) adminAction(b.dataset.admin);
   if (b.dataset.class) cmd(`!join ${b.dataset.class}`);
 });
 $('cmd-form').addEventListener('submit', (e) => {

@@ -75,6 +75,7 @@ const clients = new Set<Client>();
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 let turnEndsAt = Date.now() + cfg.turnSeconds * 1000;
+let pausedAt: number | null = null; // pause de la régie
 
 function send(c: Client, msg: ServerMsg) {
   if (c.ws.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify(msg));
@@ -82,7 +83,12 @@ function send(c: Client, msg: ServerMsg) {
 
 function sendState(c: Client) {
   const now = Date.now();
-  const base = { type: 'state' as const, turn: game.state.turn, turnEndsAt, turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size };
+  const key = c.name ? playerKey(c.name) : null;
+  const base = {
+    type: 'state' as const, turn: game.state.turn, turnEndsAt: pausedAt ? turnEndsAt + (now - pausedAt) : turnEndsAt,
+    turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
+    leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
+  };
   if (c.spectator) {
     send(c, { ...base, me: null, floor: game.spectatorView(c.floor, now), merchant: null, spectator: true });
   } else if (c.name) {
@@ -167,7 +173,78 @@ function onClientMessage(c: Client, msg: ClientMsg) {
     } else if (msg.type === 'floor' && c.spectator) {
       c.floor = Number(msg.n);
       sendState(c);
+    } else if (msg.type === 'admin' && c.spectator) {
+      admin(c, msg.action, msg.arg);
     }
+  }
+}
+
+// ------------------------------------------------------------------ régie
+function admin(c: Client, action: string, arg?: string | number) {
+  const now = Date.now();
+  let msg = '';
+  switch (action) {
+    case 'pause':
+      if (pausedAt === null) pausedAt = now;
+      msg = 'Partie en pause.';
+            break;
+    case 'resume':
+      if (pausedAt !== null) {
+        const delta = now - pausedAt;
+        turnEndsAt += delta;
+        for (const f of Object.values(game.state.floors)) if (f.collapseAt !== null) f.collapseAt += delta;
+        for (const p of Object.values(game.state.players)) if (p.immuneUntil > pausedAt) p.immuneUntil += delta;
+        pausedAt = null;
+      }
+      msg = 'La partie reprend.';
+      break;
+    case 'next':
+      turnEndsAt = now;
+      msg = 'Tour suivant déclenché.';
+      break;
+    case 'vote':
+      if (!game.state.vote) game.startVote();
+      msg = 'Vote lancé.';
+      break;
+    case 'event':
+      game.applyProduction(String(arg), 'décision de la régie');
+      msg = 'Événement déclenché.';
+      break;
+    case 'collapse':
+      msg = game.adminCollapse(Number(arg), now) ? `L'étage ${arg} s'effondrera au prochain tour.` : 'Étage introuvable.';
+      break;
+    case 'turnSeconds': {
+      const v = Math.max(3, Math.min(120, Number(arg) || cfg.turnSeconds));
+      cfg.turnSeconds = v;
+      turnEndsAt = Math.min(turnEndsAt, now + v * 1000);
+      msg = `Durée du tour : ${v} s.`;
+      break;
+    }
+    case 'healAll':
+      game.adminHealAll();
+      msg = 'Tout le monde est soigné.';
+      break;
+    case 'kick':
+      msg = game.adminKick(String(arg)) ? `${arg} expulsé.` : 'Joueur introuvable.';
+      break;
+    case 'reset':
+      game.reset();
+      pausedAt = null;
+      turnEndsAt = now + cfg.turnSeconds * 1000;
+      for (const cl of clients) send(cl, { type: 'events', events: game.state.events.slice(-1) });
+      msg = 'Nouvelle partie !';
+      break;
+    default:
+      return;
+  }
+  console.log(`[régie] ${msg}`);
+  deliver(game.flush());
+  send(c, { type: 'feedback', ok: true, text: `Régie : ${msg}` });
+  for (const cl of clients) sendState(cl);
+  try {
+    save();
+  } catch {
+    /* sauvegarde au prochain tour */
   }
 }
 
@@ -189,7 +266,7 @@ function runTurn() {
   }
 }
 setInterval(() => {
-  if (Date.now() >= turnEndsAt) runTurn();
+  if (pausedAt === null && Date.now() >= turnEndsAt) runTurn();
 }, 250);
 
 // Rafraîchit les chronos des pages toutes les 5 s (immunité, effondrement)
