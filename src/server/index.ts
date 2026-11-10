@@ -13,6 +13,7 @@ import { connectTwitch } from './twitch.js';
 import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
+import { BotManager } from './bots.js';
 import { Journal, errInfo } from './journal.js';
 import { buildReport } from './report.js';
 
@@ -267,6 +268,12 @@ function say(name: string, text: string) {
 /** Traite une commande, qu'elle vienne de la page ou du chat Twitch. */
 function command(name: string, text: string, from?: Client) {
   const src = from ? 'web' : 'twitch';
+  if (game.player(name)?.bot) {
+    // Un vrai joueur prend le pseudo d'un PNJ : le PNJ s'en va
+    game.removeBot(name);
+    deliver(game.flush());
+  }
+  bots.noteHuman(name);
   const fb = text.match(/^!(bug|avis|feedback)\b\s*(.*)$/i);
   if (fb) return feedback(name, fb[1].toLowerCase() === 'bug' ? 'bug' : 'avis', fb[2], src, from);
   const k = playerKey(name);
@@ -356,6 +363,10 @@ function onClientMessage(c: Client, msg: ClientMsg) {
         const name = String(msg.name ?? '').trim().slice(0, 24);
         if (!playerKey(name)) return send(c, { type: 'feedback', ok: false, text: 'Choisis un pseudo valide.' });
         c.name = name;
+        if (game.player(name)?.bot) {
+          game.removeBot(name);
+          deliver(game.flush());
+        }
       }
       c.since = Date.now();
       journal.write('connect', { cid: c.id, name: c.name, spectator: c.spectator, mobile: c.mobile, ua: c.ua, known: c.name ? !!game.player(c.name) : undefined });
@@ -390,12 +401,7 @@ function onClientMessage(c: Client, msg: ClientMsg) {
       const x = Number(msg.x);
       const y = Number(msg.y);
       if (!p || !p.alive || !Number.isFinite(x) || !Number.isFinite(y)) return;
-      const out: ServerMsg = { type: 'pos', name: p.name, floor: p.floor, roomId: p.roomId, x: Math.max(-0.3, Math.min(1.3, x)), y: Math.max(-0.3, Math.min(1.3, y)) };
-      for (const o of clients) {
-        if (o === c) continue;
-        if (o.spectator) send(o, out);
-        else if (o.name && game.player(o.name)?.floor === p.floor) send(o, out);
-      }
+      broadcastPos(p.name, x, y, c);
     } else if (msg.type === 'clientPerf') {
       journal.write('clientPerf', { cid: c.id, name: c.name, spectator: c.spectator, page: String(msg.page ?? '').slice(0, 100), fps: Number(msg.fps) || 0, w: Number(msg.w) || 0, h: Number(msg.h) || 0, mobile: c.mobile });
     }
@@ -447,6 +453,12 @@ function admin(c: Client, action: string, arg?: string | number) {
       game.adminHealAll();
       msg = 'Tout le monde est soigné.';
       break;
+    case 'bots': {
+      bots.target = Math.max(0, Math.min(30, Math.round(Number(arg)) || 0));
+      cfg.bots = bots.target;
+      msg = `PNJ figurants : ${bots.target} au maximum (ils arrivent ou partent un par tour, et cèdent la place aux vrais joueurs).`;
+      break;
+    }
     case 'kick':
       msg = game.adminKick(String(arg)) ? `${arg} expulsé.` : 'Joueur introuvable.';
       break;
@@ -487,10 +499,19 @@ function runTurn() {
   const all = Object.values(game.state.players);
   const floors: Record<number, number> = {};
   for (const p of all) if (p.alive) floors[p.floor] = (floors[p.floor] ?? 0) + 1;
-  journal.write('turn', { ms, late, events: events.length, players: all.length, alive: all.filter((p) => p.alive).length, online: clients.size, floors });
+  journal.write('turn', { ms, late, events: events.length, players: all.length, alive: all.filter((p) => p.alive).length, bots: all.filter((p) => p.bot).length, online: clients.size, floors });
   if (game.state.turn % 10 === 0) journal.write('snapshot', { leaderboard: game.leaderboard() });
   deliver(events);
   narrator.onTurn(events);
+  // Les PNJ figurants s'ajustent et choisissent leur action du prochain tour
+  try {
+    const before = game.state.nextId;
+    bots.afterTurn();
+    deliver(game.state.events.filter((e) => e.id >= before));
+    game.flush(); // déjà distribués
+  } catch (e) {
+    console.error('[pnj] erreur, la partie continue :', e);
+  }
   for (const c of clients) sendState(c);
   try {
     save();
@@ -506,6 +527,43 @@ setInterval(() => {
 setInterval(() => {
   for (const c of clients) sendState(c);
 }, 5000);
+
+// ------------------------------------------------------------ PNJ figurants
+/** Position libre d'un crawler dans sa salle (0..1), relayée aux pages de son étage et à la régie. */
+function broadcastPos(name: string, x: number, y: number, except?: Client) {
+  const p = game.player(name);
+  if (!p || !p.alive) return;
+  const out: ServerMsg = { type: 'pos', name: p.name, floor: p.floor, roomId: p.roomId, x: Math.max(-0.3, Math.min(1.3, x)), y: Math.max(-0.3, Math.min(1.3, y)) };
+  for (const o of clients) {
+    if (o === except) continue;
+    if (o.spectator) send(o, out);
+    else if (o.name && game.player(o.name)?.floor === p.floor) send(o, out);
+  }
+}
+const bots: BotManager = new BotManager(
+  game,
+  {
+    submit: (name, text) => {
+      const before = game.state.nextId;
+      let res;
+      try {
+        res = game.submit(name, text);
+      } catch (e) {
+        console.error('[pnj] commande en erreur :', name, text, e);
+        return;
+      }
+      journal.write('cmd', { name, text, src: 'bot', ok: res.ok, reply: res.text, ms: 0 });
+      deliver(game.state.events.filter((e) => e.id >= before));
+    },
+    say: (name, text) => say(name, text),
+    pos: (name, x, y) => broadcastPos(name, x, y),
+    humanActive: (p): boolean => [...clients].some((c) => c.name && playerKey(c.name) === p.key) || bots.recentlyActive(p),
+  },
+  cfg.bots,
+);
+setInterval(() => {
+  if (pausedAt === null) bots.fidget();
+}, 2500);
 
 // ----------------------------------------------------------------- Twitch
 if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(user, text));

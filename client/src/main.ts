@@ -25,6 +25,7 @@ const stage = new Stage(map, $('map-wrap'), spectatorKey !== null);
 // Déplacement libre dans la salle (page joueur) : ZQSD/flèches ou clic ; une porte franchie = changement de salle
 const DIR_CMD: Record<string, string> = { n: '!nord', s: '!sud', e: '!est', o: '!ouest' };
 const DIR_LABEL: Record<string, string> = { n: 'au nord', s: 'au sud', e: 'à l\'est', o: 'à l\'ouest' };
+if (spectatorKey !== null) $('map-help').textContent = 'Molette : zoom · glisser : déplacer · double-clic : recentrer';
 if (spectatorKey === null) {
   map.walkEnabled = true;
   map.onDoor = (dir) => {
@@ -226,7 +227,7 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   const canPvp = room.type !== 'safe' && me.immuneSeconds === 0;
   const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : '#ffb0b0'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attaque ${i + 1}">Attaquer</button></div>`).join('');
   const players = others.map((p) => {
-    const tags = [p.ally ? '<span class="badge ally">allié</span>' : '', p.traitor ? '<span class="badge traitor">traître</span>' : '', p.immune ? '<span class="badge immune">immunisé</span>' : '', !p.alive ? '<span class="badge">mort</span>' : ''].join('');
+    const tags = [p.bot ? '<span class="badge pnj">PNJ</span>' : '', p.ally ? '<span class="badge ally">allié</span>' : '', p.traitor ? '<span class="badge traitor">traître</span>' : '', p.immune ? '<span class="badge immune">immunisé</span>' : '', !p.alive ? '<span class="badge">mort</span>' : ''].join('');
     const atk = p.alive && canPvp && !p.immune ? `<button class="danger" data-cmd="!attaque ${esc(p.name)}">${p.ally ? 'Trahir' : 'Attaquer'}</button>` : '';
     const ally = p.alive && !p.ally ? `<button data-cmd="!alliance ${esc(p.name)}">Alliance</button>` : '';
     return `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level}</span> ${tags}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div><div style="display:flex;flex-direction:column;gap:3px">${atk}${ally}</div></div>`;
@@ -288,7 +289,7 @@ function renderShared(s: PlayerViewMsg) {
   $('rank-card').innerHTML = `<div class="card-title">Classement <span class="muted">${rows.length} crawlers</span></div>
     <div class="titles">Boucher : ${top('kills')} · Traître en chef : ${top('betrayals')} · Abonné à la mort : ${top('deaths')} · Riche : ${top('gold')}</div>
     <table class="rank"><tr><th>#</th><th>Crawler</th><th>Niv</th><th>Étage</th><th>Kills</th><th>Morts</th></tr>
-    ${rows.slice(0, 12).map((r, i) => `<tr class="${r.name === me ? 'me' : ''} ${r.alive ? '' : 'dead'}"><td>${i + 1}</td><td><img src="${tiles.icon(CLASS_SPRITE[r.cls], 1)}" alt=""> ${esc(r.name)}${r.traitor ? ' <span class="badge traitor">traître</span>' : ''}${r.bounty ? ' <span class="badge gold">prime</span>' : ''}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('')}
+    ${rows.slice(0, 12).map((r, i) => `<tr class="${r.name === me ? 'me' : ''} ${r.alive ? '' : 'dead'}"><td>${i + 1}</td><td><img src="${tiles.icon(CLASS_SPRITE[r.cls], 1)}" alt=""> ${esc(r.name)}${r.bot ? ' <span class="badge pnj">PNJ</span>' : ''}${r.traitor ? ' <span class="badge traitor">traître</span>' : ''}${r.bounty ? ' <span class="badge gold">prime</span>' : ''}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('')}
     </table>
     ${s.obituary.length ? `<div class="section-label">Nécrologie</div>${s.obituary.slice(0, 5).map((o) => `<div class="obit">T${o.turn} · ${esc(o.text.split(' Cause')[0])}${o.text.includes('Cause :') ? ` — ${esc(o.text.split('Cause : ')[1].split('.')[0])}` : ''}</div>`).join('')}` : ''}`;
 
@@ -310,6 +311,7 @@ function renderShared(s: PlayerViewMsg) {
     </div>
     <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Déclencher</button></div>
     <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
+    <div class="admin-row"><input id="adm-bots" type="number" min="0" max="30" placeholder="PNJ figurants (0 à 30, défaut 10)"><button data-admin="bots">OK</button></div>
     <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>
     <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée ↗</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Journaux pour Claude ↗</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Vue stream 3D ↗</a></div>`;
 }
@@ -319,6 +321,7 @@ function adminAction(action: string) {
   if (action === 'event') arg = ($('adm-event') as HTMLSelectElement).value;
   if (action === 'turnSeconds') arg = Number(($('adm-turn') as HTMLInputElement).value);
   if (action === 'kick') arg = ($('adm-kick') as HTMLInputElement).value.trim();
+  if (action === 'bots') arg = Number(($('adm-bots') as HTMLInputElement).value);
   if (action === 'collapse') arg = state?.floor?.n;
   if ((action === 'reset' || action === 'collapse' || action === 'kick') && !confirm('Sûr ? Cette action est irréversible.')) return;
   send({ type: 'admin', action: action as never, arg });
@@ -336,7 +339,7 @@ function renderSpectator() {
   if (f) $('spec-floor').innerHTML = `<button data-floor="${f.n - 1}">◀</button> étage ${f.n} <button data-floor="${f.n + 1}">▶</button>`;
   if (!f) return;
   const all = f.rooms.flatMap((r) => (r.players ?? []).map((p) => ({ ...p, room: r.id })));
-  $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Suivre ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
+  $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Suivre ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.bot ? ' <span class="badge pnj">PNJ</span>' : ''}${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
   const mons = f.rooms.flatMap((r) => r.monsters ?? []);
   $('room-card').innerHTML = `<div class="card-title">Étage ${f.n}</div><div class="desc">${f.rooms.length} salles · ${mons.length} monstres · boss : ${mons.find((m) => m.boss)?.name ?? 'vaincu'}</div>`;
   $('pending').className = 'pending hidden';

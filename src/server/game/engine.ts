@@ -1143,7 +1143,7 @@ export class Game {
     return Object.values(this.state.players)
       .map((p) => ({
         name: p.name, cls: p.cls, level: p.level, floor: p.floor, deepest: p.deepest, kills: p.kills, deaths: p.deaths,
-        betrayals: p.betrayals, gold: p.gold, alive: p.alive, traitor: !!p.traitorUntilTurn, bounty: b?.target === p.key,
+        betrayals: p.betrayals, gold: p.gold, alive: p.alive, traitor: !!p.traitorUntilTurn, bounty: b?.target === p.key, ...(p.bot ? { bot: true } : {}),
       }))
       .sort((a, b2) => b2.deepest - a.deepest || b2.level - a.level || b2.kills - a.kills || a.deaths - b2.deaths)
       .slice(0, 50);
@@ -1199,6 +1199,32 @@ export class Game {
     return true;
   }
 
+  /** Un PNJ figurant entre dans le donjon (mêmes règles qu'un joueur, marqué PNJ). */
+  joinBot(name: string, cls: string): boolean {
+    if (this.player(name)) return false;
+    const r = this.join(name, cls);
+    const p = this.player(name);
+    if (!r.ok || !p) return false;
+    p.bot = true;
+    // Pas de discours d'accueil du marchand pour un figurant
+    this.state.events = this.state.events.filter((e) => !(e.npc && e.to === p.key));
+    this.out = this.out.filter((e) => !(e.npc && e.to === p.key));
+    this.sync();
+    return true;
+  }
+
+  /** Un PNJ cède sa place à un vrai joueur. */
+  removeBot(name: string): boolean {
+    const p = this.player(name);
+    if (!p?.bot) return false;
+    this.leaveAlliance(p, false);
+    delete this.state.players[p.key];
+    for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
+    this.emit({ floor: p.floor, kind: 'systeme', scope: 'etage', drama: 5, text: `${p.name} (PNJ) range son arme et quitte le donjon : place aux vrais aventuriers !` });
+    this.sync();
+    return true;
+  }
+
   /** Vide les évènements produits hors tour (régie) pour les distribuer. */
   flush(): GameEvent[] {
     const out = this.out;
@@ -1224,6 +1250,7 @@ export class Game {
     return {
       name: o.name, cls: o.cls, level: o.level, hp: o.hp, maxHp: o.maxHp, alive: o.alive, immune: this.isImmune(o),
       traitor: !!o.traitorUntilTurn, ally: viewer ? this.isAlly(viewer, o) : false, me: viewer?.key === o.key,
+      ...(o.bot ? { bot: true } : {}),
     };
   }
 

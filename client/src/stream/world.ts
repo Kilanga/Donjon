@@ -361,7 +361,7 @@ export class World {
     } else if (!e.path.length && e.obj.position.distanceTo(target) > 0.3) e.path = [target];
     e.hp = p ? p.hp : m!.hp;
     e.maxHp = p ? p.maxHp : m!.maxHp;
-    e.color = p ? (p.traitor ? '#ff4d8d' : p.immune ? '#8cd0ff' : '#ffffff') : m!.boss ? '#ffcf4a' : '#ffb0b0';
+    e.color = p ? (p.traitor ? '#ff4d8d' : p.immune ? '#8cd0ff' : p.bot ? '#a9b8cc' : '#ffffff') : m!.boss ? '#ffcf4a' : '#ffb0b0';
     e.name = name + (p?.traitor ? ' ☠' : '');
   }
 

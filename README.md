@@ -134,6 +134,18 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 
 Pour tester vite seul : `"turnSeconds": 5`, `"floorMinutes": 5`, puis `npm run bots -- 6` dans un second terminal.
 
+## PNJ figurants
+
+Pour qu'il y ait toujours de la vie dans le donjon, le serveur fait jouer jusqu'à **10 PNJ** (Brunhilde, Gorim Barbe-Grise,
+Elwyn…). Ils suivent les mêmes règles que les joueurs : ils explorent, tapent les monstres, boivent leurs potions, fouillent,
+ramassent, votent, descendent, et lâchent une phrase de temps en temps. Ils sont **pacifiques** (jamais d'attaque contre un
+joueur, mais on peut les attaquer) et marqués **PNJ** partout.
+
+- Chaque vrai joueur actif (page ouverte, ou commande dans les 10 dernières minutes) fait partir un PNJ, un par tour.
+- Si un joueur choisit le pseudo d'un PNJ, le PNJ s'en va et lui laisse la place.
+- Réglage : `"bots": 10` dans `config.json`, variable `BOTS`, ou en direct dans la régie (0 pour les retirer).
+- Ils sont exclus des statistiques de participation du rapport de session.
+
 ## Vue stream 3D (bonus, à tester)
 
 Une deuxième page montre la partie en 3D, façon émission : caméra « réalisateur » qui va là où ça chauffe,

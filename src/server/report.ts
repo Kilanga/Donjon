@@ -50,7 +50,8 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   const t1 = Date.parse(lines[lines.length - 1].t);
   const starts = by('start');
   const stops = by('stop');
-  const cmds = by('cmd');
+  const allCmds = by('cmd');
+  const cmds = allCmds.filter((l) => l.src !== 'bot'); // les PNJ figurants ne comptent pas dans la participation
   const says = by('say');
   const events = by('event');
   const turns = by('turn');
@@ -117,6 +118,7 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   out.push(`- Joueurs distincts sur la page : ${uniq.size} (${mobile} sur téléphone) · connexions : ${players.length} · régie : ${conns.filter((l) => l.spectator).length}`);
   const twitchNames = new Set(cmds.filter((l) => l.src === 'twitch').map((l) => s(l.name).toLowerCase()));
   out.push(`- Joueurs venus du chat Twitch : ${twitchNames.size}`);
+  out.push(`- PNJ figurants : jusqu'à ${Math.max(0, ...turns.map((l) => Number(l.bots) || 0))} en jeu (exclus des statistiques de participation)`);
   const peak = Math.max(0, ...turns.map((l) => Number(l.online) || 0));
   out.push(`- Pic de pages ouvertes : ${peak} · pic de crawlers en jeu : ${Math.max(0, ...turns.map((l) => Number(l.players) || 0))}`);
   out.push(`- Commandes : ${cmds.length} (${pct(cmds.filter((l) => !l.ok).length, cmds.length)} refusées) · messages libres : ${says.length} · anti-spam déclenché : ${by('spam').length} fois\n`);
@@ -187,7 +189,7 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
     out.push(`\n## Classement final (tour ${lastSnap.turn})\n`);
     const lb = (lastSnap.leaderboard as Record<string, unknown>[]) ?? [];
     out.push(table(['#', 'Joueur', 'Classe', 'Niveau', 'Étage max', 'Kills', 'Morts', 'Or'], lb.slice(0, 15).map((r, i) => {
-      return [i + 1, r.name, r.cls, r.level, r.deepest, r.kills, r.deaths, r.gold];
+      return [i + 1, `${r.name}${r.bot ? ' (PNJ)' : ''}`, r.cls, r.level, r.deepest, r.kills, r.deaths, r.gold];
     })));
   }
 

@@ -73,6 +73,7 @@ input:focus { outline: none; border-color: var(--violet); }
 .badge.immune { border-color: var(--blue); color: var(--blue); }
 .badge.traitor { border-color: var(--pink); color: var(--pink); }
 .badge.ally { border-color: var(--green); color: var(--green); }
+.badge.pnj { border-color: #7d8aa0; color: #a9b8cc; font-size: 10px; padding: 1px 6px; }
 .badge.gold { border-color: #8a6d1c; color: var(--gold); }
 .entity { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid #241d31; }
 .entity:first-child { border-top: 0; }

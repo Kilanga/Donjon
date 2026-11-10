@@ -586,7 +586,7 @@ export class MapRenderer {
       const o = this.fx.offset(key, now);
       const flip = pl.me && this.me ? this.me.flip : i % 2 === 1;
       this.drawFlashing(key, CLASS_SPRITE[pl.cls], p.x + o.x, p.y + o.y, t + i * 0.29, flip, now);
-      const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : '#ffffff';
+      const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : pl.bot ? '#a9b8cc' : '#ffffff';
       this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
       const b = this.bubbles.get(pl.name);
       if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0, dur: b.dur, npc: false });

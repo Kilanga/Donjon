@@ -43,6 +43,7 @@ export interface PlayerPublic {
   traitor: boolean;
   ally: boolean;
   me: boolean;
+  bot?: boolean; // PNJ figurant
 }
 
 export interface RoomView {
@@ -142,6 +143,7 @@ export interface LeaderRow {
   alive: boolean;
   traitor: boolean;
   bounty: boolean;
+  bot?: boolean;
 }
 
 export interface VoteOption {
@@ -201,4 +203,4 @@ export type ClientMsg =
   | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string } // images/seconde (journal)
   | { type: 'pos'; x: number; y: number }; // déplacement libre dans la salle (0..1, purement visuel)
 
-export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick';
+export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots';
