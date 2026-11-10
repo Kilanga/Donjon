@@ -18,8 +18,13 @@ Spécifications complètes : doc « Le Donjon — architecture du stream interac
 5. **Chaque ami** ouvre l'adresse sur PC ou téléphone, choisit un pseudo, puis une classe. L'aide s'ouvre au premier passage (bouton « ? Aide » ensuite).
 6. **Pendant la partie**, depuis la régie : pause si quelqu'un décroche, « Tour suivant » si ça traîne, lancer un vote,
    déclencher un événement pour relancer l'action, régler la durée du tour (15 s si tout le monde suit bien, 25–30 s sinon).
-7. **À la fin**, fais une capture du classement, puis pose trois questions : qu'est-ce qui vous a fait rire ?
+7. **Pendant la partie, les joueurs signalent les soucis** avec `!bug ce qui cloche` (ou leur avis avec `!avis …`).
+   C'est noté avec leur situation exacte (étage, salle, PV, dernières actions) et tu le vois passer dans la régie.
+8. **À la fin**, fais une capture du classement, puis pose trois questions : qu'est-ce qui vous a fait rire ?
    À quel moment vous vous êtes ennuyés ? Vous rejoueriez ?
+9. **Renvoie tout à Claude** : dans la régie, lien « Journaux pour Claude » (ou l'adresse `…/journaux?cle=…` affichée
+   au démarrage). Télécharge le **Rapport** (.md) et le **Journal complet** (.jsonl), et glisse les deux dans la conversation,
+   avec les réponses aux trois questions. Voir [Journaux de session](#journaux-de-session).
 
 Pour une partie toute neuve : bouton « Nouvelle partie » de la régie, ou supprime `data/save.json` avant de lancer.
 Si quelqu'un ferme son onglet, son crawler reste dans le donjon (il riposte tout seul) : il le retrouve en revenant avec le même pseudo.
@@ -155,6 +160,7 @@ Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent s
 | `!descendre` | `!down` | Prendre l'escalier une fois le boss vaincu |
 | `!vote <n°>` | `!vote` | Voter pour l'événement de la production (immédiat) |
 | `!statut`, `!aide` | `!status`, `!help` | Infos |
+| `!bug <description>` / `!avis <message>` | `!feedback` | Signaler un souci ou donner son avis (noté dans le journal, visible en régie) |
 | un message sans `!` ou `!dis …` | `!say` | Parler : bulle au-dessus de ton crawler |
 
 Raccourcis clavier sur la page : flèches ou ZQSD pour se déplacer, `F` fouiller, `A` attaquer, `?` aide,
@@ -214,6 +220,22 @@ l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable av
 Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
 Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
 
+## Journaux de session
+
+Le serveur note tout dans `logs/session-<date>_<heure>.jsonl` (un fichier par lancement, une ligne JSON par fait) :
+commandes et réponses du jeu, messages, tous les évènements (privés compris), connexions (téléphone ou ordinateur),
+résumé de chaque tour (durée de calcul, joueurs en vie, pages ouvertes), classement toutes les 10 tours,
+actions de la régie, `!bug` et `!avis` avec contexte, erreurs du serveur, erreurs JavaScript des pages
+et images/seconde de chaque page (toutes les 2 min).
+
+- **Régie → « Journaux pour Claude »** : télécharge le rapport Markdown (résumé lisible : retours des joueurs, erreurs
+  regroupées, commandes refusées, morts et causes, activité par tranche de 10 min, perfs) et le journal brut.
+  Les deux couvrent la dernière soirée, même si le serveur a été relancé plusieurs fois (une pause de plus de 2 h
+  sans serveur sépare deux soirées : les essais de l'après-midi ne sont pas mélangés).
+- **En ligne de commande** : `npm run rapport` écrit `logs/rapport-<date>.md` (ou `npm run rapport -- logs/session-x.jsonl`).
+- La clé de régie et la clé API ne sont jamais écrites dans les journaux. Les pseudos et messages du chat, si.
+- `LOGS=0` désactive le journal. Le dossier `logs/` n'est pas envoyé sur GitHub.
+
 ## Tests et outils
 
 ```powershell
@@ -221,6 +243,7 @@ npm test               # tests (règles, génération, mort, alliances, effondre
 npm run simulate       # simule une session de 10 bots pendant 1 h de jeu et affiche un bilan
 npm run bots -- 6      # connecte 6 bots au serveur lancé, pour voir la page s'animer
 npm run typecheck      # vérification TypeScript
+npm run rapport        # rapport de la dernière soirée à partir de logs/
 ```
 
 ## Organisation du code
@@ -231,6 +254,7 @@ src/server/        serveur HTTP + WebSocket, sauvegarde, Twitch
 src/server/game/   moteur : engine.ts (tours, combats, votes…), dungeon.ts (génération), data.ts (classes, objets,
                    monstres, textes), production.ts (événements soumis au vote)
 src/server/ai.ts   appels à l'IA (Ollama / API Claude) ; narrator.ts : narration et marchand
+src/server/journal.ts  journal de session (logs/*.jsonl) ; report.ts : rapport Markdown
 client/            page joueur (Vite) : main.ts (interface), map.ts (rendu pixel art), tiles.ts (planche de sprites)
 scripts/           simulation et bots de test
 tests/             tests Vitest
