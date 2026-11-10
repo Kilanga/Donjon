@@ -14,21 +14,23 @@ const hash = (n: number) => {
 };
 const center = (r: { x: number; y: number }) => new THREE.Vector3(r.x * CELL, 0, r.y * CELL);
 
-// Apparence des monstres (les modèles KayKit Skeletons, teintés)
-const MONSTER_LOOK: Record<string, { model: CharName; scale: number; tint?: number; emissive?: number }> = {
-  gobelin: { model: 'sk_minion', scale: 0.85, tint: 0xa8e080 },
+// Apparence des monstres : Quaternius pour les créatures, squelettes KayKit pour les morts-vivants.
+// « repli » : modèle KayKit utilisé si le fichier Quaternius n'a pas pu être chargé.
+type Look = { model: CharName; scale: number; tint?: number; emissive?: number; repli?: Look };
+const MONSTER_LOOK: Record<string, Look> = {
+  gobelin: { model: 'q_gobelin', scale: 0.62, repli: { model: 'sk_minion', scale: 0.85, tint: 0xa8e080 } },
   squelette: { model: 'sk_warrior', scale: 1 },
   zombie: { model: 'sk_minion', scale: 0.8, tint: 0x9fc29a },
-  diablotin: { model: 'sk_rogue', scale: 0.7, tint: 0xff9a8a },
-  limace: { model: 'sk_minion', scale: 0.75, tint: 0xd8f070 },
-  demon: { model: 'sk_rogue', scale: 0.95, tint: 0xff7070 },
-  orque: { model: 'sk_warrior', scale: 1.15, tint: 0x9fd070 },
+  diablotin: { model: 'q_diablotin', scale: 0.6, repli: { model: 'sk_rogue', scale: 0.7, tint: 0xff9a8a } },
+  limace: { model: 'q_slime', scale: 0.55, repli: { model: 'sk_minion', scale: 0.75, tint: 0xd8f070 } },
+  demon: { model: 'q_demon', scale: 0.95, repli: { model: 'sk_rogue', scale: 0.95, tint: 0xff7070 } },
+  orque: { model: 'q_orque', scale: 1.0, repli: { model: 'sk_warrior', scale: 1.15, tint: 0x9fd070 } },
   necromancien: { model: 'sk_mage', scale: 1 },
-  guerrier: { model: 'sk_warrior', scale: 1.25, tint: 0xb8d890 },
+  guerrier: { model: 'q_orque_chef', scale: 1.15, repli: { model: 'sk_warrior', scale: 1.25, tint: 0xb8d890 } },
   mimique: { model: 'sk_rogue', scale: 0.9, tint: 0xffd060 },
-  ogre: { model: 'sk_warrior', scale: 1.8, tint: 0xff9a60, emissive: 0x401000 },
-  gros_zombie: { model: 'sk_minion', scale: 1.8, tint: 0xa0ffb0, emissive: 0x003010 },
-  gros_demon: { model: 'sk_rogue', scale: 1.8, tint: 0xff5050, emissive: 0x400000 },
+  ogre: { model: 'q_ogre', scale: 1.45, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xff9a60, emissive: 0x401000 } },
+  gros_zombie: { model: 'q_champignon', scale: 1.3, tint: 0xc8e0b0, repli: { model: 'sk_minion', scale: 1.8, tint: 0xa0ffb0, emissive: 0x003010 } },
+  gros_demon: { model: 'q_diablotin', scale: 1.3, emissive: 0x501000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff5050, emissive: 0x400000 } },
 };
 
 const ATTACK_ANIM: Record<string, string> = {
@@ -333,7 +335,8 @@ export class World {
       let emissive: number | undefined;
       if (p) model = p.cls as CharName;
       else {
-        const look = MONSTER_LOOK[m!.kind] ?? { model: 'sk_minion' as CharName, scale: 1 };
+        let look: Look = MONSTER_LOOK[m!.kind] ?? { model: 'sk_minion', scale: 1 };
+        if (!this.assets.has(look.model) && look.repli) look = look.repli;
         model = look.model;
         scale = look.scale;
         tint = look.tint;
@@ -388,7 +391,7 @@ export class World {
   }
 
   private play(e: Ent, name: string, once = false, clamp = false) {
-    const clip = this.assets.clips.get(name);
+    const clip = this.assets.clip(e.model, name);
     if (!clip) return;
     const a = e.mixer.clipAction(clip);
     if (e.current === a && !once) return;

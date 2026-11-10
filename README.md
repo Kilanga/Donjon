@@ -158,7 +158,7 @@ plan large quand c'est calme, bandeau « EN DIRECT » sur les moments forts, cla
   et se réduit tout seul dans une fenêtre plus petite (partage d'écran Discord, par exemple).
 - C'est la page la plus gourmande : il faut une carte graphique correcte. Si elle saccade, reste sur la vue 2D de la régie.
   Sa fluidité est notée dans le journal de session.
-- Modèles 3D : KayKit (Kay Lousberg, licence CC0).
+- Modèles 3D : KayKit (Kay Lousberg, licence CC0) pour le donjon, les aventuriers et les squelettes ; Quaternius « Ultimate Monsters » (CC0) pour gobelins, diablotins, démons, orques, slimes et boss.
 
 ## Brancher le vrai chat Twitch
 
