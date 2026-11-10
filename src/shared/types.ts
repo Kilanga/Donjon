@@ -118,6 +118,14 @@ export interface GameEvent {
   actors?: string[]; // joueurs concernés (alliés de ces joueurs voient aussi l'évènement)
   drama: number; // score de drame (pour le futur réalisateur)
   narrator?: boolean; // commentaire généré par l'IA du donjon
+  // Effet visuel/sonore : entités 'p:<nom affiché>' ou 'm:<id monstre>'
+  fx?: GameFx;
+}
+
+export interface GameFx {
+  kind: 'hit' | 'miss' | 'crit' | 'gag' | 'death' | 'kill' | 'loot' | 'levelup' | 'trap' | 'heal';
+  src?: string;
+  dst?: string;
 }
 
 export interface LeaderRow {

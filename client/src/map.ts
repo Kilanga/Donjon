@@ -1,5 +1,7 @@
 // Rendu de la carte d'un étage en pixel art, avec brouillard de guerre.
-import type { Dir, FloorView, MonsterView, PlayerPublic, RoomView } from '../../src/shared/types';
+import { normalize } from '../../src/shared/commands';
+import type { Dir, FloorView, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../src/shared/types';
+import { FxLayer } from './fx';
 import { CLASS_SPRITE, Tiles } from './tiles';
 
 const IW = 7; // largeur intérieure d'une salle (tuiles)
@@ -45,6 +47,10 @@ export class MapRenderer {
   private bubblePos: { text: string; x: number; y: number; t0: number }[] = [];
   private labels: { text: string; x: number; y: number; color: string; hp: number; maxHp: number }[] = [];
   spectator = false;
+  readonly fx = new FxLayer();
+  zoomTarget: number | null = null;
+  onManual?: () => void; // glisser/molette : la caméra auto se désactive
+  private visibleKeys = new Set<string>();
   private bubbles = new Map<string, { text: string; t0: number }>();
 
   /** Bulle de dialogue au-dessus d'un crawler (6 s). */
@@ -61,6 +67,8 @@ export class MapRenderer {
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       this.zoom = Math.max(0.5, Math.min(6, this.zoom * (e.deltaY < 0 ? 1.25 : 0.8)));
+      this.zoomTarget = null;
+      this.onManual?.();
     }, { passive: false });
     canvas.addEventListener('pointerdown', (e) => {
       this.drag = { x: e.clientX, y: e.clientY, cx: this.cam.x, cy: this.cam.y };
@@ -70,7 +78,11 @@ export class MapRenderer {
       if (!this.drag) return;
       const dx = e.clientX - this.drag.x;
       const dy = e.clientY - this.drag.y;
-      if (Math.abs(dx) + Math.abs(dy) > 6) this.follow = false;
+      if (Math.abs(dx) + Math.abs(dy) > 6) {
+        if (this.follow || this.zoomTarget !== null) this.onManual?.();
+        this.follow = false;
+        this.zoomTarget = null;
+      }
       const s = this.zoom * devicePixelRatio;
       this.cam.x = this.target.x = this.drag.cx - (dx * devicePixelRatio) / s;
       this.cam.y = this.target.y = this.drag.cy - (dy * devicePixelRatio) / s;
@@ -93,13 +105,54 @@ export class MapRenderer {
         const prev = this.lastHp.get(key);
         if (prev !== undefined && prev !== hp && prevN === f.n) {
           const pos = this.entityPos(r, key);
-          if (pos) this.floaters.push({ x: pos.x, y: pos.y - 30, text: hp < prev ? `-${prev - hp}` : `+${hp - prev}`, color: hp < prev ? '#ff5a5a' : '#6dff8a', t0: now });
+          const t0 = (this.fx.plannedAt(key) ?? now) + 90;
+          if (pos) this.floaters.push({ x: pos.x, y: pos.y - 30, text: hp < prev ? `-${prev - hp}` : `+${hp - prev}`, color: hp < prev ? '#ff5a5a' : '#6dff8a', t0 });
           if (hp < prev && r.current) this.shake = Math.max(this.shake, Math.min(6, (prev - hp) / 2));
         }
         this.lastHp.set(key, hp);
       }
     }
-    if (this.follow || prevN !== f.n) this.centerOnCurrent(prevN !== f.n);
+    if (this.spectator) {
+      if (prevN !== f.n) this.centerOnCurrent(true);
+    } else if (this.follow || prevN !== f.n) this.centerOnCurrent(prevN !== f.n);
+  }
+
+  /** Évènement reçu : programme l'effet visuel correspondant. */
+  onEvent(e: GameEvent) {
+    if (!this.floor || e.floor !== this.floor.n) return;
+    let fx = e.fx;
+    if (!fx && e.kind === 'loot' && e.actors?.length) {
+      const name = this.nameFromKey(e.actors[0]);
+      if (name) fx = { kind: 'loot', dst: `p:${name}` };
+    }
+    if (fx) this.fx.add(fx);
+  }
+
+  private nameFromKey(key: string): string | null {
+    for (const r of this.floor?.rooms ?? []) {
+      for (const p of r.players ?? []) {
+        if (normalize(p.name).replace(/^@/, '').replace(/[^a-z0-9_]/g, '_').slice(0, 25) === key) return p.name;
+      }
+    }
+    return null;
+  }
+
+  /** Caméra : cadre une salle (vue spectateur, réalisateur). */
+  focusRoom(r: RoomView, zoom = 3) {
+    this.target = { x: (r.x * CW + (IW + 2) / 2) * PX, y: (r.y * CH + (IH + 3) / 2) * PX };
+    this.zoomTarget = zoom;
+  }
+
+  /** Caméra : plan large de tout l'étage. */
+  showWholeFloor() {
+    const f = this.floor;
+    if (!f || !f.rooms.length) return;
+    const xs = f.rooms.map((r) => r.x);
+    const ys = f.rooms.map((r) => r.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs) + 1, y0 = Math.min(...ys), y1 = Math.max(...ys) + 1;
+    this.target = { x: ((x0 + x1) / 2) * CW * PX, y: ((y0 + y1) / 2) * CH * PX };
+    const fit = Math.min(this.canvas.clientWidth / ((x1 - x0) * CW * PX), this.canvas.clientHeight / ((y1 - y0) * CH * PX));
+    this.zoomTarget = Math.max(0.5, Math.min(3, Math.floor(fit * 10) / 10));
   }
 
   centerOnCurrent(snap = false) {
@@ -151,6 +204,12 @@ export class MapRenderer {
     if (!f || !this.tiles.img) return;
 
     // Caméra
+    if (this.zoomTarget !== null) {
+      this.zoom += (this.zoomTarget - this.zoom) * 0.08;
+      if (Math.abs(this.zoomTarget - this.zoom) < 0.01) this.zoom = this.zoomTarget;
+    }
+    this.shake = Math.max(this.shake, this.fx.shake);
+    this.fx.shake = 0;
     const k = 0.12;
     this.cam.x += (this.target.x - this.cam.x) * k;
     this.cam.y += (this.target.y - this.cam.y) * k;
@@ -166,7 +225,12 @@ export class MapRenderer {
     // Couloirs vers l'inconnu d'abord, puis salles
     for (const r of f.rooms) this.drawCorridors(r, known);
     for (const r of f.rooms) this.drawRoom(r, t, f.theme);
+    const nowFx = performance.now();
+    const vis = this.visibleKeys;
+    this.fx.update(nowFx, (key) => vis.has(key));
+    this.visibleKeys = new Set();
     for (const r of f.rooms) if (r.players || r.monsters) this.drawEntities(r, t);
+    this.fx.drawWorld(ctx, nowFx, (name, x, y, tt) => this.tiles.drawAnchored(ctx, name, x, y, tt));
 
     // Nombres flottants
     const now = performance.now();
@@ -174,6 +238,7 @@ export class MapRenderer {
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
     for (const fl of this.floaters) {
+      if (now < fl.t0) continue;
       const a = (now - fl.t0) / 1400;
       ctx.globalAlpha = 1 - a;
       ctx.fillStyle = '#000';
@@ -184,6 +249,7 @@ export class MapRenderer {
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLabels((x, y) => [ox + x * s, oy + y * s]);
+    this.fx.drawScreen(ctx, nowFx, (x, y) => [ox + x * s, oy + y * s]);
 
     // Teinte du thème + vignette
     const tint = THEME_TINT[f.theme];
@@ -196,6 +262,10 @@ export class MapRenderer {
     g.addColorStop(1, 'rgba(0,0,0,0.65)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+    if (this.fx.screenFlash > 0.02) {
+      ctx.fillStyle = `rgba(255,244,214,${this.fx.screenFlash})`;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   private drawCorridors(r: RoomView, known: Map<number, RoomView>) {
@@ -317,13 +387,21 @@ export class MapRenderer {
     const oy = (r.y * CH + 2) * PX;
     const ms = r.monsters ?? [];
     const ps = r.players ?? [];
+    const now = performance.now();
     ms.forEach((m, i) => {
+      const key = `m:${m.id}`;
       const p = slot(ox, oy, i, ms.length, m.boss ? 2.6 : 1.9);
-      tiles.drawAnchored(ctx, m.sprite, p.x, p.y, t + i * 0.37);
+      this.fx.lastPos.set(key, p);
+      this.visibleKeys.add(key);
+      const o = this.fx.offset(key, now);
+      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + i * 0.37, false, now);
       this.label(m.name, p.x, p.y - (m.boss ? 38 : 20), m.boss ? '#ffcf4a' : '#ff9a9a', m.hp, m.maxHp);
     });
     ps.forEach((pl, i) => {
+      const key = `p:${pl.name}`;
       const p = slot(ox, oy, i, ps.length, 4.6);
+      this.fx.lastPos.set(key, p);
+      this.visibleKeys.add(key);
       if (!pl.alive) {
         tiles.drawAnchored(ctx, 'skull', p.x, p.y);
         this.label(pl.name, p.x, p.y - 14, '#888', 0, pl.maxHp);
@@ -335,12 +413,34 @@ export class MapRenderer {
         ctx.ellipse(p.x, p.y - 2, 9, 4, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-      tiles.drawAnchored(ctx, CLASS_SPRITE[pl.cls], p.x, p.y, t + i * 0.29, i % 2 === 1);
+      const o = this.fx.offset(key, now);
+      this.drawFlashing(key, CLASS_SPRITE[pl.cls], p.x + o.x, p.y + o.y, t + i * 0.29, i % 2 === 1, now);
       const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : '#ffffff';
       this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
       const b = this.bubbles.get(pl.name);
       if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0 });
     });
+  }
+
+  /** Sprite avec flash blanc (coup reçu) ou rouge (piège, gag). */
+  private drawFlashing(key: string, sprite: string, x: number, y: number, t: number, flip: boolean, now: number) {
+    const { ctx, tiles } = this;
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
+    const f = this.fx.flash(key, now);
+    if (f.a <= 0) return;
+    ctx.save();
+    if (f.color === 'red') {
+      ctx.globalAlpha = 0.5 * f.a;
+      ctx.fillStyle = '#ff2a2a';
+      ctx.beginPath();
+      ctx.ellipse(x, y - 9, 9, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = f.a;
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
+    ctx.restore();
   }
 
   private label(text: string, x: number, y: number, color: string, hp: number, maxHp: number) {

@@ -1,7 +1,7 @@
 // Le moteur de jeu : reçoit les commandes, résout les tours, produit les évènements.
 import { HELP_TEXT, normalize, parseCommand, type ParsedCommand } from '../../shared/commands.js';
 import type {
-  ClassId, Dir, EffectsView, FloorView, GameEvent, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
+  ClassId, Dir, EffectsView, FloorView, GameEvent, GameFx, Item, LeaderRow, MeView, MerchantOffer, MonsterView, PlayerPublic, RoomView, StatId, VoteView,
 } from '../../shared/types.js';
 import type { GameConfig } from '../config.js';
 import {
@@ -65,8 +65,8 @@ export class Game {
     this.emit({ floor: p.floor, roomId: p.roomId, kind, text, scope: 'prive', to: p.key, drama: 0 });
   }
 
-  private roomEvent(p: PlayerState | null, floor: number, roomId: number, kind: GameEvent['kind'], text: string, drama = 0, actors: string[] = []) {
-    this.emit({ floor, roomId, kind, text, scope: 'salle', actors: p ? [p.key, ...actors] : actors, drama });
+  private roomEvent(p: PlayerState | null, floor: number, roomId: number, kind: GameEvent['kind'], text: string, drama = 0, actors: string[] = [], fx?: GameFx) {
+    this.emit({ floor, roomId, kind, text, scope: 'salle', actors: p ? [p.key, ...actors] : actors, drama, ...(fx ? { fx } : {}) });
   }
 
   private sync() {
@@ -453,6 +453,7 @@ export class Game {
 
   private attack(att: Fighter, def: Fighter, attackedBy: Map<string, Fighter[]>) {
     const name = (f: Fighter) => (f.kind === 'player' ? f.p.name : f.m.name);
+    const ek = (f: Fighter) => (f.kind === 'player' ? `p:${f.p.name}` : `m:${f.m.id}`);
     const ap = att.kind === 'player' ? att.p : null;
     const dp = def.kind === 'player' ? def.p : null;
     const floorN = ap ? ap.floor : dp!.floor;
@@ -472,7 +473,7 @@ export class Game {
 
     // Cape d'invisibilité
     if (dp && dp.buffs.cloakTurns > 0 && this.rng.chance(0.5)) {
-      this.roomEvent(dp, floorN, roomId, 'drole', `${name(att)} attaque ${dp.name}… qui n'est plus là. La cape trouée a fonctionné, pour une fois.`, 10);
+      this.roomEvent(dp, floorN, roomId, 'drole', `${name(att)} attaque ${dp.name}… qui n'est plus là. La cape trouée a fonctionné, pour une fois.`, 10, [], { kind: 'miss', src: ek(att), dst: ek(def) });
       return;
     }
 
@@ -508,7 +509,7 @@ export class Game {
     if (nat === 1) {
       const self = this.rng.die(4);
       const text = this.rng.pick(GAG_TEXTS).replace('{a}', name(att)) + ` (−${self} PV)`;
-      this.roomEvent(ap, floorN, roomId, 'drole', text, 60, actors);
+      this.roomEvent(ap, floorN, roomId, 'drole', text, 60, actors, { kind: 'gag', src: ek(att) });
       if (ap) this.damagePlayer(ap, self, 'sa propre maladresse', null);
       else (att as { m: MonsterState }).m.hp = Math.max(1, (att as { m: MonsterState }).m.hp - self);
       return;
@@ -516,10 +517,10 @@ export class Game {
     const crit = nat === 20;
     if (!crit && margin < 0) {
       if (margin <= -10) {
-        this.roomEvent(ap, floorN, roomId, 'drole', this.rng.pick(FIASCO_TEXTS).replace('{a}', name(att)).replace('{t}', name(def)) + ` ${dice}`, 40, actors);
+        this.roomEvent(ap, floorN, roomId, 'drole', this.rng.pick(FIASCO_TEXTS).replace('{a}', name(att)).replace('{t}', name(def)) + ` ${dice}`, 40, actors, { kind: 'miss', src: ek(att), dst: ek(def) });
         if (ap) ap.stunned = true;
         else (att as { m: MonsterState }).m.distracted = 2;
-      } else this.roomEvent(ap, floorN, roomId, 'combat', `${name(att)} rate ${name(def)} ${dice}.`, 0, actors);
+      } else this.roomEvent(ap, floorN, roomId, 'combat', `${name(att)} rate ${name(def)} ${dice}.`, 0, actors, { kind: 'miss', src: ek(att), dst: ek(def) });
       return;
     }
 
@@ -537,7 +538,7 @@ export class Game {
       drama = 20;
     } else text = `${name(att)} touche ${name(def)} ${dice} : −${dmg} PV.`;
     if (treachery) drama += 30;
-    this.roomEvent(ap, floorN, roomId, crit ? 'drole' : 'combat', text, drama, actors);
+    this.roomEvent(ap, floorN, roomId, crit ? 'drole' : 'combat', text, drama, actors, { kind: crit ? 'crit' : 'hit', src: ek(att), dst: ek(def) });
 
     if (treachery && ap && dp && dp.gold > 0) {
       const stolen = Math.ceil(dp.gold * 0.25);
@@ -590,7 +591,7 @@ export class Game {
     const absurd = cause === 'sa propre maladresse' || cause.startsWith('un piège');
     const base = this.rng.pick(DEATH_TEXTS).replace('{p}', p.name);
     this.emit({
-      floor: p.floor, roomId: p.roomId, kind: 'mort', scope: 'global', actors: [p.key],
+      floor: p.floor, roomId: p.roomId, kind: 'mort', scope: 'global', actors: [p.key], fx: { kind: 'death', dst: `p:${p.name}` },
       text: `${base} Cause : ${cause}. Son loot (${dropped.length} objet(s), ${goldLost} po) traîne au sol. −${xpLost} XP.`,
       drama: absurd ? 120 : 80,
     });
@@ -616,7 +617,7 @@ export class Game {
     const share = Math.ceil(m.xp / sharers.length);
     for (const s of sharers) this.gainXp(s, share);
     const shareTxt = sharers.length > 1 ? ` (XP partagée : ${share} chacun)` : ` (+${m.xp} XP)`;
-    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} terrasse ${m.name} et récupère ${m.gold} po${shareTxt}.`, m.boss ? 80 : 5);
+    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} terrasse ${m.name} et récupère ${m.gold} po${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
     if (m.boss) this.emit({ floor: floorN, kind: 'systeme', text: `${m.name} est vaincu par ${killer.name} ! L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`, scope: 'global', actors: [killer.key], drama: 80 });
   }
 
@@ -629,7 +630,7 @@ export class Game {
       const gain = CLASSES[p.cls].hpPerLevel;
       p.maxHp += gain;
       p.hp = Math.min(p.maxHp, p.hp + gain);
-      this.emit({ floor: p.floor, kind: 'niveau', text: `${p.name} passe niveau ${p.level} ! (+${gain} PV max, 1 point de stat à dépenser avec !monte)`, scope: 'etage', actors: [p.key], drama: 15 });
+      this.emit({ floor: p.floor, kind: 'niveau', text: `${p.name} passe niveau ${p.level} ! (+${gain} PV max, 1 point de stat à dépenser avec !monte)`, scope: 'etage', actors: [p.key], drama: 15, fx: { kind: 'levelup', dst: `p:${p.name}` } });
     }
   }
 
@@ -669,7 +670,7 @@ export class Game {
       case 'heal_big': {
         const heal = fx === 'heal_small' ? this.rng.die(6) + this.rng.die(6) + 2 : this.rng.die(6) * 4 + 4;
         p.hp = Math.min(p.maxHp, p.hp + heal);
-        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} boit ${item.name} et récupère ${heal} PV.`);
+        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} boit ${item.name} et récupère ${heal} PV.`, 0, [], { kind: 'heal', dst: `p:${p.name}` });
       }
       case 'smoke':
         p.buffs.smoke = true;
@@ -826,7 +827,7 @@ export class Game {
     const r = this.room(p);
     if (this.rng.chance(0.5)) r.trapArmed = false; // un piège sur deux ne se réarme pas
     const text = this.rng.pick(TRAP_TEXTS).replace('{p}', p.name) + ` (−${dmg} PV)`;
-    this.roomEvent(p, p.floor, p.roomId, 'piege', text, 30);
+    this.roomEvent(p, p.floor, p.roomId, 'piege', text, 30, [], { kind: 'trap', dst: `p:${p.name}` });
     this.damagePlayer(p, dmg, 'un piège', null);
   }
 
