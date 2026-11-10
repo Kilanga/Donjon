@@ -194,7 +194,7 @@ export class Game {
     const p: PlayerState = {
       key, name: name.trim().slice(0, 24), cls, level: 1, xp: 0, hp: def.hp, maxHp: def.hp, stats: { ...def.stats }, statPoints: 0, gold: 10,
       weapon: makeItem(def.startWeapon, this.nextId), armor: def.startArmor ? makeItem(def.startArmor, this.nextId) : null,
-      items: [makeItem('potion', this.nextId)], floor: f.n, roomId: f.spawnRoom, alive: true, respawnIn: 0,
+      items: [makeItem('potion', this.nextId), makeItem('potion', this.nextId)], floor: f.n, roomId: f.spawnRoom, alive: true, respawnIn: 0,
       immuneUntil: this.now + this.cfg.immunitySeconds * 1000, allianceId: null, allyProposals: [], traitorUntilTurn: 0,
       pending: null, lastAction: null, stunned: false, buffs: { cloakTurns: 0, mirror: false, smoke: false, coupon: false },
       discovered: {}, kills: 0, deaths: 0, betrayals: 0, deepest: f.n, joinedTurn: this.state.turn,

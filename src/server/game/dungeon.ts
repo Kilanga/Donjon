@@ -95,8 +95,8 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
   const fixed = pool.filter((m) => !m.wanderer);
   const wanderers = pool.filter((m) => m.wanderer);
   for (const r of rooms) {
-    if (r.type === 'normale' && dist[r.id] > 1 && rng.chance(0.6)) {
-      const k = rng.int(1, n >= 2 ? 3 : 2);
+    if (r.type === 'normale' && dist[r.id] > 1 && rng.chance(n === 1 ? 0.5 : 0.6)) {
+      const k = rng.int(1, n >= 3 ? 3 : n === 2 ? 2 : 1); // étage 1 : un monstre par salle
       for (let i = 0; i < k; i++) floor.monsters.push(spawnMonster(rng.pick(fixed), n, r.id, rng, nextId));
     }
     if (r.type === 'tresor' && rng.chance(0.6)) floor.monsters.push(spawnMonster(rng.pick(fixed), n, r.id, rng, nextId));
