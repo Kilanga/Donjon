@@ -284,7 +284,8 @@ function renderShared(s: PlayerViewMsg) {
     </div>
     <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Déclencher</button></div>
     <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
-    <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>`;
+    <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>
+    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée ↗</a></div>`;
 }
 
 function adminAction(action: string) {

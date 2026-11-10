@@ -8,6 +8,7 @@ import { loadConfig } from './config.js';
 import { Game, playerKey } from './game/engine.js';
 import type { GameState } from './game/state.js';
 import { connectTwitch } from './twitch.js';
+import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
 
@@ -63,6 +64,14 @@ const MIME: Record<string, string> = {
 };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
+  if (url.pathname === '/bilan') {
+    if (url.searchParams.get('cle') !== cfg.spectatorKey) {
+      res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Clé de régie requise.');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(recapHtml(game, cfg.turnSeconds));
+    return;
+  }
   let file = path.normalize(path.join(staticDir, decodeURIComponent(url.pathname)));
   if (!file.startsWith(staticDir)) {
     res.writeHead(403).end();
@@ -313,6 +322,16 @@ setInterval(() => {
 // ----------------------------------------------------------------- Twitch
 if (cfg.twitchChannel) connectTwitch(cfg.twitchChannel, (user, text) => command(user, text));
 
+
+const onListenError = (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n  Le port ${cfg.port} est déjà utilisé : le Donjon tourne sans doute déjà dans une autre fenêtre.`);
+    console.error('  Ferme-la (ou change "port" dans config.json), puis relance.\n');
+  } else console.error('[serveur] impossible de démarrer :', e);
+  process.exit(1);
+};
+server.on('error', onListenError);
+wss.on('error', onListenError); // ws relaie les erreurs du serveur HTTP
 
 server.listen(cfg.port, () => {
   console.log(`\n  Le Donjon tourne sur http://localhost:${cfg.port}`);
