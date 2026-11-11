@@ -357,6 +357,10 @@ function deliver(events: GameEvent[]) {
 }
 
 // IA du donjon (optionnelle) : la clé API ne vient que de la variable d'environnement
+if (cfg.ai.provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && cfg.ai.fallback && cfg.ai.fallback !== 'anthropic') {
+  console.log(`  [ai] ANTHROPIC_API_KEY is not set: falling back to ${cfg.ai.fallback}.`);
+  cfg.ai.provider = cfg.ai.fallback;
+}
 const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
 // Victoria Steele : sa voix (service local) part vers les pages du stream, qui téléchargent le clip avec la clé
 const voice = new Voice(cfg.voice, (clip) => {

@@ -356,7 +356,7 @@ npm start
 Le modèle par défaut est `claude-haiku-5-5` (rapide et peu cher), réglable avec `anthropicModel`.
 L'API est facturée à part de l'abonnement Claude : les crédits API inclus dans l'abonnement Max doivent d'abord être
 réclamés dans la Console (<https://platform.claude.com>, page Billing), en y liant une organisation. Le coût reste faible :
-l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable avec `maxPerMinute`, 8 par défaut).
+l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable avec `maxPerMinute`, 15 par défaut).
 
 ### Réglages
 
@@ -367,6 +367,7 @@ l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable av
 | `anthropicModel` | `claude-haiku-5-5` | Modèle de l'API Claude |
 | `timeoutMs` | 12000 | Au-delà, la réponse est abandonnée |
 | `maxPerMinute` | 15 | Nombre maximum d'appels par minute |
+| `fallback` | — | `"ollama"` : si la clé `ANTHROPIC_API_KEY` manque, Victoria passe sur Ollama au lieu de se taire |
 
 Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
 Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.

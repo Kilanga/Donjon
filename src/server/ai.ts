@@ -12,6 +12,7 @@ export interface AiConfig {
   anthropicModel: string;
   timeoutMs: number;
   maxPerMinute: number;
+  fallback?: AiProvider; // si l'API Claude n'a pas de clé (ANTHROPIC_API_KEY absente), on bascule sur celui-ci
 }
 
 export const DEFAULT_AI: AiConfig = {
