@@ -2,6 +2,37 @@
 import * as THREE from 'three';
 import type { Dir, FloorView, ForecastRoom, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../../src/shared/types';
 import { Assets, InstancedBuilder, type CharName, type PieceName } from './assets';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { buildDressing, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
+
+/** Pièces de décor coupées quand elles sont entre la caméra et la salle filmée (vue en coupe). */
+const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue', 'web']);
+const CUT = { uCutZ: { value: 1e9 }, uCutY: { value: 0.75 } };
+function patchCut(m: THREE.Material) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uCutZ = CUT.uCutZ;
+    sh.uniforms.uCutY = CUT.uCutY;
+    sh.vertexShader = 'varying vec3 vCutW;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 cutW = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        cutW = instanceMatrix * cutW;
+      #endif
+      vCutW = (modelMatrix * cutW).xyz;`);
+    sh.fragmentShader = 'uniform float uCutZ;\nuniform float uCutY;\nvarying vec3 vCutW;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  if (vCutW.z > uCutZ && vCutW.y > uCutY) discard;');
+  };
+  m.customProgramCacheKey = () => 'cut';
+  return m;
+}
+const cutMats = new Map<THREE.Material, THREE.Material>();
+const cutMaterial = (m: THREE.Material) => {
+  let c = cutMats.get(m);
+  if (!c) cutMats.set(m, (c = patchCut(m.clone())));
+  return c;
+};
+const CUT_DEPTH = patchCut(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
 
 export const CELL = 16; // pas de la grille (salle 12 + couloir 4)
 const HALF = 6; // demi-côté d'une salle
@@ -82,6 +113,9 @@ interface Ent {
   lastHtml?: string; // dernière étiquette écrite (évite de réécrire le DOM à chaque image)
   busyUntil: number; // animation ponctuelle en cours
   color: string;
+  bot: boolean;
+  ring: THREE.Mesh | null; // anneau de classe au sol
+  ringKey?: string;
 }
 
 interface Flame {
@@ -91,6 +125,8 @@ interface Flame {
 }
 
 export class World {
+  /** ?leger dans l'adresse du stream : pas de halo lumineux (bloom), si le PC peine. */
+  static light = false;
   scene = new THREE.Scene();
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
@@ -118,6 +154,17 @@ export class World {
   private wantLook = new THREE.Vector3();
   followName: string | null = null;
   onShot?: (label: string) => void;
+  private hemi: THREE.HemisphereLight;
+  private mood: Mood = moodFor('classique');
+  private moodLights: THREE.PointLight[] = []; // lumière colorée des salles spéciales proches
+  private wide = true; // plan large : pas de coupe des murs
+  private beam: THREE.Mesh | null = null; // rayon au-dessus de l'escalier ouvert
+  private collapseAt: number | null = null;
+  private tombs: { obj: THREE.Object3D; label: HTMLDivElement | null }[] = [];
+  private motes: THREE.Points;
+  private composer: EffectComposer;
+  private bloom: UnrealBloomPass;
+  private nextDebris = 0;
 
   constructor(canvas: HTMLCanvasElement, labels: HTMLElement, assets: Assets) {
     this.assets = assets;
@@ -131,10 +178,11 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.5, 600);
 
-    this.scene.background = new THREE.Color(0x0b0812);
-    this.scene.fog = new THREE.Fog(0x0b0812, 70, 220);
-    this.scene.add(new THREE.HemisphereLight(0x7a68b8, 0x1c1226, 0.85));
-    this.sun = new THREE.DirectionalLight(0x9db2ff, 0.9);
+    this.scene.background = new THREE.Color(0x15110e);
+    this.scene.fog = new THREE.Fog(0x15110e, 70, 220);
+    this.hemi = new THREE.HemisphereLight(this.mood.sky, this.mood.ground, this.mood.ambient);
+    this.scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight(0xaab8d8, 0.7);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, { left: -28, right: 28, top: 28, bottom: -28, near: 1, far: 120 });
@@ -146,14 +194,29 @@ export class World {
       this.lights.push(l);
       this.scene.add(l);
     }
+    for (let i = 0; i < 3; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 20, 1.4);
+      this.moodLights.push(l);
+      this.scene.add(l);
+    }
     this.flash = new THREE.PointLight(0xffd070, 0, 20, 1.5);
     this.scene.add(this.flash, this.dynamic);
+    this.motes = makeMotes();
+    this.scene.add(this.motes);
+    // Halo lumineux sur les flammes, l'or, les emblèmes : seul ce qui est très lumineux « bave »
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(800, 450), 0.55, 0.45, 0.82);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
     this.flameTex = glow([[0, 'rgba(255,248,210,1)'], [0.25, 'rgba(255,170,60,.95)'], [0.6, 'rgba(255,80,10,.35)'], [1, 'rgba(255,40,0,0)']]);
     this.sparkTex = glow([[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,.7)'], [1, 'rgba(255,255,255,0)']]);
   }
 
   resize(w: number, h: number) {
     this.renderer.setSize(w, h, false);
+    this.composer.setSize(w, h);
+    this.bloom.resolution.set(Math.round(w / 2), Math.round(h / 2));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -163,7 +226,14 @@ export class World {
   setFloor(f: FloorView) {
     const changed = !this.floor || this.floor.n !== f.n || this.floor.uid !== f.uid || this.floor.rooms.length !== f.rooms.length;
     this.floor = f;
+    this.collapseAt = f.collapseInSec === null ? null : performance.now() + f.collapseInSec * 1000;
     if (changed) {
+      this.applyMood(f.theme);
+      for (const t of this.tombs) {
+        this.scene.remove(t.obj);
+        t.label?.remove();
+      }
+      this.tombs = [];
       this.buildStatic(f);
       for (const e of this.ents.values()) this.removeEnt(e);
       this.ents.clear();
@@ -177,7 +247,10 @@ export class World {
   private buildStatic(f: FloorView) {
     if (this.static) {
       this.scene.remove(this.static);
-      this.static.traverse((o) => (o as THREE.InstancedMesh).dispose?.());
+      this.static.traverse((o) => {
+        (o as THREE.InstancedMesh).dispose?.();
+        if (o.userData.disposeMaterial) ((o as THREE.Mesh).material as THREE.Material).dispose();
+      });
     }
     for (const fl of this.flames) this.scene.remove(fl.sprite);
     this.flames = [];
@@ -261,6 +334,14 @@ export class World {
       }
     }
     this.static = b.build();
+    buildDressing(f, this.static);
+    // Vue en coupe : murs, piliers, torches et bannières entre la caméra et la salle filmée sont arasés
+    this.static.traverse((o) => {
+      const m = o as THREE.InstancedMesh;
+      if (!m.isMesh || !CUT_PIECES.has(m.userData.piece)) return;
+      m.material = Array.isArray(m.material) ? m.material.map(cutMaterial) : cutMaterial(m.material);
+      m.customDepthMaterial = CUT_DEPTH;
+    });
     this.scene.add(this.static);
     for (const c of forges) this.buildForge(c);
     // Socle sombre sous l'étage
@@ -268,7 +349,8 @@ export class World {
     const ys = f.rooms.map((r) => r.y);
     const w = (Math.max(...xs) - Math.min(...xs) + 1) * CELL + 8;
     const d = (Math.max(...ys) - Math.min(...ys) + 1) * CELL + 8;
-    const base = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), new THREE.MeshStandardMaterial({ color: 0x241c2e, roughness: 1 }));
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), new THREE.MeshStandardMaterial({ color: 0x1d1713, roughness: 1 }));
+    base.userData.disposeMaterial = true;
     base.position.set(((Math.min(...xs) + Math.max(...xs)) / 2) * CELL, -1.6, ((Math.min(...ys) + Math.max(...ys)) / 2) * CELL);
     base.receiveShadow = true;
     this.static.add(base);
@@ -309,6 +391,7 @@ export class World {
   /** Objets qui changent : coffres, piques, loot au sol, escalier. */
   private buildDynamic(f: FloorView) {
     this.dynamic.clear();
+    this.beam = null;
     for (const r of f.rooms) {
       const c = center(r);
       if (r.type === 'piege') {
@@ -327,9 +410,17 @@ export class World {
       }
       if (r.type === 'boss') {
         // L'escalier vers l'étage suivant : un trou qui s'illumine quand le boss est vaincu
-        const hole = new THREE.Mesh(HOLE_GEO, r.bossAlive ? HOLE_DARK : HOLE_LIT);
+        // ouvert seulement si le boss est mort ET que le scellé est levé
+        const open = !r.bossAlive && f.stairsInSec === 0;
+        const hole = new THREE.Mesh(HOLE_GEO, open ? HOLE_LIT : HOLE_DARK);
         hole.position.set(c.x, -0.1, c.z - 4);
         this.dynamic.add(hole);
+        if (open) {
+          this.beam = makeBeam();
+          this.beam.position.x = c.x;
+          this.beam.position.z = c.z - 4;
+          this.dynamic.add(this.beam);
+        }
       }
       if ((r.groundGold ?? 0) > 0) {
         const coins = this.assets.piece('coin_stack_large');
@@ -417,6 +508,7 @@ export class World {
         key, name, model, obj, mixer: new THREE.AnimationMixer(obj), current: null, base: m ? 'Idle' : 'Idle', roomId: r.id, path: [], yaw: 0,
         slow: false, wanderAt: performance.now() + 1500 + Math.random() * 4000, freePos: null, freeUntil: 0,
         hp: 0, maxHp: 1, boss: !!m?.boss, player: !!p, label, bubble: null, dyingUntil: 0, busyUntil: 0, color: '#fff',
+        bot: !!p?.bot, ring: null,
       };
       this.ents.set(key, e);
       this.play(e, 'Idle');
@@ -441,6 +533,16 @@ export class World {
     e.maxHp = p ? p.maxHp : m!.maxHp;
     e.color = p ? (p.traitor ? '#ff4d8d' : p.immune ? '#8cd0ff' : p.bot ? '#a9b8cc' : '#ffffff') : m!.boss ? '#ffcf4a' : '#ffb0b0';
     e.name = name + (p?.traitor ? ' ☠' : '');
+    // Anneau au sol : couleur de la classe (rose pour un traître), net pour un vrai joueur ; rouge sous un boss
+    const ringKey = p ? `${p.cls}:${!!p.bot}:${p.traitor}` : m?.boss ? 'boss' : '';
+    if (ringKey !== e.ringKey) {
+      if (e.ring) e.obj.remove(e.ring);
+      e.ring = null;
+      e.ringKey = ringKey;
+      if (p) e.ring = makeHalo(p.traitor ? 0xf25c9a : CLASS_COLOR[p.cls] ?? 0xffffff, !p.bot);
+      else if (m?.boss) e.ring = makeHalo(0xe5484d, true, 1.6 / Math.max(0.5, e.obj.scale.x));
+      if (e.ring) e.obj.add(e.ring);
+    }
   }
 
   /** Trajet de salle en salle en passant par les portes. */
@@ -576,6 +678,12 @@ export class World {
           }
         }
         if (src && src.player) setTimeout(() => this.play(src, 'Cheer', true), 500);
+        if (dst && dst.player) {
+          const at = dst.obj.position.clone();
+          const who = dst.name.replace(' ☠', '');
+          const human = !dst.bot;
+          setTimeout(() => this.addTomb(at, who, human), 2300);
+        }
         break;
       case 'levelup':
         if (src) {
@@ -603,6 +711,39 @@ export class World {
         }
         break;
     }
+  }
+
+  /** Une tombe là où un crawler est tombé ; elle reste jusqu'à la fin de l'étage. */
+  private addTomb(at: THREE.Vector3, name: string, human: boolean) {
+    const t = makeTomb(at.x * 7 + at.z * 13);
+    t.position.set(at.x, 0, at.z - 0.4);
+    this.scene.add(t);
+    let label: HTMLDivElement | null = null;
+    if (human) {
+      label = document.createElement('div');
+      label.className = 'tomb3d';
+      label.textContent = name;
+      this.labels.appendChild(label);
+    }
+    this.tombs.push({ obj: t, label });
+    while (this.tombs.length > 30) {
+      const old = this.tombs.shift()!;
+      this.scene.remove(old.obj);
+      old.label?.remove();
+    }
+  }
+
+  private applyMood(theme: string) {
+    const m = (this.mood = moodFor(theme));
+    this.hemi.color.setHex(m.sky);
+    this.hemi.groundColor.setHex(m.ground);
+    this.hemi.intensity = m.ambient;
+    (this.scene.background as THREE.Color).setHex(m.fog);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.setHex(m.fog);
+    fog.near = m.fogNear;
+    fog.far = m.fogFar;
+    (this.motes.material as THREE.PointsMaterial).color.setHex(m.mote);
   }
 
   bubble(name: string, text: string) {
@@ -665,6 +806,7 @@ export class World {
     if (this.followName) {
       const e = this.ents.get(`p:${this.followName}`);
       if (e) {
+        this.wide = false;
         this.roomShot(e.obj.position, 0.9);
         return;
       }
@@ -706,6 +848,7 @@ export class World {
       this.onShot?.('Plan large');
     }
     const room = this.shot.roomId !== null ? f.rooms.find((x) => x.id === this.shot.roomId) : undefined;
+    this.wide = !room;
     if (room) this.roomShot(center(room), 1);
     else this.wideShot(now);
   }
@@ -757,6 +900,8 @@ export class World {
       this.shake *= Math.exp(-dt * 6);
     }
     this.camera.lookAt(this.camLook);
+    CUT.uCutZ.value = this.wide ? 1e9 : this.camLook.z + 6.6;
+    this.atmosphere(dt, now);
     this.sun.position.set(this.camLook.x - 14, 34, this.camLook.z + 18);
     this.sun.target.position.copy(this.camLook);
     this.flash.intensity *= Math.exp(-dt * 5);
@@ -790,8 +935,10 @@ export class World {
       e.obj.rotation.y += df * Math.min(1, dt * 8);
     }
 
-    // Torches : les lumières suivent la caméra
+    // Torches : les lumières suivent la caméra (sauf les torches arasées par la vue en coupe)
+    for (const fl of this.flames) fl.sprite.visible = fl.pos.z <= CUT.uCutZ.value;
     const ranked = this.flames
+      .filter((f) => f.sprite.visible)
       .map((f) => ({ f, d: f.pos.distanceToSquared(this.camLook) }))
       .sort((a, b) => a.d - b.d);
     this.lights.forEach((l, i) => {
@@ -829,8 +976,65 @@ export class World {
       }
     }
 
-    this.renderer.render(this.scene, this.camera);
+    if (World.light) this.renderer.render(this.scene, this.camera);
+    else this.composer.render(dt);
     this.drawLabels(now);
+  }
+
+  /** Lumières des salles spéciales, poussière, rayon de l'escalier, et la dernière minute avant l'effondrement. */
+  private atmosphere(dt: number, now: number) {
+    const f = this.floor;
+    if (!f) return;
+    // Les 3 salles spéciales les plus proches du centre de l'image prennent leur couleur
+    const near = f.rooms
+      .map((r) => ({ r, col: roomColor(r), d: center(r).distanceToSquared(this.camLook) }))
+      .filter((x) => x.col !== null && x.d < 40 * 40)
+      .sort((a, b) => a.d - b.d);
+    this.moodLights.forEach((l, i) => {
+      const x = near[i];
+      if (!x) {
+        l.intensity = 0;
+        return;
+      }
+      const c = center(x.r);
+      l.color.setHex(x.col!);
+      l.position.set(c.x, 4.5, c.z + 1);
+      const pulse = x.r.type === 'boss' && x.r.bossAlive ? 0.85 + 0.15 * Math.sin(now / 300) : 1;
+      l.intensity = (x.r.type === 'piege' ? 26 : 45) * pulse;
+    });
+    // Poussière : un nuage qui suit la caméra, chaque grain dérive doucement
+    const arr = this.motes.geometry.attributes.position.array as Float32Array;
+    const rise = this.mood.rise;
+    for (let i = 0; i < arr.length; i += 3) {
+      arr[i] += Math.sin(now / 2300 + i) * 0.12 * dt;
+      arr[i + 1] += (rise + Math.sin(now / 1700 + i * 0.7) * 0.08) * dt;
+      if (arr[i + 1] > 7) arr[i + 1] = 0.2;
+      if (arr[i + 1] < 0.1) arr[i + 1] = 6.8;
+    }
+    this.motes.geometry.attributes.position.needsUpdate = true;
+    this.motes.position.set(this.camLook.x, 0, this.camLook.z);
+    // Rayon de l'escalier ouvert
+    if (this.beam) (this.beam.material as THREE.MeshBasicMaterial).opacity = 0.42 + 0.14 * Math.sin(now / 420);
+    // Dernière minute : la lumière rougit, le sol gronde, des gravats tombent
+    const rem = this.collapseAt === null ? Infinity : (this.collapseAt - now) / 1000;
+    if (rem > 0 && rem < 60) {
+      const k = 1 - rem / 60;
+      const red = new THREE.Color(this.mood.sky).lerp(new THREE.Color(0xff2a1a), 0.4 + 0.5 * k);
+      this.hemi.color.copy(red);
+      this.sun.color.setHex(0xaab8d8).lerp(new THREE.Color(0xff4a30), 0.5 + 0.4 * k);
+      this.hemi.intensity = this.mood.ambient * (0.9 + 0.25 * Math.max(0, Math.sin(now / 180)) * k);
+      if (Math.sin(now / 900) > 0.92) this.shake = Math.max(this.shake, 0.12 + 0.35 * k);
+      if (now > this.nextDebris) {
+        this.nextDebris = now + 600 - 450 * k;
+        const at = this.camLook.clone().add(new THREE.Vector3((Math.random() - 0.5) * 14, 9 + Math.random() * 3, (Math.random() - 0.5) * 12));
+        this.burst(at, 0x9a8f80, 14, 0.6, 9);
+      }
+    } else if (this.hemi.color.getHex() !== this.mood.sky) {
+      this.hemi.color.setHex(this.mood.sky);
+      this.hemi.intensity = this.mood.ambient;
+      this.sun.color.setHex(0xaab8d8);
+    }
+    void dt;
   }
 
   private drawLabels(now: number) {
@@ -866,6 +1070,14 @@ export class World {
         e.lastHtml = html;
         e.label.innerHTML = html;
       }
+    }
+    // Noms gravés sur les tombes des vrais joueurs (en plan rapproché seulement)
+    for (const t of this.tombs) {
+      if (!t.label) continue;
+      v.copy(t.obj.position).add(new THREE.Vector3(0, 1.5, 0)).project(this.camera);
+      const vis = close && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+      t.label.style.display = vis ? 'block' : 'none';
+      if (vis) t.label.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;
     }
   }
 }

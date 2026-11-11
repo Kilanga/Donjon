@@ -381,6 +381,7 @@ function tickHud() {
   await assets.load((d, t) => {
     $('load-bar').style.width = `${(100 * d) / t}%`;
   });
+  World.light = params.has('leger');
   worlds.push(new World($('c') as HTMLCanvasElement, $('labels'), assets), new World($('c2') as HTMLCanvasElement, $('labels2'), assets));
   world = worlds[0];
   for (const w of worlds) {

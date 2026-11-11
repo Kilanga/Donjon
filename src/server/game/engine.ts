@@ -1773,7 +1773,7 @@ export class Game {
       const voices = (no: number) => Object.values(rz.votes).filter((x) => x.no === no).reduce((s, x) => s + x.voices, 0);
       const mine = key ? rz.votes[key]?.no : undefined;
       return {
-        title: 'QUI MÉRITE UNE SECONDE CHANCE ?',
+        title: 'Qui mérite une seconde chance ?',
         options: [...this.state.graveyard]
           .sort((a, b) => voices(b.no) - voices(a.no) || b.snap.level - a.snap.level)
           .slice(0, 6)

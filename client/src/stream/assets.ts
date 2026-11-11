@@ -210,6 +210,7 @@ export class InstancedBuilder {
         inst.castShadow = true;
         inst.receiveShadow = true;
         inst.computeBoundingSphere();
+        inst.userData.piece = name;
         group.add(inst);
       });
     }
