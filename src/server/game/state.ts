@@ -62,11 +62,16 @@ export interface MonsterState {
   wanderer: boolean;
   boss: boolean;
   distracted: number; // tours de distraction (poulet)
+  asleep?: boolean; // l'ogre endormi : n'attaque pas tant qu'on ne le réveille pas
   aggro: string | null; // dernier joueur qui l'a frappé
 }
 
+export type RoomFeature = 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre';
+
 export interface RoomState {
   id: number;
+  feature?: RoomFeature; // salle spéciale (!search pour s'en servir)
+  featureUsedBy?: string[]; // qui s'en est déjà servi (autel, fontaine) ; prisonnier : libéré dès la première entrée
   x: number;
   y: number;
   type: RoomType;
@@ -78,6 +83,7 @@ export interface RoomState {
   mimic: boolean;
   trapArmed: boolean;
   trapRevealed: boolean;
+  trapSeen?: boolean; // quelqu'un a déjà vu (ou subi) le piège : la carte 2D peut l'afficher
   merchant: Item[];
   forge?: boolean; // la forge de l'étage (safe room du forgeron)
   stairs: boolean;

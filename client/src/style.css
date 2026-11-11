@@ -138,6 +138,10 @@ input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rg
 #bottom .card-title { font-size: 16px; margin-bottom: 4px; }
 #log, #chat { overflow-y: auto; flex: 1; font-size: 14px; }
 #log div { padding: 2px 0; border-bottom: 1px solid #e6e1d6; }
+#log.only-mine div:not([data-mine]) { display: none; }
+.log-tabs { display: inline-flex; gap: 4px; margin-left: auto; }
+.log-tabs button { font: 600 13px var(--sans, system-ui); padding: 2px 9px; border: 1px solid #cfc8b9; background: transparent; color: var(--muted); border-radius: 3px; cursor: pointer; }
+.log-tabs button.on { background: var(--text); border-color: var(--text); color: var(--panel); }
 #log .k-mort { color: var(--red); }
 #log .k-trahison { color: var(--pink); font-weight: 700; }
 #log .k-drole { color: #7c5200; }

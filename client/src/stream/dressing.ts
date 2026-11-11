@@ -3,6 +3,7 @@
 // et l'ambiance de chaque thème d'étage.
 import * as THREE from 'three';
 import type { FloorView, RoomView } from '../../../src/shared/types';
+import { roomDecor, type Prop } from '../../../src/shared/decor';
 
 const CELL = 16;
 const HALF = 6;
@@ -158,69 +159,51 @@ export function buildDressing(f: FloorView, group: THREE.Group) {
   for (const r of f.rooms) {
     const cx = r.x * CELL;
     const cz = r.y * CELL;
-    // Hasard propre à chaque salle (toujours le même pour une salle donnée) : rien n'est aligné ni répété
-    const rand = rng(hash(r.id * 7919 + f.n * 104729));
-    const between = (a: number, b: number) => a + rand() * (b - a);
-    const chance = (p: number) => rand() < p;
-    const inRoom = (margin = 1.2) => [cx + between(-HALF + margin, HALF - margin), cz + between(-HALF + margin, HALF - margin)] as const;
-    // Un point le long d'un mur (là où les choses s'entassent)
-    const alongWall = (): readonly [number, number, number] => {
-      const side = Math.floor(rand() * 4);
-      const t = between(-HALF + 1.3, HALF - 1.3);
-      const d = HALF - between(0.9, 1.6);
-      return side === 0 ? [cx + t, cz - d, 0] : side === 1 ? [cx - d, cz + t, 1] : side === 2 ? [cx + d, cz + t, 2] : [cx + t, cz + d, 3];
-    };
-    // Tapis : jamais centré ni droit, parfois deux qui se chevauchent
-    if (r.type === 'normale' && chance(0.22)) {
-      const [x, z] = inRoom(2.2);
-      const list = chance(0.5) ? rugsRed : rugsBlue;
-      list.push(mat4(x, 0.075, z, -Math.PI / 2, 0, between(-0.9, 0.9), between(2.2, 3.2), between(3.2, 4.6), 1));
-      if (chance(0.3)) rugsRed.push(mat4(x + between(-1.4, 1.4), 0.085, z + between(-1.2, 1.2), -Math.PI / 2, 0, between(-1.5, 1.5), between(1.6, 2.4), between(2.2, 3.2), 1));
-    }
-    // Os : en tas (là où quelque chose s'est mal fini), avec quelques os égarés
-    if (r.type === 'normale' || r.type === 'piege' || r.type === 'boss' || r.type === 'arene') {
-      const piles = r.type === 'boss' ? 3 : chance(0.55) ? 1 + Math.floor(rand() * 2) : 0;
-      for (let pI = 0; pI < piles; pI++) {
-        const [px, pz] = chance(0.6) ? alongWall() : inRoom(1.8);
-        const n = 3 + Math.floor(rand() * 7);
-        for (let i = 0; i < n; i++) {
-          const a = rand() * Math.PI * 2;
-          const d = Math.pow(rand(), 1.6) * 1.1;
-          bones.push(mat4(px + Math.cos(a) * d, 0.07 + rand() * 0.12, pz + Math.sin(a) * d, Math.PI / 2 + between(-0.3, 0.3), rand() * Math.PI, between(-0.3, 0.3), 1, between(0.5, 1.5), 1));
-        }
-        if (chance(0.7)) skulls.push(mat4(px + between(-0.4, 0.4), 0.18, pz + between(-0.4, 0.4), between(-0.4, 0.2), rand() * 6, between(-0.5, 0.5), 1, 0.9, 1.1));
+    // Le décor est tiré une seule fois (module partagé) : la carte 2D montre les mêmes objets aux mêmes endroits
+    const at = (p: Prop) => [cx + p.u * HALF, cz + p.v * HALF] as const;
+    for (const p of roomDecor(f.n, r, f.theme)) {
+      const rand = rng(p.seed);
+      const between = (a: number, b: number) => a + rand() * (b - a);
+      const [px, pz] = at(p);
+      switch (p.kind) {
+        case 'rug_red':
+        case 'rug_blue':
+          (p.kind === 'rug_red' ? rugsRed : rugsBlue).push(mat4(px, p.kind === 'rug_red' ? 0.085 : 0.075, pz, -Math.PI / 2, 0, p.rot, p.w! * HALF * 2, p.h! * HALF * 2, 1));
+          break;
+        case 'bones':
+          for (let i = 0; i < (p.n ?? 4); i++) {
+            const a = rand() * Math.PI * 2;
+            const d = Math.pow(rand(), 1.6) * 1.1;
+            bones.push(mat4(px + Math.cos(a) * d, 0.07 + rand() * 0.12, pz + Math.sin(a) * d, Math.PI / 2 + between(-0.3, 0.3), rand() * Math.PI, between(-0.3, 0.3), 1, between(0.5, 1.5), 1));
+          }
+          if (p.skull) skulls.push(mat4(px + between(-0.4, 0.4), 0.18, pz + between(-0.4, 0.4), between(-0.4, 0.2), rand() * 6, between(-0.5, 0.5), 1, 0.9, 1.1));
+          break;
+        case 'rubble':
+          for (let i = 0; i < (p.n ?? 5); i++) {
+            const a = rand() * Math.PI * 2;
+            const d = Math.pow(rand(), 1.3) * 1.3;
+            const sc = between(0.12, 0.42) * (1.2 - d * 0.4);
+            rubble.push(mat4(px + Math.cos(a) * d, sc * 0.6, pz + Math.sin(a) * d, rand() * 6, rand() * 6, rand() * 6, sc * between(0.8, 1.3), sc, sc * between(0.8, 1.4)));
+          }
+          break;
+        case 'puddle':
+          for (let i = 0; i < (p.n ?? 3); i++) puddles.push(mat4(px + between(-0.9, 0.9), 0.07 + i * 0.001, pz + between(-0.7, 0.7), -Math.PI / 2, 0, 0, between(0.35, 0.9), between(0.25, 0.7), 1));
+          break;
+        case 'scorch':
+          scorch.push(mat4(px, 0.072, pz, -Math.PI / 2, 0, p.rot, p.s, p.s * 0.8, 1));
+          break;
+        default:
+          break; // tonneaux, caisses, pièces : posés par le monde (pièces 3D)
       }
+    }
+    // Quelques os égarés (détail propre à la 3D)
+    if (r.type === 'normale' || r.type === 'piege' || r.type === 'boss' || r.type === 'arene') {
+      const rand = rng(hash(r.id * 7919 + f.n * 104729) ^ 0x5bd1e995);
       const strays = Math.floor(rand() * 4);
       for (let i = 0; i < strays; i++) {
-        const [x, z] = inRoom();
-        bones.push(mat4(x, 0.07, z, Math.PI / 2, rand() * Math.PI, 0, 1, between(0.5, 1.2), 1));
-      }
-    }
-    // Éboulis contre les murs : des pierres de toutes tailles
-    if (r.type !== 'safe' && chance(0.6)) {
-      const heaps = 1 + Math.floor(rand() * 2);
-      for (let k = 0; k < heaps; k++) {
-        const [px, pz] = alongWall();
-        const n = 4 + Math.floor(rand() * 8);
-        for (let i = 0; i < n; i++) {
-          const a = rand() * Math.PI * 2;
-          const d = Math.pow(rand(), 1.3) * 1.3;
-          const sc = between(0.12, 0.42) * (1.2 - d * 0.4);
-          rubble.push(mat4(px + Math.cos(a) * d, sc * 0.6, pz + Math.sin(a) * d, rand() * 6, rand() * 6, rand() * 6, sc * between(0.8, 1.3), sc, sc * between(0.8, 1.4)));
-        }
-      }
-    }
-    // Flaques : quelques taches irrégulières faites de disques qui se recouvrent (pas d'étage inondé : l'eau couvre tout)
-    if (!wet && r.type !== 'safe' && chance(0.4)) {
-      const [px, pz] = inRoom(2);
-      const n = 2 + Math.floor(rand() * 4);
-      for (let i = 0; i < n; i++) puddles.push(mat4(px + between(-0.9, 0.9), 0.07 + i * 0.001, pz + between(-0.7, 0.7), -Math.PI / 2, 0, 0, between(0.35, 0.9), between(0.25, 0.7), 1));
-    }
-    if (fire && chance(0.6)) {
-      const n = 1 + Math.floor(rand() * 4);
-      for (let i = 0; i < n; i++) {
-        const [x, z] = inRoom(1.5);
-        scorch.push(mat4(x, 0.072 + i * 0.001, z, -Math.PI / 2, 0, rand() * 6, between(0.6, 2), between(0.5, 1.6), 1));
+        const x = cx + (rand() * 2 - 1) * (HALF - 1.2);
+        const z = cz + (rand() * 2 - 1) * (HALF - 1.2);
+        bones.push(mat4(x, 0.07, z, Math.PI / 2, rand() * Math.PI, 0, 1, 0.5 + rand() * 0.7, 1));
       }
     }
   }
@@ -578,4 +561,65 @@ export function smokeSprite(): THREE.Sprite {
   });
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: _smokeTex, color: 0x6e6660, transparent: true, depthWrite: false, opacity: 0 }));
   return s;
+}
+
+// ----------------------------------------------------------- salles spéciales
+// Autel, fontaine, puits à vœux, chaînes du prisonnier : posés au milieu du mur nord (le puits au centre).
+
+const TORUS_GEO = new THREE.TorusGeometry(1.15, 0.32, 8, 20);
+const CHAIN_GEO = new THREE.TorusGeometry(0.09, 0.025, 4, 8);
+const CLOTH = new THREE.MeshStandardMaterial({ color: 0x8a1c22, roughness: 0.9 });
+const GOLD = new THREE.MeshStandardMaterial({ color: 0xd8a830, roughness: 0.35, metalness: 0.7 });
+const GLOW_WATER = new THREE.MeshStandardMaterial({ color: 0x3ab0d0, emissive: 0x1a6a8a, emissiveIntensity: 0.9, roughness: 0.05 });
+const DARK_WATER = new THREE.MeshStandardMaterial({ color: 0x0c1c28, roughness: 0.05, metalness: 0.5 });
+
+/** Renvoie l'endroit où se tient le prisonnier (pour le personnage), sinon null. */
+export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: number): THREE.Vector3 | null {
+  const z = cz - HALF + 1.4;
+  switch (kind) {
+    case 'autel': {
+      g.add(part(BOX, F_STONE, cx, 0.55, z, 2.6, 1.1, 1.2));
+      g.add(part(BOX, STONE, cx, 1.15, z, 2.9, 0.14, 1.4));
+      g.add(part(BOX, CLOTH, cx, 1.0, z + 0.62, 0.9, 0.9, 0.05));
+      g.add(part(CYL, GOLD, cx, 1.35, z, 0.22, 0.3, 0.22));
+      for (const dx of [-1.1, 1.1]) {
+        g.add(part(CANDLE_GEO, WAX, cx + dx, 1.38, z));
+        const fl = new THREE.Mesh(FLAME_GEO, FLAME);
+        fl.position.set(cx + dx, 1.6, z);
+        g.add(fl);
+      }
+      return null;
+    }
+    case 'fontaine': {
+      g.add(part(CYL, F_STONE, cx, 0.35, z + 0.4, 1.7, 0.7, 1.7));
+      g.add(part(CYL, GLOW_WATER, cx, 0.72, z + 0.4, 1.45, 0.05, 1.45));
+      g.add(part(CYL, STONE, cx, 1.3, z + 0.4, 0.28, 1.3, 0.28));
+      g.add(part(CYL, STONE, cx, 2.0, z + 0.4, 0.75, 0.16, 0.75));
+      g.add(part(CYL, GLOW_WATER, cx, 2.1, z + 0.4, 0.6, 0.04, 0.6));
+      return null;
+    }
+    case 'puits': {
+      const ring = part(TORUS_GEO, F_STONE, cx, 0.45, cz);
+      ring.rotation.x = Math.PI / 2;
+      ring.scale.set(1, 1, 2.4);
+      g.add(ring);
+      g.add(part(CYL, DARK_WATER, cx, 0.4, cz, 1.0, 0.05, 1.0));
+      for (const dx of [-1.4, 1.4]) g.add(part(BOX, WOOD_DARK, cx + dx, 1.3, cz, 0.18, 2.6, 0.18));
+      g.add(part(BOX, WOOD, cx, 2.55, cz, 3.1, 0.2, 0.22));
+      g.add(part(CYL, WOOD, cx + 0.3, 1.7, cz, 0.22, 0.32, 0.22));
+      return null;
+    }
+    case 'prisonnier': {
+      for (const dx of [-0.55, 0.55]) {
+        for (let i = 0; i < 7; i++) {
+          const link = part(CHAIN_GEO, F_METAL, cx + dx * (1 - i * 0.05), 2.4 - i * 0.17, cz - HALF + 0.55 + i * 0.03);
+          link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+          g.add(link);
+        }
+      }
+      return new THREE.Vector3(cx, 0, cz - HALF + 1.1);
+    }
+    default:
+      return null;
+  }
 }

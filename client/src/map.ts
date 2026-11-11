@@ -2,6 +2,7 @@
 import { normalize } from '../../src/shared/commands';
 import type { Dir, FloorView, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../src/shared/types';
 import { FxLayer } from './fx';
+import { rng, roomDecor, type Prop } from '../../src/shared/decor';
 import { CLASS_SPRITE, Tiles } from './tiles';
 
 const IW = 7; // largeur intérieure d'une salle (tuiles)
@@ -511,6 +512,114 @@ export class MapRenderer {
     this.tiles.tile(this.ctx, name, tx, ty);
   }
 
+  /** Le décor partagé avec le stream 3D : mêmes objets, mêmes places (tapis, os, éboulis, flaques, tonneaux…). */
+  private drawDecor(r: RoomView, ox: number, oy: number, theme: string) {
+    const { ctx, tiles } = this;
+    const X = (u: number) => (ox + 1 + ((u + 1) / 2) * IW) * PX;
+    const Y = (v: number) => (oy + 2 + ((v + 1) / 2) * IH) * PX;
+    const props = roomDecor(this.floor?.n ?? 1, r, theme);
+    // Au sol d'abord (tapis, flaques, brûlures), puis ce qui dépasse
+    const flat = (p: Prop) => p.kind === 'rug_red' || p.kind === 'rug_blue' || p.kind === 'puddle' || p.kind === 'scorch';
+    for (const p of [...props.filter(flat), ...props.filter((x) => !flat(x))]) {
+      const x = X(p.u);
+      const y = Y(p.v);
+      const rand = rng(p.seed);
+      ctx.save();
+      switch (p.kind) {
+        case 'rug_red':
+        case 'rug_blue': {
+          const w = p.w! * IW * PX;
+          const h = p.h! * IH * PX;
+          ctx.translate(x, y);
+          ctx.rotate(p.rot * 0.4); // vu de dessus, à plat : on garde un peu de l'angle
+          ctx.fillStyle = p.kind === 'rug_red' ? '#6e1c1f' : '#1d3766';
+          ctx.fillRect(-w / 2, -h / 2, w, h);
+          ctx.strokeStyle = p.kind === 'rug_red' ? '#c8933a' : '#d8c27a';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6);
+          break;
+        }
+        case 'puddle':
+          ctx.fillStyle = 'rgba(10,12,20,0.55)';
+          for (let i = 0; i < (p.n ?? 3); i++) {
+            ctx.beginPath();
+            ctx.ellipse(x + (rand() - 0.5) * PX * 0.9, y + (rand() - 0.5) * PX * 0.5, PX * (0.2 + rand() * 0.3), PX * (0.12 + rand() * 0.18), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        case 'scorch':
+          ctx.fillStyle = 'rgba(0,0,0,0.38)';
+          ctx.beginPath();
+          ctx.ellipse(x, y, PX * 0.35 * p.s, PX * 0.22 * p.s, p.rot, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'bones':
+          ctx.strokeStyle = '#d9cfb6';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          for (let i = 0; i < Math.min(6, p.n ?? 4); i++) {
+            const a = rand() * Math.PI;
+            const bx = x + (rand() - 0.5) * PX * 0.9;
+            const by = y + (rand() - 0.5) * PX * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(bx - Math.cos(a) * 5, by - Math.sin(a) * 3);
+            ctx.lineTo(bx + Math.cos(a) * 5, by + Math.sin(a) * 3);
+            ctx.stroke();
+          }
+          if (p.skull) tiles.drawAnchored(ctx, 'skull', x, y + PX * 0.3);
+          break;
+        case 'rubble':
+          for (let i = 0; i < Math.min(7, p.n ?? 5); i++) {
+            const rx = x + (rand() - 0.5) * PX * 1.1;
+            const ry = y + (rand() - 0.5) * PX * 0.7;
+            const rr = 2 + rand() * 4;
+            ctx.fillStyle = rand() < 0.5 ? '#6f645c' : '#857a70';
+            ctx.beginPath();
+            ctx.ellipse(rx, ry, rr, rr * 0.75, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        case 'barrel':
+        case 'barrel_stack': {
+          const k = p.kind === 'barrel_stack' ? 2 : 1;
+          for (let i = 0; i < k; i++) {
+            const bx = x + i * PX * 0.45;
+            const rad = PX * 0.32 * p.s;
+            ctx.fillStyle = '#6e4526';
+            if (p.tipped) {
+              ctx.fillRect(bx - rad * 1.3, y - rad * 0.8, rad * 2.6, rad * 1.6);
+              ctx.fillStyle = '#3d2614';
+              ctx.fillRect(bx - rad * 0.7, y - rad * 0.8, 3, rad * 1.6);
+              ctx.fillRect(bx + rad * 0.6, y - rad * 0.8, 3, rad * 1.6);
+            } else {
+              ctx.beginPath();
+              ctx.ellipse(bx, y, rad, rad * 0.9, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#3d2614';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.ellipse(bx, y, rad * 0.7, rad * 0.62, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+        case 'crates':
+          tiles.drawAnchored(ctx, 'crate', x - PX * 0.3, y + PX * 0.5);
+          tiles.drawAnchored(ctx, 'crate', x + PX * 0.35, y + PX * 0.5);
+          tiles.drawAnchored(ctx, 'crate', x, y);
+          break;
+        case 'box':
+          tiles.drawAnchored(ctx, 'crate', x, y + PX * 0.5);
+          break;
+        case 'coins':
+          tiles.drawAnchored(ctx, 'coin_anim_f0', x, y + PX * 0.3);
+          break;
+      }
+      ctx.restore();
+    }
+  }
+
   private drawRoom(r: RoomView, t: number, theme: string) {
     const { ctx, tiles } = this;
     const ox = r.x * CW;
@@ -565,6 +674,7 @@ export class MapRenderer {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect((ox + 1) * PX, (oy + 2) * PX, IW * PX, 4); // ombre sous la façade
+    this.drawDecor(r, ox, oy, theme);
 
     // Objets de la salle
     if (r.stairs) {
@@ -584,6 +694,61 @@ export class MapRenderer {
     }
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
     if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
+    if (r.feature) {
+      // Salles spéciales : l'objet au milieu du mur du haut
+      const fx = (midCol + 0.5) * PX;
+      const fy = (oy + 2.6) * PX;
+      if (r.feature === 'autel') {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(fx - PX * 0.9 + 3, fy + PX * 0.35, PX * 1.8, 6);
+        ctx.fillStyle = '#8d8a96';
+        ctx.fillRect(fx - PX * 0.9, fy - PX * 0.35, PX * 1.8, PX * 0.75);
+        ctx.fillStyle = '#b0adb8';
+        ctx.fillRect(fx - PX, fy - PX * 0.5, PX * 2, PX * 0.2);
+        ctx.fillStyle = '#a3161b';
+        ctx.fillRect(fx - PX * 0.2, fy - PX * 0.3, PX * 0.4, PX * 0.6);
+        for (const dx of [-0.75, 0.75]) {
+          ctx.fillStyle = '#efe6cf';
+          ctx.fillRect(fx + dx * PX - 2, fy - PX * 0.85, 4, PX * 0.35);
+          ctx.fillStyle = `rgba(255,200,80,${0.75 + 0.25 * Math.sin(t * 9 + dx)})`;
+          ctx.beginPath();
+          ctx.ellipse(fx + dx * PX, fy - PX * 0.95, 3, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (r.feature === 'fontaine') {
+        tiles.tile(ctx, 'wall_fountain_top_1', midCol, oy);
+        tiles.tile(ctx, 'wall_fountain_mid_blue_anim', midCol, oy + 1, t);
+        tiles.tile(ctx, 'wall_fountain_basin_blue_anim', midCol, oy + 2, t);
+        ctx.fillStyle = `rgba(120,220,255,${0.12 + 0.06 * Math.sin(t * 3)})`;
+        ctx.beginPath();
+        ctx.ellipse(fx, fy + PX * 0.2, PX * 1.4, PX * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (r.feature === 'puits') {
+        const wy = (midRow + 0.5) * PX;
+        ctx.fillStyle = '#6f645c';
+        ctx.beginPath();
+        ctx.ellipse(fx, wy, PX * 0.85, PX * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#132a3a';
+        ctx.beginPath();
+        ctx.ellipse(fx, wy - 2, PX * 0.55, PX * 0.36, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,214,90,${0.5 + 0.4 * Math.sin(t * 5)})`;
+        ctx.fillRect(fx - 2, wy - 4, 3, 3);
+      } else if (r.feature === 'prisonnier') {
+        ctx.strokeStyle = '#9a9aa8';
+        ctx.lineWidth = 2;
+        for (const dx of [-0.45, 0.45]) {
+          ctx.beginPath();
+          ctx.moveTo(fx + dx * PX, (oy + 1.8) * PX);
+          ctx.lineTo(fx + dx * PX * (r.featureDone ? 0.6 : 0.4), fy + (r.featureDone ? PX * 0.6 : 0));
+          ctx.stroke();
+        }
+        if (!r.featureDone) tiles.drawAnchored(ctx, 'elf_f_idle_anim', fx, fy + PX * 0.6, t);
+      } else if (r.feature === 'ogre') {
+        for (let i = 0; i < 5; i++) tiles.drawAnchored(ctx, 'coin_anim_f0', fx + (i - 2) * 7, fy + PX * 0.4 + (i % 2) * 4);
+      }
+    }
     if (r.crypt) {
       // La crypte : une pierre tombale par éliminé qui attend qu'on le ressuscite, et quelques crânes
       tiles.drawAnchored(ctx, 'skull', (ox + 1.5) * PX, (oy + IH + 0.5) * PX);
@@ -624,7 +789,6 @@ export class MapRenderer {
     }
     if ((r.ground?.length ?? 0) > 0) tiles.drawAnchored(ctx, 'skull', (ox + IW - 0.2) * PX, (oy + IH + 1.6) * PX);
     if ((r.groundGold ?? 0) > 0) tiles.drawAnchored(ctx, 'coin_anim', (ox + IW - 0.9) * PX, (oy + IH + 1.6) * PX, t);
-    if (r.type === 'normale' && hash(r.id * 7) % 5 === 0) tiles.drawAnchored(ctx, 'crate', (ox + 1.5) * PX, (oy + IH + 2) * PX);
 
     // Brouillard : salles connues mais pas surveillées
     if (!r.current && !r.players && !r.monsters) {
@@ -653,7 +817,13 @@ export class MapRenderer {
       this.fx.lastPos.set(key, p);
       this.visibleKeys.add(key);
       const o = this.fx.offset(key, now);
-      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + i * 0.37, flip, now);
+      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + (m.asleep ? 0 : i * 0.37), flip, now);
+      if (m.asleep) {
+        // Il ronfle : des « z » qui montent
+        ctx.font = `700 ${Math.round(11 + 3 * ((t * 0.7) % 1))}px 'Alegreya Sans', system-ui, sans-serif`;
+        ctx.fillStyle = `rgba(200,220,255,${1 - ((t * 0.7) % 1)})`;
+        ctx.fillText('z', p.x + 14 + 8 * ((t * 0.7) % 1), p.y - 30 - 16 * ((t * 0.7) % 1));
+      }
       this.label(m.name, p.x, p.y - (m.boss ? 38 : 20), m.boss ? '#ffcf4a' : '#ff9a9a', m.hp, m.maxHp);
     });
     ps.forEach((pl, i) => {
@@ -718,7 +888,7 @@ export class MapRenderer {
   private drawStairsSign(x: number, y: number, w: number, h: number, t: number, seal: number, bossAlive: boolean) {
     const { ctx } = this;
     const dpr = devicePixelRatio;
-    const status = seal < 0 ? '🔒 sealed (season not started)' : seal > 0 ? `🔒 opens in ${Math.floor(seal / 60)}:${String(Math.floor(seal % 60)).padStart(2, '0')}` : bossAlive ? '⚔ beat the boss to get through' : '🔓 OPEN: !descend';
+    const status = seal < 0 ? '🔒 sealed (timer not started)' : seal > 0 ? `🔒 opens in ${Math.floor(seal / 60)}:${String(Math.floor(seal % 60)).padStart(2, '0')}` : bossAlive ? '⚔ beat the boss to get through' : '🔓 OPEN: !descend';
     const open = seal === 0 && !bossAlive;
     const color = open ? '#ffd65a' : '#c9a8ff';
     const m = 40 * dpr;
@@ -808,6 +978,12 @@ export class MapRenderer {
     else if (r.type === 'tresor') { color = '#e0a826'; icon = r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'coin'; dash = true; dim = r.chest !== 'ferme'; }
     else if (r.type === 'arene') { color = '#b07cff'; icon = 'weapon_duel_sword'; }
     else if (r.chest === 'ferme') icon = 'chest_full_open_anim_f0';
+    if (r.feature) {
+      // Salles spéciales : pastille turquoise (estompée une fois utilisée)
+      color = '#3fa7a0';
+      icon = { autel: 'flask_big_red', fontaine: 'flask_big_blue', puits: 'coin_anim_f0', prisonnier: 'ui_heart_empty', ogre: 'ogre_idle_anim_f0' }[r.feature];
+      dim = !!r.featureDone;
+    }
     if (r.stairs) icon = null; // l'escalier a déjà son panneau
     if (color) {
       const { ctx } = this;

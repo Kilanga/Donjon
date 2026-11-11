@@ -8,12 +8,12 @@ import {
   CLASSES, CRIT_TEXTS, DEATH_TEXTS, FIASCO_TEXTS, GAG_TEXTS, RARITY_LABEL, SEARCH_FAIL_TEXTS, STAT_LABELS, TRAP_TEXTS,
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
-import { BOSSES, FORGE_LINES, FORGE_MAX, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
+import { BOSSES, FEATURE_DESC, FORGE_LINES, FORGE_MAX, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS, SLEEPING_OGRE } from './data.js';
 import { THEME_EFFECTS, THEME_LABEL } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
-import { emptyState, migrate, type FlashBet, type FloorState, type GameState, type Grave, type MonsterState, type PlayerState, type RoomState, type Wallet } from './state.js';
+import { emptyState, migrate, type FlashBet, type FloorState, type GameState, type Grave, type MonsterState, type PlayerState, type RoomFeature, type RoomState, type Wallet } from './state.js';
 
 export const INVENTORY_MAX = 8;
 export const ALLIANCE_MAX = 4;
@@ -168,6 +168,21 @@ export class Game {
         f.cryptRoom = crypt.id;
         crypt.desc = 'A crypt. Fresh graves line the walls, and some of them still seem to be waiting for someone.';
       }
+      // Salles spéciales : 2 par étage (3 sur les grands), toutes différentes
+      const kinds = this.rng.shuffle<RoomFeature>(['autel', 'fontaine', 'puits', 'prisonnier', 'ogre']).slice(0, f.rooms.length >= 30 ? 3 : 2);
+      const spots = this.rng.shuffle(f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom && r.id !== f.cryptRoom));
+      kinds.forEach((k, i) => {
+        const r = spots[i];
+        if (!r) return;
+        r.feature = k;
+        r.desc = FEATURE_DESC[k];
+        if (k === 'ogre') {
+          f.monsters = f.monsters.filter((m) => m.roomId !== r.id);
+          const ogre = spawnMonster(SLEEPING_OGRE, n, r.id, this.rng, this.nextId);
+          ogre.asleep = true;
+          f.monsters.push(ogre);
+        }
+      });
       const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: beat the boss and take the exit to become a Legend. When it collapses, the season is over! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out (${f.rooms.length} rooms, theme: ${THEME_LABEL[f.theme] ?? f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
@@ -504,7 +519,7 @@ export class Game {
       for (const m of f.monsters) {
         if (m.hp <= 0) continue;
         const r = f.rooms[m.roomId];
-        if (r.type === 'safe') continue;
+        if (r.type === 'safe' || m.asleep) continue;
         if (this.playersIn(f.n, m.roomId).length === 0) continue;
         intents.push({ init: this.rng.die(20) + m.atk, base: m.atk, tie: this.rng.next(), attacker: { kind: 'monster', m } });
       }
@@ -631,10 +646,10 @@ export class Game {
     const others = this.playersIn(p.floor, p.roomId).filter((o) => o.key !== p.key);
     const a = normalize(arg).replace(/^@/, '');
     if (!a) {
-      if (monsters.length) {
-        const aggro = monsters.find((m) => m.aggro === p.key);
-        return { target: { kind: 'monster', m: aggro ?? monsters[0] } };
-      }
+      // Les monstres éveillés d'abord ; l'ogre endormi seulement si on le vise (les PNJ le laissent dormir)
+      const awake = monsters.filter((m) => !m.asleep);
+      const pick = monsters.find((m) => m.aggro === p.key && !m.asleep) ?? awake[0] ?? (p.bot || silent ? undefined : monsters[0]);
+      if (pick) return { target: { kind: 'monster', m: pick } };
       if (silent || p.bot) return {}; // les PNJ figurants ne s'en prennent jamais aux joueurs
       // Pas de monstre : un joueur de la salle au hasard (ni allié, ni protégé), sauf en safe room
       if (this.room(p).type === 'safe') return { error: 'No fighting in a safe room. The merchant insists.' };
@@ -694,6 +709,14 @@ export class Game {
       return;
     }
 
+    // Frapper un ogre endormi : bonus de surprise, mais il se réveille
+    let sneak = 0;
+    if (def.kind === 'monster' && def.m.asleep) {
+      def.m.asleep = false;
+      sneak = 5;
+      this.roomEvent(ap, floorN, roomId, 'drole', `${def.m.name} wakes up with a start. And he is NOT a morning person.`, 40);
+    }
+
     // Jet d'attaque
     let bonus: number;
     let stat: StatId = 'for';
@@ -705,12 +728,13 @@ export class Game {
         ap.buffs.mirror = false;
       }
       if (treachery) bonus += 5;
+      bonus += sneak;
     } else bonus = (att as { m: MonsterState }).m.atk;
     if (this.state.floors[floorN]?.theme === 'plongé dans le noir') bonus -= 2; // on y voit mal
     const nat = this.rng.die(20);
     const total = nat + bonus;
     // La magie passe en partie à travers les défenses : le mage ignore 3 points de défense d'un monstre
-    const defRoll = dp ? this.rng.die(20) + this.defense(dp) : this.rng.die(20) + Math.max(0, (def as { m: MonsterState }).m.def - (ap?.cls === 'mage' ? 3 : 0));
+    const defRoll = dp ? this.rng.die(20) + this.defense(dp) : this.rng.die(20) + (def as { m: MonsterState }).m.def - (ap?.cls === 'mage' ? 3 : 0);
     const margin = total - defRoll;
     const dice = `(${total} vs ${defRoll})`;
     const actors = [ap?.key, dp?.key].filter(Boolean) as string[];
@@ -830,7 +854,7 @@ export class Game {
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
-    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
+    if (!m.boss && m.kind !== 'mimique' && m.kind !== 'ogre_dormeur') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
     if (!killer) return;
     killer.kills++;
     killer.gold += m.gold;
@@ -942,7 +966,7 @@ export class Game {
         p.buffs.mirror = true;
         return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} admires themself in a pocket mirror. Confidence maxed out (+3 to the next roll).`, 10);
       case 'duck':
-        if (r.trapArmed) r.trapRevealed = true;
+        if (r.trapArmed) r.trapRevealed = r.trapSeen = true;
         return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} sets a whistling toad on the floor. ${r.trapArmed ? 'It whistles its head off: a trap is revealed!' : 'It yawns. No trap here.'}`, 10);
       case 'crown':
         this.gainXp(p, xpNext(p.level) - p.xp);
@@ -1067,6 +1091,7 @@ export class Game {
     const f = this.state.floors[p.floor];
     // Ce qui traîne au sol (loot d'un mort, pluie d'or) passe avant tout : fouiller le ramasse
     if (r.ground.length || r.groundGold) return this.doPickup(p, arg);
+    if (r.feature) return this.useFeature(p, r, f);
     if (r.type === 'safe') return this.say(p, 'Nothing to search in here. The merchant keeps the place spotless.');
     if (r.type === 'tresor' && r.chest === 'ferme') {
       r.chest = 'ouvert';
@@ -1085,6 +1110,7 @@ export class Game {
       return this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} opens the chest: ${gold} gold, ${loot.map((i) => `${i.name} (${RARITY_LABEL[i.rarity]})`).join(', ')}!`, best ? 50 : 15);
     }
     if (r.type === 'piege' && r.trapArmed) {
+      r.trapSeen = true;
       const c = this.check(p, 'int', 12 + f.n);
       if (c.ok) {
         r.trapArmed = false;
@@ -1113,6 +1139,7 @@ export class Game {
     // Étage 1 : 1-3 PV (on apprend), étage 2 : 1-5, ensuite d6 + moitié de l'étage
     const dmg = f.n === 1 ? this.rng.die(3) : f.n === 2 ? this.rng.die(5) : this.rng.die(6) + half(f.n);
     const r = this.room(p);
+    r.trapSeen = true;
     if (this.rng.chance(0.5)) r.trapArmed = false; // un piège sur deux ne se réarme pas
     const text = this.rng.pick(TRAP_TEXTS).replace('{p}', p.name) + ` (−${dmg} HP)`;
     this.roomEvent(p, p.floor, p.roomId, 'piege', text, 30, [], { kind: 'trap', dst: `p:${p.name}` });
@@ -1142,7 +1169,17 @@ export class Game {
     if (nr.type === 'boss' && f.monsters.some((m) => m.boss && m.roomId === nr.id)) {
       this.emit({ floor: f.n, roomId: nr.id, kind: 'combat', text: `${p.name} walks into the boss room. Brave. Or reckless.`, scope: 'etage', actors: [p.key], drama: 30 });
     }
+    const sleeper = f.monsters.find((m) => m.asleep && m.roomId === nr.id);
+    if (sleeper) {
+      const c = this.check(p, 'agi', 9 + f.n);
+      if (!c.ok) {
+        sleeper.asleep = false;
+        sleeper.aggro = p.key;
+        this.roomEvent(p, f.n, nr.id, 'drole', `${p.name} steps on a squeaky flagstone (${c.total}). ${sleeper.name} opens one eye. Then the other.`, 45);
+      }
+    }
     if (nr.type === 'piege' && nr.trapArmed && !nr.trapRevealed) {
+      nr.trapSeen = true;
       const c = this.check(p, 'agi', 11 + f.n + (this.wet(f.n, nr.id) ? 2 : 0)); // sous l'eau, on ne le voit pas venir
       if (c.ok) this.roomEvent(p, f.n, nr.id, 'piege', `${p.name} narrowly dodges a trap on the way in (${c.total}).`, 10);
       else this.springTrap(p, f);
@@ -1397,6 +1434,95 @@ export class Game {
     this.state.players[g.key] = p;
     this.discover(p);
     this.startTimer(f, p);
+  }
+
+  /** Salles spéciales : !search s'en sert. */
+  private useFeature(p: PlayerState, r: RoomState, f: FloorState) {
+    const used = (r.featureUsedBy ??= []);
+    const ev = (text: string, drama: number, kind: GameEvent['kind'] = 'drole') => this.roomEvent(p, f.n, r.id, kind, text, drama);
+    switch (r.feature) {
+      case 'autel': {
+        if (used.includes(p.key)) return this.say(p, 'You already prayed here. This god only answers once.');
+        used.push(p.key);
+        const c = this.check(p, 'cha', 12);
+        if (c.total >= 15) {
+          const heal = Math.ceil(p.maxHp / 2);
+          p.hp = Math.min(p.maxHp, p.hp + heal);
+          p.buffs.mirror = true;
+          return ev(`${p.name} prays at the altar (${c.total}): BLESSED! +${heal} HP and +3 on the next roll.`, 30, 'niveau');
+        }
+        if (c.total >= 9) return ev(`${p.name} prays at the altar (${c.total}). The god is busy. Leave a message after the beep.`, 5);
+        const lost = Math.ceil(p.gold * 0.2);
+        p.gold -= lost;
+        ev(`${p.name} prays at the altar (${c.total}) and gets CURSED: −${lost} gold and a lightning bolt in the backside.`, 35, 'piege');
+        return this.damagePlayer(p, 2 + f.n, 'a vengeful god', null);
+      }
+      case 'fontaine': {
+        if (used.includes(p.key)) return this.say(p, 'You already drank from it. Your stomach says no.');
+        used.push(p.key);
+        if (this.rng.chance(0.7)) {
+          const heal = this.rng.die(6) + 2 * f.n;
+          p.hp = Math.min(p.maxHp, p.hp + heal);
+          return ev(`${p.name} drinks from the fountain: refreshing! +${heal} HP.`, 5, 'loot');
+        }
+        const dmg = Math.min(p.hp - 1, this.rng.die(4) + f.n);
+        p.hp -= dmg;
+        return ev(`${p.name} drinks from the fountain… it was NOT water. −${dmg} HP and a very green face.`, 25, 'piege');
+      }
+      case 'puits': {
+        const cost = 10 * f.n;
+        if (p.gold < cost) return this.say(p, `A wish costs ${cost} gold here. You have ${p.gold}.`);
+        p.gold -= cost;
+        const roll = this.rng.next();
+        if (roll < 0.45) {
+          const it = randomLoot(this.rng, this.nextId, f.n, false, 'rare');
+          this.giveItem(p, it);
+          return ev(`${p.name} throws ${cost} gold into the well and makes a wish… ${it.name} floats back up!`, 25, 'loot');
+        }
+        if (roll < 0.75) {
+          p.gold += cost * 2;
+          return ev(`${p.name} throws ${cost} gold into the well… and the well coughs back ${cost * 2}. Lucky!`, 20, 'loot');
+        }
+        return ev(`${p.name} throws ${cost} gold into the well. Splash. That's it. That's the wish.`, 15);
+      }
+      case 'prisonnier': {
+        if (used.length) return this.say(p, 'The chains are empty now.');
+        used.push(p.key);
+        if (this.rng.chance(0.75)) {
+          const gold = 15 * f.n;
+          const it = randomLoot(this.rng, this.nextId, f.n);
+          p.gold += gold;
+          this.giveItem(p, it);
+          this.gainXp(p, 30);
+          r.desc = 'Broken chains hang from the wall. Someone owes ' + p.name + ' one.';
+          return ev(`${p.name} frees the prisoner, who hands over ${gold} gold and ${it.name} before running off. +30 XP.`, 30, 'loot');
+        }
+        const pool = MONSTERS.filter((t) => t.minFloor <= f.n && !t.boss);
+        const m = spawnMonster(this.rng.pick(pool), f.n, r.id, this.rng, this.nextId);
+        m.aggro = p.key;
+        f.monsters.push(m);
+        r.desc = 'Broken chains hang from the wall. It was a trap all along.';
+        return ev(`${p.name} frees the prisoner… who drops the act: it's ${m.name}! It was a trap!`, 50, 'combat');
+      }
+      case 'ogre': {
+        const ogre = f.monsters.find((m) => m.kind === 'ogre_dormeur' && m.roomId === r.id && m.hp > 0);
+        if (!ogre) return this.say(p, 'Only crumbs and fleas are left on the pile.');
+        if (!ogre.asleep) return this.say(p, `${ogre.name} is awake. Stealing from him now would be… bold.`);
+        if (used.includes(p.key)) return this.say(p, 'You already helped yourself. Don\'t push your luck.');
+        used.push(p.key);
+        const c = this.check(p, 'agi', 12 + f.n);
+        if (c.ok) {
+          const gold = 20 * f.n;
+          p.gold += gold;
+          return ev(`${p.name} tiptoes around the snoring ogre and swipes ${gold} gold (${c.total}). Smooth.`, 25, 'loot');
+        }
+        ogre.asleep = false;
+        ogre.aggro = p.key;
+        return ev(`${p.name} reaches for the loot (${c.total})… and drops a goblet. ${ogre.name} WAKES UP.`, 55, 'combat');
+      }
+      default:
+        return this.say(p, 'Nothing special here.');
+    }
   }
 
   /** !resurrect <nom|n°> [gold|hp] dans la crypte : le sauveteur paie 50 × l'étage en or, ou la moitié de ses PV actuels. */
@@ -2031,16 +2157,22 @@ export class Game {
 
   private roomView(f: FloorState, r: RoomState, current: boolean, withOccupants: boolean, viewer: PlayerState | null): RoomView {
     const v: RoomView = {
-      id: r.id, x: r.x, y: r.y, type: r.type, doors: r.doors, current, stairs: r.stairs,
+      // Un piège que personne n'a encore vu passe pour une salle ordinaire (sauf pour la régie et le stream)
+      id: r.id, x: r.x, y: r.y, type: r.type === 'piege' && !r.trapSeen && viewer ? 'normale' : r.type, doors: r.doors, current, stairs: r.stairs,
       bossAlive: f.monsters.some((m) => m.boss && m.roomId === r.id && m.hp > 0), chest: r.chest, searched: !!r.searchedBy,
       trapArmed: r.trapArmed && (r.trapRevealed || !viewer), merchant: r.type === 'safe' && !r.forge, ...(r.forge ? { forge: true } : {}),
     };
     if (current || !viewer) v.desc = r.desc;
     if (withOccupants) {
       v.players = Object.values(this.state.players).filter((o) => o.floor === f.n && o.roomId === r.id && (o.alive || o.key === viewer?.key)).map((o) => this.publicPlayer(o, viewer));
-      v.monsters = this.monstersIn(f.n, r.id).map((m): MonsterView => ({ id: m.id, name: m.name, kind: m.kind, sprite: m.sprite, hp: m.hp, maxHp: m.maxHp, boss: m.boss }));
+      v.monsters = this.monstersIn(f.n, r.id).map((m): MonsterView => ({ id: m.id, name: m.asleep ? `${m.name} (asleep)` : m.name, kind: m.kind, sprite: m.sprite, hp: m.hp, maxHp: m.maxHp, boss: m.boss, ...(m.asleep ? { asleep: true } : {}) }));
       v.ground = r.ground;
       v.groundGold = r.groundGold;
+    }
+    if (r.feature) {
+      v.feature = r.feature;
+      const used = r.featureUsedBy ?? [];
+      v.featureDone = r.feature === 'prisonnier' ? used.length > 0 : r.feature === 'ogre' ? !f.monsters.some((m) => m.roomId === r.id && m.asleep) : !!viewer && used.includes(viewer.key);
     }
     if (f.cryptRoom === r.id) v.crypt = this.state.graveyard.filter((g) => g.cryptFloor === f.n).map((g) => ({ no: g.no, name: g.name, level: g.snap.level, cls: g.snap.cls }));
     return v;

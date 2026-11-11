@@ -124,6 +124,7 @@ export const HELP_TEXT = [
   '!use <item> / !equip <item> — use or equip',
   '!shop, !buy <#>, !sell <item> — trade (safe room)',
   '!rest — heal up (safe room)',
+  'Strange rooms (altar, fountain, wishing well, prisoner, sleeping ogre): !search to use them',
   '!forge weapon / !forge armor — upgrade your gear at the blacksmith (+1, up to +3, for gold)',
   '!talk <message> — chat with the merchant (safe room)',
   '!ally <player> / !leave — form or leave an alliance',

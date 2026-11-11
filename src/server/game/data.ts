@@ -126,6 +126,16 @@ export const BOSSES: MonsterTpl[] = [
   { kind: 'gros_demon', names: ['Baal-Zephor, Lord of the Abyss'], sprite: 'big_demon_idle_anim', hp: 26, atk: 4, def: 2, dmg: 7, xp: 220, gold: [50, 90], minFloor: 1, boss: true },
 ];
 
+/** Salles spéciales : description (avec le mode d'emploi) et monstre de l'ogre endormi. */
+export const FEATURE_DESC: Record<string, string> = {
+  autel: 'An altar to a forgotten god, still warm. !search to pray: blessing or curse, depending on your Charisma.',
+  fontaine: 'A fountain of glowing water. !search to drink: it heals… most of the time.',
+  puits: 'A wishing well. !search to throw in some gold (10 × the floor) and make a wish.',
+  prisonnier: 'Someone is chained to the wall, begging. !search to free them. Probably a good idea.',
+  ogre: 'An ogre is snoring on a pile of loot. !search to steal some of it (Dexterity). Or wake him up the hard way.',
+};
+export const SLEEPING_OGRE: MonsterTpl = { kind: 'ogre_dormeur', names: ['Snorlug, the Sleeping Ogre'], sprite: 'ogre_idle_anim', hp: 30, atk: 5, def: 2, dmg: 9, xp: 160, gold: [30, 60], minFloor: 1 };
+
 export const THEMES = ['classique', 'inondé', 'en feu', 'plongé dans le noir', 'moisi', 'hanté'];
 
 export const ROOM_DESCRIPTIONS: Record<string, string[]> = {

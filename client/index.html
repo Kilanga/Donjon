@@ -51,7 +51,7 @@
 
   <footer id="bottom">
     <div class="card log-card">
-      <div class="card-title">Log</div>
+      <div class="card-title">Log <span class="log-tabs"><button data-logtab="all" class="on">Everything</button><button data-logtab="mine">My journal</button></span></div>
       <div id="log"></div>
     </div>
     <div class="card chat-card">
@@ -105,7 +105,8 @@
         <div><code>!bug what's wrong</code> report a problem · <code>!feedback</code> share your opinion</div>
       </div>
       <p><b>Good to know:</b> safe rooms (blue banner) are protected. When you arrive or respawn, other players can't touch you for 1 min, but attacking one of them ends your protection. Attacking an ally is a <b>betrayal</b>: big bonus, stolen gold, and everyone will know. When you die, your loot stays on the floor and you come back 5 turns later.</p>
-      <p><b>On the map:</b> rooms you've visited keep a colored outline and a crest. Blue: safe room. Gold: forge, or treasure room (dotted). Red: boss room, or trap (solid if armed, dotted if disarmed). Purple: arena. The red dot shows how many monsters you saw last time, and the coin marks loot left on the floor.</p>
+      <p><b>On the map:</b> rooms you've visited keep a colored outline and a crest. Blue: safe room. Gold: forge, or treasure room (dotted). Red: boss room, or a trap someone has found (solid if armed, dotted if disarmed). Purple: arena. Teal: strange room (faded once used). The red dot shows how many monsters you saw last time, and the coin marks loot left on the floor.</p>
+      <p><b>Strange rooms:</b> altars, fountains, wishing wells, chained prisoners and sleeping ogres. Use <code>!search</code> in them, and read the room description first. Eliminated players rest in the <b>crypt</b> of the next floor: <code>!resurrect name</code> there brings them back (gold, or half your HP).</p>
       <p><b>Dice:</b> every action = d20 + your stat + half your level. A natural 20 is a crit, a natural 1 is a blooper. Everything shows up in the log.</p>
       <p class="muted">Mouse and keyboard: WASD (ZQSD on AZERTY) or arrows (or click the floor) to walk around your room; walk into a door to change rooms at the end of the turn; click a monster to attack it. F search, E attack, ? this help. Type without "!" to talk: your message shows up as a speech bubble.</p>
       <button class="close go">Let's go!</button>

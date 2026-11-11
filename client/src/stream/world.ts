@@ -6,7 +6,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { buildDressing, buildForgeShop, buildSafeRoom, smokeSprite, rng, type ForgeSpots, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
+import { buildDressing, buildFeature, buildForgeShop, buildSafeRoom, smokeSprite, rng, type ForgeSpots, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
+import { roomDecor, type PropKind } from '../../../src/shared/decor';
 
 /** Pièces de décor coupées quand elles sont entre la caméra et la salle filmée (vue en coupe). */
 const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue']);
@@ -130,6 +131,7 @@ interface Flame {
 
 interface Keeper {
   obj: THREE.Object3D;
+  prisonerRoom?: number; // le prisonnier enchaîné : disparaît une fois libéré
   mixer: THREE.AnimationMixer;
   model: CharName;
   current: THREE.AnimationAction | null;
@@ -276,6 +278,7 @@ export class World {
     }
     this.buildDynamic(f);
     this.syncCrypt(f);
+    for (const k of this.keepers) if (k.prisonerRoom !== undefined) k.obj.visible = !f.rooms.find((r) => r.id === k.prisonerRoom)?.featureDone;
     this.syncEntities(f, changed);
   }
 
@@ -317,7 +320,7 @@ export class World {
     this.flames = [];
     for (const fx of this.forges) for (const sm of fx.smoke) this.scene.remove(sm.s);
     const forges: ForgeFx[] = [];
-    const keepers: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx }[] = [];
+    const keepers: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx; prisonerRoom?: number }[] = [];
     const extra = new THREE.Group(); // pièces faites à la main (étagères, fioles, plantes…)
     const b = new InstancedBuilder(this.assets);
     const byPos = new Map(f.rooms.map((r) => [`${r.x},${r.y}`, r]));
@@ -398,29 +401,22 @@ export class World {
           b.add('banner_shield_blue', c.x + 3.5, 0, c.z - HALF);
           for (const [x, z] of [corner(-4.6, -4.4), corner(4.6, -4.4), corner(-4.6, 4.4), corner(4.6, 4.4)]) b.add('pillar_decorated', x, 0, z, 0, [0.6, 0.6, 0.6]);
           break;
-        case 'tresor': {
-          const n = 2 + Math.floor(rand() * 3);
-          for (let i = 0; i < n; i++) {
-            const s = 0.35 + rand() * 0.45;
-            b.add('coin_stack_large', c.x + jit(4.3), 0, c.z - 1.5 + jit(3.2), rand() * 6, [s, s, s]);
-          }
+        default:
           break;
-        }
-        default: {
-          // Bric-à-brac le long des murs : nombre, place, angle au hasard ; parfois un tonneau renversé
-          const props: PieceName[] = ['barrel_large', 'barrel_small_stack', 'crates_stacked', 'box_small_decorated', 'barrel_large', 'box_small_decorated'];
-          const n = Math.floor(rand() * 4);
-          for (let i = 0; i < n; i++) {
-            const name = props[Math.floor(rand() * props.length)];
-            const side = Math.floor(rand() * 4);
-            const t = jit(HALF - 1.6);
-            const d = HALF - 1.1 - rand() * 0.8;
-            const [x, z] = side === 0 ? [c.x + t, c.z - d] : side === 1 ? [c.x - d, c.z + t] : side === 2 ? [c.x + d, c.z + t] : [c.x + t, c.z + d];
-            const s = 0.65 + rand() * 0.3;
-            const tipped = name === 'barrel_large' && rand() < 0.35;
-            b.add(name, x, tipped ? 0.55 * s : 0, z, rand() * 6, [s, s, s], tipped ? Math.PI / 2 : 0);
-          }
-        }
+      }
+      // Salles spéciales : autel, fontaine, puits, prisonnier enchaîné, trésor de l'ogre
+      if (r.feature) {
+        const spot = buildFeature(extra, r.feature, c.x, c.z);
+        if (spot) keepers.push({ pos: spot, model: 'voleur', tint: 0x9a9088, prisonerRoom: r.id });
+        if (r.feature === 'ogre') for (const [dx, s] of [[-1.2, 0.8], [0.3, 1], [1.4, 0.7]] as const) b.add('coin_stack_large', c.x + dx, 0, c.z - HALF + 1.6, dx, [s, s, s]);
+        if (r.feature === 'autel') this.addFlame(new THREE.Vector3(c.x, 1.8, c.z - HALF + 1.6), 0.2, 0.5);
+      }
+      // Tonneaux, caisses, pièces d'or : le décor partagé avec la carte 2D (mêmes objets, mêmes places)
+      const PIECE: Partial<Record<PropKind, PieceName>> = { barrel: 'barrel_large', barrel_stack: 'barrel_small_stack', crates: 'crates_stacked', box: 'box_small_decorated', coins: 'coin_stack_large' };
+      for (const p of roomDecor(f.n, r, f.theme)) {
+        const name = PIECE[p.kind];
+        if (!name) continue;
+        b.add(name, c.x + p.u * HALF, p.tipped ? 0.55 * p.s : 0, c.z + p.v * HALF, p.rot, [p.s, p.s, p.s], p.tipped ? Math.PI / 2 : 0);
       }
     }
     this.static = b.build();
@@ -463,7 +459,7 @@ export class World {
   }
 
   /** Les PNJ du décor : le marchand derrière son comptoir (mage en robe dorée), le forgeron à son enclume. */
-  private placeKeepers(spots: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx }[]) {
+  private placeKeepers(spots: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx; prisonerRoom?: number }[]) {
     for (const k of this.keepers) {
       this.scene.remove(k.obj);
       k.mixer.stopAllAction();
@@ -474,7 +470,7 @@ export class World {
       const obj = this.assets.character(sp.model, sp.tint);
       obj.position.copy(sp.pos);
       this.scene.add(obj);
-      const k: Keeper = { obj, mixer: new THREE.AnimationMixer(obj), model: sp.model, current: null, busyUntil: 0 };
+      const k: Keeper = { obj, mixer: new THREE.AnimationMixer(obj), model: sp.model, current: null, busyUntil: 0, ...(sp.prisonerRoom !== undefined ? { prisonerRoom: sp.prisonerRoom } : {}) };
       this.keeperPlay(k, 'Idle');
       k.mixer.update(Math.random() * 2);
       this.keepers.push(k);
@@ -1278,6 +1274,7 @@ export class World {
 export function roomLabel(r: RoomView): string {
   if (r.forge) return 'Forge';
   if (r.crypt) return `Crypt ${r.id}`;
+  if (r.feature) return `${{ autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', ogre: 'Ogre lair' }[r.feature]} ${r.id}`;
   return { normale: 'Room', safe: 'Safe room', piege: 'Trapped room', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' }[r.type] + ` ${r.id}`;
 }
 

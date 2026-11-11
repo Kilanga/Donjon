@@ -31,6 +31,7 @@ export interface MonsterView {
   hp: number;
   maxHp: number;
   boss: boolean;
+  asleep?: boolean;
 }
 
 export interface PlayerPublic {
@@ -67,7 +68,9 @@ export interface RoomView {
   monsters?: MonsterView[];
   ground?: Item[];
   groundGold?: number;
-  crypt?: { no: number; name: string; level: number; cls: ClassId }[]; // la crypte de l'étage : tombes à ressusciter
+  crypt?: { no: number; name: string; level: number; cls: ClassId }[];
+  feature?: 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre'; // salle spéciale
+  featureDone?: boolean; // déjà utilisée (par moi, ou pour de bon) // la crypte de l'étage : tombes à ressusciter
 }
 
 export interface MerchantOffer {

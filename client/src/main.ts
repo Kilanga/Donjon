@@ -3,7 +3,7 @@ import type { ClientMsg, GameEvent, Item, PlayerViewMsg, RoomView, ServerMsg } f
 import { MapRenderer } from './map';
 import { PRODUCTION_EVENTS } from '../../src/server/game/production';
 import { THEME_EFFECTS, THEME_LABEL } from '../../src/shared/themes';
-import { Stage } from './stage';
+import { Stage, keyOf } from './stage';
 import { CLASS_SPRITE, Tiles } from './tiles';
 import { initTelemetry, telemetryReady } from './telemetry';
 
@@ -17,6 +17,7 @@ const CLASS_INFO: Record<string, { label: string; desc: string }> = {
   mage: { label: 'Mage', desc: 'Intelligence +3, 10 HP. Spells slip through monster armor. Proud.' },
 };
 const STAT_SHORT = { for: 'str', agi: 'dex', int: 'int', cha: 'cha' } as const;
+const FEATURE_LABEL: Record<string, string> = { autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', ogre: 'Ogre lair' };
 const ROOM_LABEL: Record<string, string> = { normale: 'Room', safe: 'Safe room', piege: 'Room (traps?)', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' };
 
 const params = new URLSearchParams(location.search);
@@ -107,10 +108,11 @@ function colorFor(name: string) {
   }
   return userColors.get(name)!;
 }
-function logLine(text: string, cls = '', turn?: number) {
+function logLine(text: string, cls = '', turn?: number, mine = true) {
   const box = $('log');
   const div = document.createElement('div');
   div.className = cls;
+  if (mine) div.dataset.mine = '1';
   div.innerHTML = (turn ? `<span class="t">T${turn}</span>` : '') + esc(text).replace(/\n/g, '<br>');
   const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
   box.appendChild(div);
@@ -121,7 +123,10 @@ const seen = new Set<number>();
 function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
-  logLine(e.text, e.npc ? 'k-npc' : e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
+  // « Mon journal » : ce qui me concerne (mes actions, ce qu'on me fait, ce qu'on me dit)
+  const me = myName ? keyOf(myName) : '';
+  const mine = !!me && (e.to === me || (e.actors?.includes(me) ?? false) || e.scope === 'prive');
+  logLine(e.text, e.npc ? 'k-npc' : e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn, mine);
   if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, (e.text.match(/^[^"]*?:\s*"([\s\S]+)"\s*$/)?.[1] ?? e.text).trim());
   stage.onEvent(e);
 }
@@ -258,7 +263,10 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(o.item.sprite)}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!buy ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} gold</button></div>`).join('');
 
   const acts: string[] = [];
-  if (room.chest === 'ferme') acts.push('<button data-cmd="!search">Open the chest</button>');
+  if (room.feature) {
+    const label = { autel: 'Pray at the altar', fontaine: 'Drink from the fountain', puits: `Make a wish · ${10 * (s.floor?.n ?? 1)} gold`, prisonnier: 'Free the prisoner', ogre: 'Steal from the ogre' }[room.feature];
+    acts.push(`<button data-cmd="!search" ${room.featureDone ? 'disabled' : ''}>${label}</button>`);
+  } else if (room.chest === 'ferme') acts.push('<button data-cmd="!search">Open the chest</button>');
   else if (!room.searched && room.type !== 'safe') acts.push('<button data-cmd="!search">Search</button>');
   if (room.type === 'piege') acts.push('<button data-cmd="!search">Look for traps</button>');
   if ((room.groundGold ?? 0) > 0 || (room.ground ?? []).length) acts.push(`<button data-cmd="!pickup">Pick up all${room.groundGold ? ` (${room.groundGold} gold)` : ''}</button>`);
@@ -273,7 +281,7 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   if (room.stairs) acts.push(`<button data-cmd="!descend" ${room.bossAlive ? 'disabled title="The boss blocks the stairs"' : ''}>Descend</button>`);
 
   $('room-card').innerHTML = `
-    <div class="card-title">${room.forge ? 'Forge' : room.crypt ? 'Crypt' : ROOM_LABEL[room.type]} <span class="muted">room ${room.id}</span></div>
+    <div class="card-title">${room.forge ? 'Forge' : room.crypt ? 'Crypt' : room.feature ? FEATURE_LABEL[room.feature] : ROOM_LABEL[room.type]} <span class="muted">room ${room.id}</span></div>
     ${room.desc ? `<div class="desc">${esc(room.desc)}</div>` : ''}
     <div class="actions">${acts.join('')}</div>
     ${monsters ? `<div class="section-label">Monsters</div>${monsters}` : ''}
@@ -462,6 +470,19 @@ $('login-form').addEventListener('submit', (e) => {
   localStorage.setItem('donjon-pseudo', myName);
   send({ type: 'hello', name: myName, token: localStorage.getItem('donjon-jeton') ?? undefined });
 });
+// Onglets du journal : tout, ou seulement ce qui me concerne (choix gardé d'une visite à l'autre)
+function setLogTab(tab: string) {
+  $('log').classList.toggle('only-mine', tab === 'mine');
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-logtab]')) b.classList.toggle('on', b.dataset.logtab === tab);
+  try {
+    localStorage.setItem('donjon-journal', tab);
+  } catch {
+    /* stockage indisponible */
+  }
+  $('log').scrollTop = $('log').scrollHeight;
+}
+for (const b of document.querySelectorAll<HTMLButtonElement>('[data-logtab]')) b.addEventListener('click', () => setLogTab(b.dataset.logtab!));
+if (localStorage.getItem('donjon-journal') === 'mine') setLogTab('mine');
 $('help-btn').addEventListener('click', () => $('help').classList.remove('hidden'));
 $('help').addEventListener('click', (e) => {
   if (e.target === $('help') || (e.target as HTMLElement).closest('.close')) $('help').classList.add('hidden');

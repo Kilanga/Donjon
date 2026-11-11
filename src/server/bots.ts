@@ -138,7 +138,7 @@ export class BotManager {
     const f = g.floor(p.floor);
     if (!f) return null;
     const r = f.rooms[p.roomId];
-    const monsters = f.monsters.filter((m) => m.roomId === r.id && m.hp > 0);
+    const monsters = f.monsters.filter((m) => m.roomId === r.id && m.hp > 0 && !m.asleep); // on laisse dormir l'ogre
     const seen = this.visited.get(p.key) ?? new Set<string>();
     seen.add(`${f.n}:${r.id}`);
     this.visited.set(p.key, seen);

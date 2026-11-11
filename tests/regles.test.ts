@@ -180,3 +180,77 @@ describe('attaque et fouille', () => {
     void a;
   });
 });
+
+describe('salles spéciales', () => {
+  function featured(kind: string) {
+    const g = new Game(cfg());
+    g.submit('a', '!join barbarian', T0);
+    const p = g.player('a')!;
+    const f = g.floor(1)!;
+    const r = f.rooms.find((x) => x.type === 'normale' && x.id !== f.spawnRoom && x.id !== f.cryptRoom && !x.feature)!;
+    r.feature = kind as never;
+    f.monsters = f.monsters.filter((m) => m.roomId !== r.id);
+    p.roomId = r.id;
+    p.immuneUntil = 0;
+    return { g, p, f, r };
+  }
+  const act = (g: Game, t: number) => {
+    g.submit('a', '!search', t - 1000);
+    return g.tick(t);
+  };
+
+  it('chaque étage a ses salles spéciales, et l\'ogre y dort', () => {
+    const g = new Game(cfg());
+    g.submit('a', '!join', T0);
+    const f = g.floor(1)!;
+    expect(f.rooms.filter((r) => r.feature).length).toBeGreaterThanOrEqual(2);
+    for (let seed = 1; seed < 30; seed++) {
+      const h = new Game(cfg({ seed }));
+      h.submit('a', '!join', T0);
+      const ff = h.floor(1)!;
+      const lair = ff.rooms.find((r) => r.feature === 'ogre');
+      if (lair) {
+        expect(ff.monsters.some((m) => m.roomId === lair.id && m.asleep)).toBe(true);
+        return;
+      }
+    }
+    throw new Error('aucun ogre sur 30 graines');
+  });
+
+  it('autel et fontaine : une seule fois par joueur', () => {
+    for (const kind of ['autel', 'fontaine']) {
+      const { g, p } = featured(kind);
+      act(g, T0 + 20_000);
+      const ev = act(g, T0 + 40_000);
+      expect(ev.some((e) => e.to === 'a' && /already/.test(e.text))).toBe(true);
+      expect(p.alive).toBe(true);
+    }
+  });
+
+  it('le puits coûte 10 × l\'étage', () => {
+    const { g, p } = featured('puits');
+    p.gold = 25;
+    act(g, T0 + 20_000);
+    expect(p.gold === 15 || p.gold === 35 || p.items.length > 2).toBe(true);
+  });
+
+  it('le prisonnier ne se libère qu\'une fois', () => {
+    const { g, r } = featured('prisonnier');
+    act(g, T0 + 20_000);
+    expect(r.featureUsedBy).toEqual(['a']);
+    const ev = act(g, T0 + 40_000);
+    expect(ev.some((e) => e.to === 'a' && /chains are empty/.test(e.text))).toBe(true);
+  });
+
+  it('l\'ogre endormi n\'attaque pas ; le frapper le réveille', () => {
+    const { g, p, f, r } = featured('ogre');
+    const ogre = { id: 'og', kind: 'ogre_dormeur', name: 'Snorlug', sprite: 'x', hp: 200, maxHp: 200, atk: 30, def: 0, dmg: 9, xp: 0, gold: 0, roomId: r.id, wanderer: false, boss: false, distracted: 0, aggro: null, asleep: true };
+    f.monsters.push(ogre);
+    const hp = p.hp;
+    g.tick(T0 + 20_000);
+    expect(p.hp).toBe(hp);
+    g.submit('a', '!attack snorlug', T0 + 21_000);
+    g.tick(T0 + 40_000);
+    expect(ogre.asleep).toBe(false);
+  });
+});
