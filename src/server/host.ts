@@ -20,8 +20,9 @@ const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const list = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
 
-type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes';
+type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster';
 const SEGMENTS: Segment[] = ['leaderboard', 'join', 'race', 'spotlight', 'stakes', 'story'];
+const LOBBY_SEGMENTS: Segment[] = ['join', 'roster'];
 
 export class Host {
   private said = new Set<string>();
@@ -58,7 +59,8 @@ export class Host {
     for (const p of Object.values(s.players)) {
       if (p.bot || this.seen.has(p.key)) continue;
       this.seen.add(p.key);
-      if (this.started && s.seasonStart !== null && now - s.seasonStart > RULES_AFTER_MS) this.welcome.push(p.name);
+      const lobby = !!s.lobbyUntil && now < s.lobbyUntil;
+      if (this.started && (lobby || (s.seasonStart !== null && now - s.seasonStart > RULES_AFTER_MS))) this.welcome.push(p.name);
     }
     this.started = true;
     if (s.seasonOver) return; // la fin de saison est commentée par onTurn (Légendes, vainqueurs)
@@ -72,6 +74,18 @@ export class Host {
         { urgent: true, floor: 1 },
       );
     }
+    // Les nouveaux, accueillis par petits groupes
+    if (this.welcome.length && now - this.lastWelcome > WELCOME_EVERY_MS && !this.narrator.busy(now)) {
+      const names = this.welcome.splice(0, 6);
+      this.lastWelcome = now;
+      void this.narrator.announce(
+        `Welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}: ${list(names)}.`,
+        `A warm welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}, ${list(names)}. Make yourselves at home. While it lasts.`,
+      ).then((ok) => {
+        if (!ok) this.welcome.unshift(...names); // elle parlait : ce sera pour la prochaine fois
+      });
+    }
+
     if (s.seasonStart === null) return this.deadAir(now, true);
 
     // Les règles, une fois la partie lancée
@@ -123,18 +137,6 @@ export class Host {
       }
     }
 
-    // Les nouveaux, accueillis par petits groupes
-    if (this.welcome.length && now - this.lastWelcome > WELCOME_EVERY_MS && !this.narrator.busy(now)) {
-      const names = this.welcome.splice(0, 6);
-      this.lastWelcome = now;
-      void this.narrator.announce(
-        `Welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}: ${list(names)}.`,
-        `A warm welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}, ${list(names)}. Try to last longer than the previous ones.`,
-      ).then((ok) => {
-        if (!ok) this.welcome.unshift(...names); // elle parlait : ce sera pour la prochaine fois
-      });
-    }
-
     this.deadAir(now, false);
   }
 
@@ -143,8 +145,9 @@ export class Host {
     const quiet = CHATTY[this.narrator.chatty].quietMs;
     if (now - this.narrator.lastSpokeAt < quiet || now - this.lastSegmentAt < quiet || this.narrator.busy(now)) return;
     if (lobby && !this.game.state.lobbyUntil) return; // personne n'est là, personne ne joue : elle se tait
-    for (let tries = 0; tries < SEGMENTS.length; tries++) {
-      const seg = lobby ? 'join' : SEGMENTS[this.segment++ % SEGMENTS.length];
+    const pool = lobby ? LOBBY_SEGMENTS : SEGMENTS;
+    for (let tries = 0; tries < pool.length; tries++) {
+      const seg = pool[this.segment++ % pool.length];
       const text = this.segmentText(seg, now);
       if (!text) continue;
       this.lastSegmentAt = now;
@@ -192,6 +195,16 @@ export class Host {
         const left = s.lobbyUntil ? s.lobbyUntil - now : f1?.collapseAt ? f1.collapseAt - now : null;
         const until = left && left > 0 ? ` Sign-ups close in ${minutes(left)} minutes.` : '';
         return [`Viewers can still join: type !join in the chat, or open the link at the bottom left of the stream.${until}`, `Want in? Type !join in the chat, or use the link at the bottom left.${until}`];
+      }
+      case 'roster': {
+        const names = Object.values(s.players).filter((p) => !p.bot).map((p) => p.name);
+        if (!names.length) return null;
+        const shown = names.slice(0, 5);
+        const more = names.length > shown.length ? ` and ${names.length - shown.length} more` : '';
+        return [
+          `${plural(names.length, 'contestant')} signed up so far: ${list(shown)}${more}. The game starts soon.`,
+          `So far, ${plural(names.length, 'brave soul')} signed up: ${list(shown)}${more}. Who's next?`,
+        ];
       }
       case 'stakes': {
         const floors = Object.values(s.floors).filter((f) => !f.collapsed && f.collapseAt !== null && this.humans(f.n).length);
