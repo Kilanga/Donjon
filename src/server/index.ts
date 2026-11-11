@@ -359,6 +359,7 @@ const links = new Links<Client>(path.join(root, 'data', 'liens.json'), cfg.twitc
 setInterval(() => links.save(), 10_000).unref();
 const muted = new Map<string, number>(); // pseudo -> fin du silence (ms)
 const namesByIp = new Map<string, Set<string>>(); // pseudos pris sur la page web, par adresse
+const webVoteByIp = new Map<string, { vote: object; key: string }>(); // page web : un seul vote par connexion (pas un par pseudo inventé)
 const isMuted = (name: string) => (muted.get(playerKey(name)) ?? 0) > Date.now();
 
 /** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
@@ -392,6 +393,15 @@ function command(name: string, text: string, from?: Client) {
   if (fb) return feedback(name, fb[1].toLowerCase() === 'bug' ? 'bug' : 'avis', fb[2], src, from);
   const k = playerKey(name);
   if (text.startsWith('!')) lastCmds.set(k, [...(lastCmds.get(k) ?? []), text.slice(0, 80)].slice(-5));
+  if (from && game.state.vote && /^!vote\b/i.test(text.trim()) && !isLoopback(from.ip)) {
+    // Sur la page web, on peut prendre plusieurs pseudos : le vote reste à un par connexion
+    const prev = webVoteByIp.get(from.ip);
+    if (prev && prev.vote === game.state.vote && prev.key !== k) {
+      send(from, { type: 'feedback', ok: false, text: 'One vote per connection: this one already voted under another name.' });
+      return { ok: false, text: '' };
+    }
+    webVoteByIp.set(from.ip, { vote: game.state.vote, key: k });
+  }
   const dis = text.match(/^!(dis|say|parler)\s+(.+)/i);
   if (dis) return say(name, dis[2]);
   if (!text.startsWith('!')) return say(name, text);

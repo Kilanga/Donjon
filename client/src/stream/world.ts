@@ -7,7 +7,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildDressing, buildFeature, buildForgeShop, buildSafeRoom, smokeSprite, rng, type ForgeSpots, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
-import { roomDecor, type PropKind } from '../../../src/shared/decor';
+import { CRYPT_SLOTS, roomDecor, type PropKind } from '../../../src/shared/decor';
 
 /** Pièces de décor coupées quand elles sont entre la caméra et la salle filmée (vue en coupe). */
 const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue']);
@@ -295,16 +295,20 @@ export class World {
     }
     if (!room) return;
     const c = center(room);
-    graves.slice(0, 8).forEach((g, i) => {
-      if (this.cryptTombs.has(g.no)) return;
-      const t = makeTomb(g.no * 17 + 3);
-      t.position.set(c.x - 4.5 + (i % 4) * 3, 0, c.z - 3 + Math.floor(i / 4) * 3.5);
-      this.scene.add(t);
-      const label = document.createElement('div');
-      label.className = 'tomb3d';
-      label.textContent = g.name;
-      this.labels.appendChild(label);
-      this.cryptTombs.set(g.no, { obj: t, label });
+    // Six tombes au plus, contre les murs (le milieu reste aux vivants) : les mêmes places que sur la carte 2D
+    graves.slice(0, CRYPT_SLOTS.length).forEach((g, i) => {
+      let tomb = this.cryptTombs.get(g.no);
+      if (!tomb) {
+        const t = makeTomb(g.no * 17 + 3);
+        this.scene.add(t);
+        const label = document.createElement('div');
+        label.className = 'tomb3d';
+        label.textContent = g.name;
+        this.labels.appendChild(label);
+        tomb = { obj: t, label };
+        this.cryptTombs.set(g.no, tomb);
+      }
+      tomb.obj.position.set(c.x + CRYPT_SLOTS[i][0] * HALF, 0, c.z + CRYPT_SLOTS[i][1] * HALF); // une tombe relevée libère sa place
     });
   }
 

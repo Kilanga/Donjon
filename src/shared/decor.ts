@@ -114,3 +114,9 @@ export function roomDecor(floorN: number, r: DecorRoom, theme: string): Prop[] {
   }
   return out;
 }
+
+/** Places des tombes de la crypte (six au plus), en (u, v) : contre les murs, hors des portes et du milieu
+ *  (là où se tiennent crawlers et monstres). Les mêmes pour la carte 2D et la 3D. */
+export const CRYPT_SLOTS: readonly (readonly [number, number])[] = [
+  [-0.75, -0.72], [0.75, -0.72], [-0.75, 0.48], [0.75, 0.48], [-0.42, -0.72], [0.42, -0.72],
+];

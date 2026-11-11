@@ -564,7 +564,7 @@ export function smokeSprite(): THREE.Sprite {
 }
 
 // ----------------------------------------------------------- salles spéciales
-// Autel, fontaine, puits à vœux, chaînes du prisonnier : posés au milieu du mur nord (le puits au centre).
+// Autel, fontaine, puits à vœux, chaînes du prisonnier : posés au milieu du mur nord (le puits un peu au nord du centre).
 
 const TORUS_GEO = new THREE.TorusGeometry(1.15, 0.32, 8, 20);
 const CHAIN_GEO = new THREE.TorusGeometry(0.09, 0.025, 4, 8);
@@ -599,14 +599,15 @@ export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: numbe
       return null;
     }
     case 'puits': {
-      const ring = part(TORUS_GEO, F_STONE, cx, 0.45, cz);
+      const wz = cz - 2.7; // un peu au nord du centre : les crawlers se tiennent devant, pas dedans (même place sur la carte 2D)
+      const ring = part(TORUS_GEO, F_STONE, cx, 0.45, wz);
       ring.rotation.x = Math.PI / 2;
       ring.scale.set(1, 1, 2.4);
       g.add(ring);
-      g.add(part(CYL, DARK_WATER, cx, 0.4, cz, 1.0, 0.05, 1.0));
-      for (const dx of [-1.4, 1.4]) g.add(part(BOX, WOOD_DARK, cx + dx, 1.3, cz, 0.18, 2.6, 0.18));
-      g.add(part(BOX, WOOD, cx, 2.55, cz, 3.1, 0.2, 0.22));
-      g.add(part(CYL, WOOD, cx + 0.3, 1.7, cz, 0.22, 0.32, 0.22));
+      g.add(part(CYL, DARK_WATER, cx, 0.4, wz, 1.0, 0.05, 1.0));
+      for (const dx of [-1.4, 1.4]) g.add(part(BOX, WOOD_DARK, cx + dx, 1.3, wz, 0.18, 2.6, 0.18));
+      g.add(part(BOX, WOOD, cx, 2.55, wz, 3.1, 0.2, 0.22));
+      g.add(part(CYL, WOOD, cx + 0.3, 1.7, wz, 0.22, 0.32, 0.22));
       return null;
     }
     case 'prisonnier': {

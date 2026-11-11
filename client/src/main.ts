@@ -25,6 +25,7 @@ const spectatorKey = params.get('spectateur');
 const tiles = new Tiles();
 const map = new MapRenderer($('map') as HTMLCanvasElement, tiles);
 const stage = new Stage(map, $('map-wrap'), spectatorKey !== null);
+if (params.has('debug')) Object.assign(window as unknown as Record<string, unknown>, { map }); // tests : cadrer une salle
 // Déplacement libre dans la salle (page joueur) : ZQSD/flèches ou clic ; une porte franchie = changement de salle
 const DIR_CMD: Record<string, string> = { n: '!north', s: '!south', e: '!east', o: '!west' };
 const DIR_LABEL: Record<string, string> = { n: 'north', s: 'south', e: 'east', o: 'west' };

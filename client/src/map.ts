@@ -2,7 +2,7 @@
 import { normalize } from '../../src/shared/commands';
 import type { Dir, FloorView, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../src/shared/types';
 import { FxLayer } from './fx';
-import { roomDecor, type Prop } from '../../src/shared/decor';
+import { CRYPT_SLOTS, roomDecor, type Prop } from '../../src/shared/decor';
 import { CLASS_SPRITE, Tiles, monsterSprite } from './tiles';
 
 const IW = 7; // largeur intérieure d'une salle (tuiles)
@@ -34,7 +34,7 @@ interface Floater {
 function hash(n: number) {
   let x = (n * 2654435761) >>> 0;
   x ^= x >>> 13;
-  return x;
+  return x >>> 0; // toujours positif, comme en 3D (mêmes tirages)
 }
 
 export class MapRenderer {
@@ -268,7 +268,7 @@ export class MapRenderer {
     if (pl.alive && pl.me && this.me && this.me.roomKey === key) return { x: this.me.x, y: this.me.y };
     const rp = this.remote.get(pl.name);
     if (pl.alive && rp && rp.roomKey === key && performance.now() - rp.t < 120_000) return { x: rp.x, y: rp.y };
-    return slot((r.x * CW + 1) * PX, (r.y * CH + 2) * PX, i, n, 4.6);
+    return slot((r.x * CW + 1) * PX, (r.y * CH + 2) * PX, i, n, 3.4);
   }
 
   /** Avance mon crawler (touches ou clic), gère les portes et relaie la position. */
@@ -291,7 +291,7 @@ export class MapRenderer {
     if (!this.me || this.me.roomKey !== key) {
       // Nouvelle salle : on entre par la porte d'où l'on vient (si on la connaît)
       const prev = this.me ? f.rooms.find((x) => `${f.n}:${x.id}` === this.me!.roomKey) : undefined;
-      let start = slot(b.x0, b.y0, mine.i, mine.n, 4.6);
+      let start = slot(b.x0, b.y0, mine.i, mine.n, 3.4);
       if (prev && Math.abs(prev.x - r.x) + Math.abs(prev.y - r.y) === 1) {
         const d = doorPoints(r);
         start = prev.y < r.y ? d.n : prev.y > r.y ? d.s : prev.x < r.x ? d.o : d.e;
@@ -571,87 +571,131 @@ export class MapRenderer {
       if (r.doors.e !== undefined && y === midRow) floor(ox + IW + 1, y);
       else wall('v', ox + IW + 1, y);
     }
-    // Mobilier contre le mur du haut, selon le type de salle
+    // Tout ce qui suit est placé comme dans la vue 3D : (u, v) = position 3D / demi-côté de salle (−1..1),
+    // u vers l'est, v vers le sud, avec la même correspondance que le décor partagé (drawDecor).
+    const X = (u: number) => (ox + 1 + ((u + 1) / 2) * IW) * PX;
+    const Y = (v: number) => (oy + 2 + ((v + 1) / 2) * IH) * PX;
+    const put = (name: string, u: number, v: number, tt = t, scale = 1) => tiles.drawAnchored(ctx, name, Math.round(X(u)), Math.round(Y(v) + 6), tt, false, scale);
+    const wallY = oy * PX; // haut du mur nord
+    // Torches du mur nord (même tirage qu'en 3D : il en manque parfois une dans les salles ordinaires)
+    for (const tx of [-4, 4]) {
+      if (hash(r.id * 5 + tx) % 3 === 0 && r.type === 'normale') continue;
+      if (r.type === 'safe' && !r.forge && tx === 4) continue;
+      drawTorch(ctx, X(tx / 6), wallY, t + r.id);
+    }
+    // Bannières, piliers : arène, salle du boss, boutique, forge
+    const C = 4.6 / 6;
+    const pillar = (u: number, v: number) => drawPillar(ctx, X(u), Y(v) + 6);
     if (r.type === 'arene') {
-      at('dec_weapons', ox + 1.5, oy + 2);
-      at('dec_weapons', ox + IW + 0.5, oy + 2);
+      drawBanner(ctx, X(-0.25), wallY, 'red');
+      drawBanner(ctx, X(0.25), wallY, 'red');
+      pillar(-C, -0.733);
+      pillar(C, -0.733);
     } else if (r.type === 'boss') {
-      at('dec_candelabra', ox + 1.5, oy + 2);
-      at('dec_candelabra', ox + IW + 0.5, oy + 2);
-      at('dec_skulls2', ox + 1.5, oy + IH + 2);
+      drawBanner(ctx, X(-3.5 / 6), wallY, 'red');
+      drawBanner(ctx, X(3.5 / 6), wallY, 'blue');
+      pillar(-C, -0.733);
+      pillar(C, -0.733);
+    }
+    if (r.merchant) {
+      // La boutique (comme en 3D) : grand tapis bleu, étagère à l'ouest, comptoir au nord-est avec le marchand derrière,
+      // deux tabourets devant, des bougies, un tonneau, des pots dans les coins
+      tiles.drawAnchored(ctx, 'dec_rug_gray', Math.round(X(0)), Math.round(Y(0.1) + 24), 0, false, 1.5);
+      drawBanner(ctx, X(-1 / 3), wallY, 'blue');
+      drawBanner(ctx, X(1 / 3), wallY, 'blue');
+    }
+    // Dalles éboulées : les mêmes que les dalles « rocks » de la 3D (une sur cinq, jamais chez le marchand ni à la forge)
+    if (r.type !== 'safe') {
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        if (r.type === 'piege' && i === 0 && j === 0) continue;
+        if (r.type === 'boss' && i === 0 && j === -1) continue;
+        if (hash(r.id * 9 + i * 3 + j) % 5 === 0) put((i + j) & 1 ? 'dec_rubble' : 'dec_rubble2', i * 0.667, j * 0.667, 0);
+      }
     }
     this.drawDecor(r, ox, oy, theme);
+    if (r.type === 'boss') {
+      pillar(-C, 0.733);
+      pillar(C, 0.733);
+    }
 
     // Objets de la salle
     if (r.stairs) {
-      // La sortie de l'étage : l'escalier, entre deux statues, fermé par une grille tant qu'il est scellé ou gardé
+      // La sortie de l'étage (le trou de l'escalier en 3D), fermée par une grille tant qu'elle est scellée ou gardée
       tiles.tile(ctx, 'stairs', midCol, oy + 2);
       const seal = Math.max(0, (this.floor?.stairsInSec ?? 0) - (performance.now() - this.floorAt) / 1000);
       const closed = !!r.bossAlive || this.floor?.stairsInSec === null || seal > 0;
       if (closed) tiles.tile(ctx, 'gate', midCol, oy + 2, t);
-      at('dec_statue', midCol - 0.5, oy + 3);
-      at('dec_statue', midCol + 1.5, oy + 3);
       this.stairsMark = { x: (midCol + 0.5) * PX, y: (oy + 2.5) * PX, bossAlive: !!r.bossAlive };
     }
-    if (r.trapArmed) tiles.tile(ctx, 'spikes', midCol, midRow, t);
-    if (r.chest !== 'aucun') at(r.chest === 'ferme' ? 'chest_closed' : 'chest_open', midCol + 0.5, oy + 3);
+    // Les piques au centre : dressées si le piège est armé, rentrées sinon (salle piégée connue)
+    if (r.type === 'piege') tiles.tile(ctx, r.trapArmed ? 'spikes' : 'spikes_small', midCol, midRow, t);
+    else if (r.trapArmed) tiles.tile(ctx, 'spikes', midCol, midRow, t);
+    if (r.chest !== 'aucun') put(r.chest === 'ferme' ? 'chest_closed' : 'chest_open', 0, -0.6);
     if (r.feature) {
-      // Salles spéciales : l'objet au milieu du mur du haut (le puits au centre)
-      const fx = midCol + 0.5;
+      // Salles spéciales : l'objet au milieu du mur nord (le puits un peu au nord du centre)
       if (r.feature === 'autel') {
-        at('dec_altar', fx, oy + 2.4);
-        at('dec_candelabra', fx - 1.3, oy + 2.4);
-        at('dec_candelabra', fx + 1.3, oy + 2.4);
+        put('dec_altar', 0, -0.77);
+        put('dec_candle', -0.183, -0.86);
+        put('dec_candle', 0.183, -0.86);
       } else if (r.feature === 'fontaine') {
         tiles.tile(ctx, 'fountain', midCol, oy + 1, t);
-        at('gr_puddle_small', fx, oy + 2.8);
+        put('gr_puddle_small', 0, -0.62);
       } else if (r.feature === 'puits') {
-        at('well', fx, midRow + 1);
+        put('well', 0, -0.45);
       } else if (r.feature === 'prisonnier') {
-        if (!r.featureDone) at('npc_prisoner', fx, oy + 2.6);
-        at('dec_cage', fx, oy + 2.6);
+        drawChains(ctx, X(0), wallY + PX, Y(-0.817));
+        if (!r.featureDone) put('npc_prisoner', 0, -0.817);
       } else if (r.feature === 'ogre') {
-        at('gold_pile', fx - 0.6, oy + 2.4);
-        at('gold_pile', fx + 0.5, oy + 2.2);
-        at('chest_closed', fx + 1.6, oy + 2.4);
+        put('gold_pile', -0.2, -0.733);
+        put('gold_pile', 0.05, -0.733);
+        put('gold_pile', 0.233, -0.733);
       }
     }
     if (r.crypt) {
-      // La crypte : une pierre tombale par éliminé qui attend qu'on le ressuscite
-      at('dec_coffin', ox + IW + 0.3, oy + IH + 1.9);
-      at('dec_skulls', ox + 1.5, oy + IH + 1.9);
+      // La crypte : une pierre tombale par éliminé (six au plus, aux mêmes places qu'en 3D)
       const stones = ['dec_tomb_rip', 'dec_tomb_lines', 'dec_tomb_skull', 'dec_tomb_plain'];
-      r.crypt.slice(0, 6).forEach((g, i) => {
-        const x = ox + 1.6 + (i % 3) * 2.4;
-        const y = oy + 2.4 + Math.floor(i / 3) * 1.8;
-        at(stones[g.no % stones.length], x, y);
-        this.labels.push({ text: g.name, x: x * PX, y: (y - 1.1) * PX, color: '#c9c2d8', hp: 0, maxHp: 0 });
+      r.crypt.slice(0, CRYPT_SLOTS.length).forEach((g, i) => {
+        const [u, v] = CRYPT_SLOTS[i];
+        put(stones[g.no % stones.length], u, v);
+        this.labels.push({ text: g.name, x: X(u), y: Y(v) - 12, color: '#c9c2d8', hp: 0, maxHp: 0 });
       });
     }
     if (r.forge) {
-      // La forge : le four, le râtelier, le forgeron (nain) et un tonneau d'eau
-      at('dec_furnace', ox + 1.5, oy + 2);
-      at('dec_weapons', ox + IW + 0.5, oy + 2);
-      at('barrel', ox + IW + 0.3, oy + 3.6);
-      at('npc_smith', ox + 3.6, oy + 3.6);
+      // La forge (comme en 3D) : foyer au nord-ouest, tas de charbon, enclume au centre avec le forgeron derrière,
+      // bac de trempe, râtelier au nord-est, tonneau à l'est, caisses au sud-ouest
+      if (r.doors.n === undefined) drawBanner(ctx, X(1.4 / 6), wallY, 'red');
+      put('dec_furnace', -0.433, -0.783);
+      put('dec_rubble2', -0.083, -0.73);
+      put('dec_weapons', 0.683, -0.883);
+      put('npc_smith', 0.05, -0.408);
+      drawAnvil(ctx, X(0.067), Y(-0.2) + 6);
+      put('barrel2', 0.383, -0.1);
+      put('barrel', 0.767, 0.467);
+      put('dec_crates', -0.733, 0.7);
       ctx.fillStyle = `rgba(255,120,40,${0.12 + 0.06 * Math.sin(t * 6)})`; // lueur du feu
-      ctx.fillRect((ox + 1) * PX, (oy + 1) * PX, 2 * PX, 2 * PX);
+      ctx.fillRect(X(-0.433) - PX, Y(-0.783) - PX, 2 * PX, 2 * PX);
       const b = this.bubbles.get(`marchand:${r.id}`);
-      if (b) this.bubblePos.push({ text: b.text, x: (ox + 3.6) * PX, y: (oy + 3.6) * PX - 22, t0: b.t0, dur: b.dur, npc: true });
+      if (b) this.bubblePos.push({ text: b.text, x: X(0.05), y: Y(-0.408) - 16, t0: b.t0, dur: b.dur, npc: true });
     }
     if (r.merchant) {
-      // La boutique : étagères, comptoir, le marchand derrière
-      at('dec_bookshelf', ox + 1.5, oy + 2);
-      at('dec_bookshelf', ox + 2.5, oy + 2);
-      at('dec_candelabra', ox + IW + 0.5, oy + 2);
-      at('npc_merchant', ox + 2.5, oy + 3.2);
-      at('dec_table', ox + 2.5, oy + 4);
+      const westDoor = r.doors.o !== undefined;
+      put('dec_bookshelf', westDoor ? -0.6 : -0.875, westDoor ? -0.875 : -0.433);
+      put('npc_merchant', 0.467, -0.825);
+      put('dec_table', 0.467, -0.6);
+      put('dec_chair', 0.317, -0.317);
+      put('dec_chair', 0.617, -0.317);
+      put('dec_candles', 0.067, -0.767);
+      put('dec_candles', 0.85, -0.383);
+      put('barrel', westDoor ? -0.6 : -0.783, westDoor ? 0.783 : 0.267);
+      put('dec_pot', -0.817, 0.817);
+      put('dec_pot2', 0.817, 0.817);
+      put('dec_pot', 0.85, -0.2);
       const b = this.bubbles.get(`marchand:${r.id}`);
-      if (b) this.bubblePos.push({ text: b.text, x: (ox + 2.5) * PX, y: (oy + 3.2) * PX - 20, t0: b.t0, dur: b.dur, npc: true });
+      if (b) this.bubblePos.push({ text: b.text, x: X(0.467), y: Y(-0.825) - 14, t0: b.t0, dur: b.dur, npc: true });
     }
-    // Butin au sol : les objets eux-mêmes (trois au plus) et l'or
-    (r.ground ?? []).slice(0, 3).forEach((it, i) => at(`it_${it.tpl}`, ox + IW - 0.4 - i * 0.7, oy + IH + 1.8));
-    if ((r.groundGold ?? 0) > 0) at('gold_pile', ox + IW - 2.6, oy + IH + 1.8);
+    // Butin au sol (comme en 3D) : les objets au sud-ouest (trois au plus), l'or au sud-est
+    (r.ground ?? []).slice(0, 3).forEach((it, i) => put(`it_${it.tpl}`, -0.583 + (i - 1) * 0.2, 0.533 + (i % 2) * 0.12));
+    if ((r.groundGold ?? 0) > 0) put('gold_pile', 0.583, 0.533);
     // Platino, le lézard caché que l'auteur de DawnLike demande à tous ses utilisateurs : une salle sur 400
     if (hash(r.id * 977 + (this.floor?.n ?? 0) * 31) % 400 === 7) at('platino', ox + 1.4, oy + IH + 1.9);
 
@@ -1034,6 +1078,99 @@ function slot(ox: number, oy: number, i: number, n: number, row: number) {
   const x = ox + 8 + (inLine === 1 ? span / 2 : (span * idx) / (inLine - 1));
   const y = oy + row * PX + line * 10 - (line ? 0 : 0);
   return { x, y };
+}
+
+// Petits éléments dessinés à la main (palette DawnBringer, comme DawnLike) pour les pièces 3D sans équivalent dans le pack
+
+/** Torche murale : support en fer, flamme qui vacille, halo sur le sol. */
+function drawTorch(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  const cx = Math.round(x);
+  const k = Math.floor(t * 6) % 3;
+  const g = ctx.createRadialGradient(cx, y + 14, 1, cx, y + 14, 26);
+  g.addColorStop(0, 'rgba(255,170,60,0.22)');
+  g.addColorStop(1, 'rgba(255,170,60,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - 26, y - 12, 52, 52);
+  ctx.fillStyle = '#140c1c';
+  ctx.fillRect(cx - 2, y + 8, 4, 6);
+  ctx.fillStyle = '#4e4a4e';
+  ctx.fillRect(cx - 1, y + 8, 2, 6);
+  ctx.fillStyle = '#854c30';
+  ctx.fillRect(cx - 1, y + 5, 2, 4);
+  ctx.fillStyle = '#d27d2c';
+  ctx.fillRect(cx - 2, y + 1 + (k === 1 ? 1 : 0), 4, 4);
+  ctx.fillStyle = '#dad45e';
+  ctx.fillRect(cx - 1 + (k === 2 ? 1 : 0), y - 1 + k % 2, 2, 4);
+  ctx.fillStyle = '#deeed6';
+  ctx.fillRect(cx, y + 2, 1, 2);
+}
+
+/** Bannière accrochée au mur nord (rouge à motif ou bleue à écu, comme les deux bannières 3D). */
+function drawBanner(ctx: CanvasRenderingContext2D, x: number, y: number, color: 'red' | 'blue') {
+  const cx = Math.round(x);
+  const [dark, mid, light] = color === 'red' ? ['#442434', '#d04648', '#d27d2c'] : ['#30346d', '#597dce', '#6dc2ca'];
+  ctx.fillStyle = '#854c30';
+  ctx.fillRect(cx - 5, y + 2, 10, 2);
+  ctx.fillStyle = dark;
+  ctx.fillRect(cx - 4, y + 4, 8, 13);
+  ctx.fillRect(cx - 3, y + 17, 6, 1);
+  ctx.fillStyle = mid;
+  ctx.fillRect(cx - 3, y + 4, 6, 12);
+  ctx.fillRect(cx - 2, y + 16, 4, 1);
+  ctx.fillStyle = color === 'red' ? '#dad45e' : light;
+  if (color === 'red') {
+    ctx.fillRect(cx - 3, y + 7, 6, 1);
+    ctx.fillRect(cx - 1, y + 9, 2, 3);
+    ctx.fillRect(cx - 3, y + 13, 6, 1);
+  } else {
+    ctx.fillRect(cx - 2, y + 7, 4, 5);
+    ctx.fillStyle = '#dad45e';
+    ctx.fillRect(cx - 1, y + 8, 2, 3);
+  }
+}
+
+/** Pilier de pierre (pieds en (x, y)). */
+function drawPillar(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const cx = Math.round(x);
+  const yb = Math.round(y);
+  ctx.fillStyle = 'rgba(20,12,28,0.45)';
+  ctx.fillRect(cx - 5, yb - 2, 12, 3);
+  ctx.fillStyle = '#140c1c';
+  ctx.fillRect(cx - 6, yb - 24, 12, 23);
+  ctx.fillStyle = '#4e4a4e';
+  ctx.fillRect(cx - 5, yb - 4, 10, 3);
+  ctx.fillRect(cx - 5, yb - 23, 10, 3);
+  ctx.fillStyle = '#757161';
+  ctx.fillRect(cx - 4, yb - 20, 8, 16);
+  ctx.fillStyle = '#8595a1';
+  ctx.fillRect(cx - 4, yb - 20, 3, 16);
+  ctx.fillRect(cx - 5, yb - 23, 10, 1);
+  ctx.fillStyle = '#4e4a4e';
+  ctx.fillRect(cx + 2, yb - 20, 2, 16);
+}
+
+/** Enclume sur son billot (pieds en (x, y)). */
+function drawAnvil(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const cx = Math.round(x);
+  const yb = Math.round(y);
+  ctx.fillStyle = '#140c1c';
+  ctx.fillRect(cx - 4, yb - 6, 8, 6);
+  ctx.fillRect(cx - 7, yb - 11, 13, 5);
+  ctx.fillStyle = '#854c30';
+  ctx.fillRect(cx - 3, yb - 5, 6, 4);
+  ctx.fillStyle = '#4e4a4e';
+  ctx.fillRect(cx - 6, yb - 10, 11, 3);
+  ctx.fillRect(cx + 5, yb - 10, 2, 1);
+  ctx.fillStyle = '#8595a1';
+  ctx.fillRect(cx - 6, yb - 10, 11, 1);
+  ctx.fillStyle = '#d27d2c';
+  ctx.fillRect(cx - 3, yb - 11, 4, 1);
+}
+
+/** Chaînes du prisonnier, du mur jusqu'à ses mains. */
+function drawChains(ctx: CanvasRenderingContext2D, x: number, y0: number, y1: number) {
+  ctx.fillStyle = '#8595a1';
+  for (const dx of [-7, 6]) for (let y = y0; y < y1 - 10; y += 3) ctx.fillRect(Math.round(x) + dx + (((y - y0) / 3) % 2 ? 1 : 0), y, 1, 2);
 }
 
 export type { MonsterView, PlayerPublic };
