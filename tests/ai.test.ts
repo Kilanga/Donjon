@@ -103,7 +103,7 @@ describe('IA du donjon', () => {
 describe('Narrateur', () => {
   it('commente les évènements dramatiques et ajoute un évènement narrator', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okJson({ message: { content: 'Le donjon applaudit.' } })));
-    const game = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 3 });
+    const game = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 3 });
     game.ensureFloor(1);
     const delivered: GameEvent[] = [];
     const n = new Narrator(game, new DungeonAI(cfg({ provider: 'ollama' })), (evs) => delivered.push(...evs));
@@ -117,7 +117,7 @@ describe('Narrateur', () => {
   });
 
   it('!parle hors safe room : refus ; en safe room sans IA : réplique écrite', () => {
-    const game = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 5 });
+    const game = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 5 });
     game.submit('a', '!join', 1000);
     const delivered: GameEvent[] = [];
     const n = new Narrator(game, new DungeonAI(cfg({ provider: 'off' })), (evs) => delivered.push(...evs));

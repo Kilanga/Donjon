@@ -11,7 +11,7 @@ import { NpcSociety } from '../src/server/pnj.js';
 const T0 = 1_000_000;
 
 function world() {
-  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 5, immunitySeconds: 0 });
+  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 5, immunitySeconds: 0 });
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pnj-')), 'memoire.json');
   const said: [string, string][] = [];
   const npcs = new NpcSociety(g, new DungeonAI({ ...DEFAULT_AI, provider: 'off' }), file, (n, t) => void said.push([n, t]));

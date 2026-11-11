@@ -288,6 +288,7 @@ function sendState(c: Client) {
     turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
     seasonOver: game.state.seasonOver,
+    lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
     ...(c.spectator ? { floors: game.floorsSummary(now), champions: game.state.champions } : {}),
   };
@@ -344,6 +345,9 @@ function deliver(events: GameEvent[]) {
 // IA du donjon (optionnelle) : la clé API ne vient que de la variable d'environnement
 const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
 const narrator = new Narrator(game, ai, (evs) => deliver(evs));
+
+/** Bots de chat connus : on ignore leurs messages (le rappel de Cloudbot s'affichait en bulle). */
+const CHAT_BOTS = new Set(['streamlabs', 'nightbot', 'streamelements', 'moobot', 'fossabot', 'wizebot', 'sery_bot', 'soundalerts', 'commanderroot', 'kilakbot']);
 
 /** Pseudos vus dans le chat Twitch (la page web ne les prend qu'avec « !lien <code> ») et viewers rendus muets par la modération Twitch. */
 const links = new Links<Client>(path.join(root, 'data', 'liens.json'), cfg.twitchChannel ? [playerKey(cfg.twitchChannel)] : []);
@@ -777,6 +781,7 @@ if (cfg.twitchChannel) {
   connectTwitch(
     cfg.twitchChannel,
     (user, text) => {
+      if (CHAT_BOTS.has(user.toLowerCase())) return; // Streamlabs, Nightbot… : leurs messages ne sont pas des joueurs
       const k = playerKey(user);
       links.sawOnTwitch(k);
       if (isMuted(user)) return; // banni ou en timeout sur Twitch : plus rien à l'antenne

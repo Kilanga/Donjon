@@ -42,7 +42,7 @@ describe('profondeurs', () => {
 
 describe('thèmes d\'étage', () => {
   function onTheme(theme: string, seed = 9) {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed });
     g.submit('ana', '!join chevalier', T0);
     const p = g.player('ana')!;
     const f = g.floor(1)!;
@@ -86,7 +86,7 @@ describe('thèmes d\'étage', () => {
 
 describe('dernier étage et légendes', () => {
   it('l\'escalier du dernier étage fait entrer dans la Légende', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 4, finalFloor: 2 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 4, finalFloor: 2 });
     g.submit('ana', '!join barbare', T0);
     const p = g.player('ana')!;
     const f2 = g.freshFloor(2);
@@ -104,7 +104,7 @@ describe('dernier étage et légendes', () => {
   });
 
   it('l\'effondrement du dernier étage termine la saison et fige la partie', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 4, finalFloor: 2, floorMinutes: 1 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 4, finalFloor: 2, floorMinutes: 1 });
     g.submit('ana', '!join barbare', T0);
     const p = g.player('ana')!;
     const f2 = g.freshFloor(2);
@@ -125,7 +125,7 @@ describe('dernier étage et légendes', () => {
 
 describe('monstres qui reviennent et XP', () => {
   it('un monstre tué revient 3 tours plus tard, dans une salle vide ; un boss non', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 11 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 11 });
     g.submit('ana', '!join barbare', T0);
     const f = g.floor(1)!;
     const ids = new Set(f.monsters.map((x) => x.id));
@@ -147,7 +147,7 @@ describe('monstres qui reviennent et XP', () => {
   });
 
   it('tuer un crawler rapporte moins que tuer un monstre du même étage', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, seed: 11 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 11 });
     g.submit('ana', '!join barbare', T0);
     const pvp = 5 * 4; // victime niveau 4
     const weakest = Math.min(...g.floor(1)!.monsters.filter((m) => !m.boss).map((m) => m.xp));

@@ -5,7 +5,7 @@ import { bfs, generateFloor } from '../src/server/game/dungeon.js';
 import { Game, xpNext } from '../src/server/game/engine.js';
 import { Rng } from '../src/server/game/rng.js';
 
-const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, seed: 42, ...over });
+const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 42, ...over });
 const T0 = 1_000_000;
 
 function setup(over: Partial<GameConfig> = {}) {

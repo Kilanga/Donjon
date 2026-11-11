@@ -169,14 +169,16 @@ enclume, forgeron nain). `!forge` donne les prix, `!forge arme` (+1 au jet et d�
 `!forge armure` (+1 défense) améliore l'équipement porté, jusqu'à +3. Le prix monte à chaque niveau et avec la
 profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dans la forge.
 
-## Rythme d'une saison (≈ 1 h 20)
+## Rythme d'une saison (≈ 1 h 35 avec le salon)
 
-La saison démarre quand le premier vrai joueur entre. Ensuite tout est **à heure fixe** : l'étage *n* s'effondre
-*n* × 10 min plus tard, et la saison se termine à 8 × 10 = 80 min, quoi qu'il arrive. Sur chaque étage :
-
-1. **Escalier scellé** (5 premières minutes) : on explore, on pille, on passe à la forge, on prend des niveaux.
-2. **« L'escalier se descelle ! »** (5 dernières minutes) : on bat le boss et on descend avant l'effondrement.
-3. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
+1. **Échauffement** : tant qu'aucun vrai joueur n'est là, les PNJ font vivre le donjon.
+2. **Salon d'attente** : le premier `!join` ouvre **5 min d'inscriptions** (décompte sur le stream et la page ; rappel à 1 min).
+   On peut déjà jouer, mais c'est un échauffement : au coup d'envoi, **tout repart à zéro** (donjon neuf, niveau 1 pour
+   tout le monde, PNJ compris, chacun garde sa classe). Réglage `lobbySeconds` (0 = pas de salon).
+3. **La saison** démarre au coup d'envoi, à heure fixe : **l'étage 1 dure 20 min** (le double, `firstFloorFactor`), les
+   suivants 10 min (`floorMinutes`), donc fin de saison à 90 min. Sur chaque étage, l'escalier est scellé la première
+   moitié, descellé la seconde (il faut aussi battre le boss).
+4. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
    Seuls les retardataires, l'équipe de fermeture, tombent à l'étage suivant.
 
 **Tours décalés** : chaque étage a des tours de 20 s, mais les étages pairs jouent 10 s après les impairs. Le stream a

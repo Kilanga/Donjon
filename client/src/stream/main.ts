@@ -319,7 +319,11 @@ function tickHud() {
     $('turn').textContent = `Tour ${state.turn} · ${Math.ceil(left)} s`;
     $('turn-bar').style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = view.floor?.collapseInSec;
-    if (c !== null && c !== undefined) {
+    const lobby = state.lobbyInSec;
+    if (lobby !== null && lobby !== undefined) {
+      const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
+      $('collapse').textContent = `⏳ La partie commence dans ${fmt(rest)} · tapez !join`;
+    } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
       const st = view.floor?.stairsInSec;

@@ -47,7 +47,7 @@ export class Game {
     this.rng = new Rng(this.state.rng);
     if (this.state.seasonStart === null) {
       const timed = Object.values(this.state.floors).filter((f) => f.collapseAt !== null);
-      if (timed.length) this.state.seasonStart = Math.min(...timed.map((f) => f.collapseAt! - f.n * cfg.floorMinutes * 60_000));
+      if (timed.length) this.state.seasonStart = Math.min(...timed.map((f) => f.collapseAt! - (f.n + (cfg.firstFloorFactor ?? 1) - 1) * cfg.floorMinutes * 60_000));
     }
   }
 
@@ -159,14 +159,62 @@ export class Game {
    *  (un étage recreusé pour les retardataires garde au moins floorMinutes de vie). */
   private startTimer(f: FloorState, p?: PlayerState) {
     if (this.state.seasonStart === null) {
-      if (p?.bot && !p.closer) return;
+      if (p?.bot) return; // les PNJ ne lancent rien
+      if (this.cfg.lobbySeconds > 0) {
+        if (this.state.lobbyUntil === null) this.openLobby(); // premier vrai joueur : on ouvre les inscriptions
+        return;
+      }
       this.state.seasonStart = this.now;
     }
     if (f.startedAt === null) {
-      const F = this.cfg.floorMinutes * 60_000;
       f.startedAt = this.now;
-      f.collapseAt = Math.max(this.state.seasonStart + f.n * F, this.now + F);
+      f.collapseAt = Math.max(this.waveEnd(f.n), this.now + this.floorSpan(f.n));
     }
+  }
+
+  /** Durée de vie d'un étage (l'étage 1 dure plus longtemps : le temps que tout le monde arrive). */
+  floorSpan(n: number): number {
+    return this.cfg.floorMinutes * 60_000 * (n === 1 ? this.cfg.firstFloorFactor : 1);
+  }
+
+  /** Effondrement de l'étage n pour la vague principale : heure fixe depuis le début de la saison. */
+  waveEnd(n: number): number {
+    return (this.state.seasonStart ?? this.now) + this.cfg.floorMinutes * 60_000 * (n + this.cfg.firstFloorFactor - 1);
+  }
+
+  // ----------------------------------------------------------- salon d'attente
+
+  private openLobby() {
+    this.state.lobbyUntil = this.now + this.cfg.lobbySeconds * 1000;
+    this.state.lobbyWarned = false;
+    const min = Math.round(this.cfg.lobbySeconds / 60);
+    this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 70, text: `INSCRIPTIONS OUVERTES ! La partie commence dans ${min} min : tapez !join pour en être. En attendant, échauffement avec les PNJ (tout repart à zéro au coup d'envoi).` });
+  }
+
+  /** Fin des inscriptions : donjon neuf, tout le monde (PNJ compris) repart niveau 1 à l'entrée, et l'horloge démarre. */
+  private launchSeason() {
+    const roster = Object.values(this.state.players)
+      .sort((a, b) => Number(!!a.bot) - Number(!!b.bot))
+      .map((p) => ({ name: p.name, cls: p.cls, bot: !!p.bot, closer: !!p.closer }));
+    const keep = { nextId: this.state.nextId, turn: this.state.turn, events: this.state.events };
+    this.state = emptyState(this.rng.int(1, 2 ** 31));
+    Object.assign(this.state, keep);
+    this.rng = new Rng(this.state.rng);
+    this.state.seasonStart = this.now;
+    const before = this.out.length;
+    for (const r of roster) {
+      this.join(r.name, r.cls, r.bot);
+      const p = this.state.players[playerKey(r.name)];
+      if (p && r.closer) p.closer = true;
+    }
+    this.out.splice(before); // pas de « X entre dans le donjon » × 15
+    const humans = roster.filter((r) => !r.bot).length;
+    const f = this.floor(1)!;
+    for (const r of roster) if (!r.bot) this.merchantSays(1, f.spawnRoom, MERCHANT_WELCOME, playerKey(r.name));
+    this.emit({
+      floor: 1, kind: 'systeme', scope: 'global', drama: 95,
+      text: `LA PARTIE COMMENCE ! ${humans} aventurier${humans > 1 ? 's' : ''} et ${roster.length - humans} PNJ entrent dans un donjon tout neuf, niveau 1 pour tout le monde. L'étage 1 s'effondre dans ${Math.round(this.floorSpan(1) / 60_000)} min.`,
+    });
   }
 
   /** Tours décalés : un « tour du monde » (state.turn) dure turnSeconds / 2 ; chaque étage joue un tour sur deux,
@@ -190,7 +238,8 @@ export class Game {
   stairsInMs(f: FloorState): number | null {
     if (f.collapseAt === null) return null;
     if (f.stairsOpened) return 0; // annoncé ouvert : il le reste (même si un vote rallonge l'étage)
-    return Math.max(0, f.collapseAt - this.cfg.stairsOpenMinutes * 60_000 - this.now);
+    const open = this.cfg.stairsOpenMinutes * 60_000 * (f.n === 1 ? this.cfg.firstFloorFactor : 1); // l'étage 1, plus long, s'ouvre aussi plus longtemps
+    return Math.max(0, f.collapseAt - open - this.now);
   }
 
   /** L'étage le moins profond encore debout : là où arrivent les nouveaux. */
@@ -365,6 +414,20 @@ export class Game {
     this.now = now;
     this.out = [];
     if (this.state.seasonOver) return []; // saison terminée : plus rien ne bouge
+    // Salon d'attente : rappel à 1 min, puis coup d'envoi (avant de résoudre quoi que ce soit)
+    if (this.state.lobbyUntil !== null && this.state.seasonStart === null) {
+      const left = this.state.lobbyUntil - now;
+      if (left <= 0) {
+        this.launchSeason();
+        this.state.turn++;
+        this.sync();
+        return this.out;
+      }
+      if (left <= 60_000 && !this.state.lobbyWarned) {
+        this.state.lobbyWarned = true;
+        this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 50, text: 'Plus qu\'UNE MINUTE pour rejoindre la partie : !join ! Ensuite, tout repart à zéro et le donjon commence à s\'effondrer.' });
+      }
+    }
     this.state.turn++;
     // Tours décalés : seuls les crawlers des étages qui jouent ce tour-ci agissent (les autres gardent leur commande)
     const players = Object.values(this.state.players).filter((p) => this.plays(p.floor));
@@ -1084,7 +1147,7 @@ export class Game {
       if (left <= 0) this.collapse(f);
     }
     // Fin de saison à heure fixe (n × floorMinutes), même si personne n'a atteint le dernier étage
-    if (!this.state.seasonOver && this.state.seasonStart !== null && this.now >= this.state.seasonStart + this.cfg.finalFloor * this.cfg.floorMinutes * 60_000) {
+    if (!this.state.seasonOver && this.state.seasonStart !== null && this.now >= this.waveEnd(this.cfg.finalFloor)) {
       const last = this.state.floors[this.cfg.finalFloor];
       if (last && !last.collapsed) this.collapse(last);
       else this.endSeason(last ?? { n: this.cfg.finalFloor } as FloorState);
@@ -1675,7 +1738,10 @@ export class Game {
         humans: alive.filter((p) => p.floor === f.n && !p.bot).length,
         bots: alive.filter((p) => p.floor === f.n && p.bot).length,
         collapseInSec: f.collapseAt === null ? null : Math.max(0, Math.ceil((f.collapseAt - now) / 1000)),
-        stairsInSec: f.collapseAt === null ? null : Math.max(0, Math.ceil((f.collapseAt - this.cfg.stairsOpenMinutes * 60_000 - now) / 1000)),
+        stairsInSec: (() => {
+          const ms = this.stairsInMs(f);
+          return ms === null ? null : Math.ceil(ms / 1000);
+        })(),
       }))
       .filter((s) => s.n === 1 || s.humans + s.bots > 0)
       .sort((a, b) => a.n - b.n);

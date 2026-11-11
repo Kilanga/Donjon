@@ -7,7 +7,9 @@ export interface GameConfig {
   turnSeconds: number; // durée d'un tour
   floorMinutes: number; // durée de vie d'un étage avant effondrement (l'étage n tombe n × floorMinutes après le début de la saison)
   stairsOpenMinutes: number; // l'escalier n'est descellé que pendant les N dernières minutes de l'étage
-  staggered: boolean; // tours décalés : les étages pairs jouent une demi-durée de tour après les impairs (une action toutes les turnSeconds/2 sur le stream)
+  staggered: boolean;
+  firstFloorFactor: number; // l'étage 1 dure N fois plus longtemps (le temps que tout le monde arrive)
+  lobbySeconds: number; // inscriptions : le premier !join ouvre N secondes d'attente, puis la partie repart à zéro pour tous (0 = pas de salon) // tours décalés : les étages pairs jouent une demi-durée de tour après les impairs (une action toutes les turnSeconds/2 sur le stream)
   respawnTurns: number; // tours avant réapparition
   immunitySeconds: number; // immunité JvJ après réapparition
   roomsPerPlayer: number; // taille d'étage : salles par joueur actif
@@ -32,6 +34,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   floorMinutes: 10,
   stairsOpenMinutes: 5,
   staggered: true,
+  firstFloorFactor: 2,
+  lobbySeconds: 300,
   respawnTurns: 5,
   immunitySeconds: 180,
   roomsPerPlayer: 2,
@@ -71,6 +75,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   cfg.twitchChannel = env.TWITCH_CHANNEL ?? cfg.twitchChannel;
   if (env.FINAL_FLOOR) cfg.finalFloor = Math.max(1, Number(env.FINAL_FLOOR) || cfg.finalFloor);
   if (env.BOTS !== undefined && env.BOTS !== '') cfg.bots = Math.max(0, Math.min(30, Number(env.BOTS) || 0));
+  if (env.LOBBY_SECONDS !== undefined && env.LOBBY_SECONDS !== '') cfg.lobbySeconds = Math.max(0, Number(env.LOBBY_SECONDS) || 0);
   if (env.STAGGERED) cfg.staggered = env.STAGGERED === '1' || env.STAGGERED === 'true';
   if (env.TUNNEL) cfg.tunnel = env.TUNNEL === '1' || env.TUNNEL === 'true';
   if (env.CLOSERS !== undefined && env.CLOSERS !== '') cfg.closers = Math.max(0, Math.min(10, Number(env.CLOSERS) || 0));

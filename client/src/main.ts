@@ -381,7 +381,13 @@ function tickHud() {
     ($('turn-bar') as HTMLElement).style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = state.floor?.collapseInSec;
     const el = $('hud-collapse');
-    if (c !== null && c !== undefined) {
+    const lobby = state.lobbyInSec;
+    if (lobby !== null && lobby !== undefined) {
+      // Salon d'attente : décompte avant le coup d'envoi
+      const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
+      el.textContent = `⏳ La partie commence dans ${fmtTime(rest)} : !join pour en être (échauffement en attendant)`;
+      el.classList.toggle('urgent', rest < 60);
+    } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
       const st = state.floor?.stairsInSec;

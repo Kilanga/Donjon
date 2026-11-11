@@ -123,6 +123,8 @@ export interface GameState {
   floodUntil: number; // tour de fin de l'inondation
   champions: import('../../shared/types.js').Legend[]; // sortis vainqueurs pendant cette partie
   seasonOver: boolean; // le dernier étage s'est effondré : la saison est finie, la partie est figée
+  lobbyUntil: number | null; // salon d'attente : fin des inscriptions (la partie repart alors à zéro pour tous)
+  lobbyWarned?: boolean;
   seasonStart: number | null; // arrivée du premier vrai joueur : l'horloge de la saison (étage n tombe à seasonStart + n × floorMinutes)
   bounty: { target: string; gold: number; untilTurn: number } | null;
 }
@@ -130,7 +132,7 @@ export interface GameState {
 export function emptyState(seed: number): GameState {
   return {
     version: 1, turn: 0, nextId: 1, rng: seed >>> 0, floors: {}, players: {}, alliances: {}, events: [],
-    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [], seasonOver: false, seasonStart: null,
+    vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [], seasonOver: false, seasonStart: null, lobbyUntil: null,
   };
 }
 

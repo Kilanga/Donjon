@@ -181,7 +181,8 @@ export interface PlayerViewMsg {
   serverNow: number;
   me: MeView | null;
   floor: FloorView | null;
-  standby?: FloorView | null; // stream : second étage gardé chargé (bascule instantanée)
+  standby?: FloorView | null;
+  lobbyInSec?: number | null; // salon d'attente : secondes avant le coup d'envoi (null = pas de salon en cours) // stream : second étage gardé chargé (bascule instantanée)
   standbyTurnEndsAt?: number;
   merchant: MerchantOffer[] | null;
   forge?: ForgeOffer | null; // dans la forge : ce que le forgeron peut améliorer, et à quel prix
