@@ -23,7 +23,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     expect(ev.some((e) => /GAME OVER pour ana \(n°1\), bob \(n°2\)/.test(e))).toBe(true);
     expect(ev.some((e) => /VOTE DE RÉSURRECTION/.test(e))).toBe(true);
     expect(g.player('ana')).toBeUndefined();
-    expect(g.voteView(null)?.title).toMatch(/SECONDE CHANCE/);
+    expect(g.voteView(null)?.title).toMatch(/seconde chance/i);
     // le chat vote (même sans perso) : une voix par pseudo, définitive
     expect(g.submit('viewer1', '!vote 2', t).ok).toBe(true);
     expect(g.submit('viewer2', '!vote 2', t).ok).toBe(true);
