@@ -4,7 +4,7 @@ import { MapRenderer } from './map';
 import { PRODUCTION_EVENTS } from '../../src/server/game/production';
 import { THEME_EFFECTS, THEME_LABEL } from '../../src/shared/themes';
 import { Stage, keyOf } from './stage';
-import { CLASS_SPRITE, Tiles } from './tiles';
+import { CLASS_SPRITE, Tiles, itemSprite, monsterSprite } from './tiles';
 import { initTelemetry, telemetryReady } from './telemetry';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -228,11 +228,11 @@ function render() {
   if (room) renderRoom(room, s);
   // Inventaire
   const inSafe = room?.type === 'safe';
-  const eq = (label: string, it: Item | null) => `<div class="entity">${it ? `<img src="${tiles.icon(it.sprite)}" alt="">` : '<span style="width:32px"></span>'}<div class="grow"><div class="section-label" style="margin:0">${label}</div>${it ? itemLine(it) : '<span class="muted">nothing</span>'}</div></div>`;
+  const eq = (label: string, it: Item | null) => `<div class="entity">${it ? `<img src="${tiles.icon(itemSprite(it))}" alt="">` : '<span style="width:32px"></span>'}<div class="grow"><div class="section-label" style="margin:0">${label}</div>${it ? itemLine(it) : '<span class="muted">nothing</span>'}</div></div>`;
   const items = me.items.map((it, i) => {
     const use = it.kind === 'arme' || it.kind === 'armure' ? `<button data-cmd="!equip ${i + 1}">Equip</button>` : `<button data-cmd="!use ${i + 1}">Use</button>`;
     const sell = inSafe ? `<button data-cmd="!sell ${i + 1}">Sell ${Math.max(1, Math.ceil(it.value / 2))} gold</button>` : '';
-    return `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><div style="display:flex;flex-direction:column;gap:3px">${use}${sell}</div></div>`;
+    return `<div class="entity"><img src="${tiles.icon(itemSprite(it))}" alt=""><div class="grow">${itemLine(it)}</div><div style="display:flex;flex-direction:column;gap:3px">${use}${sell}</div></div>`;
   }).join('');
   $('inv-card').innerHTML = `<div class="card-title">Gear <span class="muted">${me.items.length}/8 items</span></div>
     ${eq('Weapon', me.weapon)}${eq('Armor', me.armor)}
@@ -250,17 +250,17 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   const ms = room.monsters ?? [];
   const others = (room.players ?? []).filter((p) => !p.me);
   const canPvp = room.type !== 'safe' && me.immuneSeconds === 0;
-  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : 'var(--red)'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attack ${i + 1}">Attack</button></div>`).join('');
+  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(monsterSprite(m))}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : 'var(--red)'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attack ${i + 1}">Attack</button></div>`).join('');
   const players = others.map((p) => {
     const tags = [p.bot ? '<span class="badge pnj">NPC</span>' : '', p.ally ? '<span class="badge ally">ally</span>' : '', p.traitor ? '<span class="badge traitor">traitor</span>' : '', p.immune ? '<span class="badge immune">immune</span>' : '', !p.alive ? '<span class="badge">dead</span>' : ''].join('');
     const atk = p.alive && canPvp && !p.immune ? `<button class="danger" data-cmd="!attack ${esc(p.name)}">${p.ally ? 'Betray' : 'Attack'}</button>` : '';
     const ally = p.alive && !p.ally ? `<button data-cmd="!ally ${esc(p.name)}">Ally</button>` : '';
     return `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">lvl ${p.level}</span> ${tags}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div><div style="display:flex;flex-direction:column;gap:3px">${atk}${ally}</div></div>`;
   }).join('');
-  const ground = (room.ground ?? []).map((it) => `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><button data-cmd="!pickup ${esc(it.name)}">Take</button></div>`).join('');
+  const ground = (room.ground ?? []).map((it) => `<div class="entity"><img src="${tiles.icon(itemSprite(it))}" alt=""><div class="grow">${itemLine(it)}</div><button data-cmd="!pickup ${esc(it.name)}">Take</button></div>`).join('');
   const cryptCost = 50 * (s.floor?.n ?? 1);
   const crypt = (room.crypt ?? []).map((g) => `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[g.cls])}" alt="" style="filter:grayscale(1) opacity(.6)"><div class="grow"><b>${esc(g.name)}</b> <span class="muted">#${g.no} · lvl ${g.level}</span></div><div style="display:flex;flex-direction:column;gap:3px"><button data-cmd="!resurrect ${esc(g.name)} gold" ${me.gold < cryptCost ? 'disabled' : ''}>Raise · ${cryptCost} gold</button><button data-cmd="!resurrect ${esc(g.name)} hp" ${me.hp < 2 ? 'disabled' : ''}>Raise · ${Math.ceil(me.hp / 2)} HP</button></div></div>`).join('');
-  const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(o.item.sprite)}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!buy ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} gold</button></div>`).join('');
+  const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(itemSprite(o.item))}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!buy ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} gold</button></div>`).join('');
 
   const acts: string[] = [];
   if (room.feature) {

@@ -1,9 +1,9 @@
-// Rendu de la carte d'un étage en pixel art, avec brouillard de guerre.
+// Rendu de la carte d'un étage en pixel art (planche DawnLike), avec brouillard de guerre.
 import { normalize } from '../../src/shared/commands';
 import type { Dir, FloorView, GameEvent, MonsterView, PlayerPublic, RoomView } from '../../src/shared/types';
 import { FxLayer } from './fx';
-import { rng, roomDecor, type Prop } from '../../src/shared/decor';
-import { CLASS_SPRITE, Tiles } from './tiles';
+import { roomDecor, type Prop } from '../../src/shared/decor';
+import { CLASS_SPRITE, Tiles, monsterSprite } from './tiles';
 
 const IW = 7; // largeur intérieure d'une salle (tuiles)
 const IH = 5; // hauteur intérieure
@@ -11,6 +11,9 @@ const GAP = 2; // longueur des couloirs
 const CW = IW + 2 + GAP; // pas horizontal d'une cellule
 const CH = IH + 3 + GAP; // pas vertical
 const PX = 16;
+
+/** Jeu de sols et de murs de la planche DawnLike pour chaque thème d'étage. */
+const THEME_KEY: Record<string, string> = { classique: 'classic', 'inondé': 'flooded', 'en feu': 'fire', 'plongé dans le noir': 'dark', 'moisi': 'moldy', 'hanté': 'haunted' };
 
 const THEME_TINT: Record<string, string> = {
   'inondé': 'rgba(40,110,220,0.16)',
@@ -480,6 +483,7 @@ export class MapRenderer {
     const { ctx } = this;
     const ox = r.x * CW;
     const oy = r.y * CH;
+    const th = THEME_KEY[this.floor?.theme ?? ''] ?? 'classic';
     for (const [d, id] of Object.entries(r.doors) as [Dir, number][]) {
       const unknown = !known.has(id);
       if (!unknown && (d === 'o' || d === 'n')) continue; // déjà dessiné par l'autre salle
@@ -489,27 +493,27 @@ export class MapRenderer {
         const x0 = d === 'e' ? ox + IW + 2 : ox - GAP;
         const len = unknown ? 1 : GAP;
         const start = d === 'e' ? x0 : ox - len;
-        for (let i = 0; i < len; i++) this.floorTile(start + i, ty, 3);
-        ctx.fillStyle = '#1a1420';
-        ctx.fillRect(start * PX, ty * PX - 3, len * PX, 3);
-        ctx.fillRect(start * PX, (ty + 1) * PX, len * PX, 3);
+        for (let i = 0; i < len; i++) {
+          this.floorTile(start + i, ty, 3);
+          this.tiles.tile(ctx, `wl_${th}_h`, start + i, ty - 1);
+          this.tiles.tile(ctx, `wl_${th}_h`, start + i, ty + 1);
+        }
       } else {
         const tx = ox + 1 + Math.floor(IW / 2);
         const len = unknown ? 1 : GAP;
         const start = d === 's' ? oy + IH + 3 : oy - len;
-        for (let i = 0; i < len; i++) this.floorTile(tx, start + i, 3);
-        ctx.fillStyle = '#1a1420';
-        ctx.fillRect(tx * PX - 3, start * PX, 3, len * PX);
-        ctx.fillRect((tx + 1) * PX, start * PX, 3, len * PX);
+        for (let i = 0; i < len; i++) {
+          this.floorTile(tx, start + i, 3);
+          this.tiles.tile(ctx, `wl_${th}_v`, tx - 1, start + i);
+          this.tiles.tile(ctx, `wl_${th}_v`, tx + 1, start + i);
+        }
       }
     }
     ctx.globalAlpha = 1;
   }
 
-  private floorTile(tx: number, ty: number, seed: number) {
-    const v = hash(tx * 73 + ty * 131 + seed) % 100;
-    const name = v < 70 ? 'floor_1' : `floor_${2 + (v % 7)}`;
-    this.tiles.tile(this.ctx, name, tx, ty);
+  private floorTile(tx: number, ty: number, _seed: number) {
+    this.tiles.tile(this.ctx, `fl_${THEME_KEY[this.floor?.theme ?? ''] ?? 'classic'}_c`, tx, ty);
   }
 
   /** Le décor partagé avec le stream 3D : mêmes objets, mêmes places (tapis, os, éboulis, flaques, tonneaux…). */
@@ -520,103 +524,18 @@ export class MapRenderer {
     const props = roomDecor(this.floor?.n ?? 1, r, theme);
     // Au sol d'abord (tapis, flaques, brûlures), puis ce qui dépasse
     const flat = (p: Prop) => p.kind === 'rug_red' || p.kind === 'rug_blue' || p.kind === 'puddle' || p.kind === 'scorch';
+    const SPRITE: Record<string, string> = { rug_red: 'dec_rug_red', rug_blue: 'dec_rug_gray', scorch: 'gr_scorch', crates: 'dec_crates', box: 'dec_crate', coins: 'gold_pile', barrel: 'barrel', barrel_stack: 'barrel2' };
     for (const p of [...props.filter(flat), ...props.filter((x) => !flat(x))]) {
       const x = X(p.u);
       const y = Y(p.v);
-      const rand = rng(p.seed);
-      ctx.save();
-      switch (p.kind) {
-        case 'rug_red':
-        case 'rug_blue': {
-          const w = p.w! * IW * PX;
-          const h = p.h! * IH * PX;
-          ctx.translate(x, y);
-          ctx.rotate(p.rot * 0.4); // vu de dessus, à plat : on garde un peu de l'angle
-          ctx.fillStyle = p.kind === 'rug_red' ? '#6e1c1f' : '#1d3766';
-          ctx.fillRect(-w / 2, -h / 2, w, h);
-          ctx.strokeStyle = p.kind === 'rug_red' ? '#c8933a' : '#d8c27a';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6);
-          break;
-        }
-        case 'puddle':
-          ctx.fillStyle = 'rgba(10,12,20,0.55)';
-          for (let i = 0; i < (p.n ?? 3); i++) {
-            ctx.beginPath();
-            ctx.ellipse(x + (rand() - 0.5) * PX * 0.9, y + (rand() - 0.5) * PX * 0.5, PX * (0.2 + rand() * 0.3), PX * (0.12 + rand() * 0.18), 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          break;
-        case 'scorch':
-          ctx.fillStyle = 'rgba(0,0,0,0.38)';
-          ctx.beginPath();
-          ctx.ellipse(x, y, PX * 0.35 * p.s, PX * 0.22 * p.s, p.rot, 0, Math.PI * 2);
-          ctx.fill();
-          break;
-        case 'bones':
-          ctx.strokeStyle = '#d9cfb6';
-          ctx.lineWidth = 2;
-          ctx.lineCap = 'round';
-          for (let i = 0; i < Math.min(6, p.n ?? 4); i++) {
-            const a = rand() * Math.PI;
-            const bx = x + (rand() - 0.5) * PX * 0.9;
-            const by = y + (rand() - 0.5) * PX * 0.6;
-            ctx.beginPath();
-            ctx.moveTo(bx - Math.cos(a) * 5, by - Math.sin(a) * 3);
-            ctx.lineTo(bx + Math.cos(a) * 5, by + Math.sin(a) * 3);
-            ctx.stroke();
-          }
-          if (p.skull) tiles.drawAnchored(ctx, 'skull', x, y + PX * 0.3);
-          break;
-        case 'rubble':
-          for (let i = 0; i < Math.min(7, p.n ?? 5); i++) {
-            const rx = x + (rand() - 0.5) * PX * 1.1;
-            const ry = y + (rand() - 0.5) * PX * 0.7;
-            const rr = 2 + rand() * 4;
-            ctx.fillStyle = rand() < 0.5 ? '#6f645c' : '#857a70';
-            ctx.beginPath();
-            ctx.ellipse(rx, ry, rr, rr * 0.75, 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          break;
-        case 'barrel':
-        case 'barrel_stack': {
-          const k = p.kind === 'barrel_stack' ? 2 : 1;
-          for (let i = 0; i < k; i++) {
-            const bx = x + i * PX * 0.45;
-            const rad = PX * 0.32 * p.s;
-            ctx.fillStyle = '#6e4526';
-            if (p.tipped) {
-              ctx.fillRect(bx - rad * 1.3, y - rad * 0.8, rad * 2.6, rad * 1.6);
-              ctx.fillStyle = '#3d2614';
-              ctx.fillRect(bx - rad * 0.7, y - rad * 0.8, 3, rad * 1.6);
-              ctx.fillRect(bx + rad * 0.6, y - rad * 0.8, 3, rad * 1.6);
-            } else {
-              ctx.beginPath();
-              ctx.ellipse(bx, y, rad, rad * 0.9, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.strokeStyle = '#3d2614';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.ellipse(bx, y, rad * 0.7, rad * 0.62, 0, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-          }
-          break;
-        }
-        case 'crates':
-          tiles.drawAnchored(ctx, 'crate', x - PX * 0.3, y + PX * 0.5);
-          tiles.drawAnchored(ctx, 'crate', x + PX * 0.35, y + PX * 0.5);
-          tiles.drawAnchored(ctx, 'crate', x, y);
-          break;
-        case 'box':
-          tiles.drawAnchored(ctx, 'crate', x, y + PX * 0.5);
-          break;
-        case 'coins':
-          tiles.drawAnchored(ctx, 'coin_anim_f0', x, y + PX * 0.3);
-          break;
-      }
-      ctx.restore();
+      const name =
+        p.kind === 'bones' ? (p.skull ? 'dec_skulls' : (p.seed & 1) ? 'dec_bones' : 'dec_bones2')
+        : p.kind === 'rubble' ? ((p.seed & 1) ? 'dec_rubble' : 'dec_rubble2')
+        : p.kind === 'puddle' ? ((p.n ?? 0) > 3 ? 'gr_puddle' : 'gr_puddle_small')
+        : SPRITE[p.kind];
+      if (!name) continue;
+      const rug = p.kind === 'rug_red' || p.kind === 'rug_blue';
+      tiles.drawAnchored(ctx, name, Math.round(x), Math.round(y + (rug ? 16 : 6)), 0);
     }
   }
 
@@ -624,171 +543,117 @@ export class MapRenderer {
     const { ctx, tiles } = this;
     const ox = r.x * CW;
     const oy = r.y * CH;
-    const openE = r.doors.e !== undefined;
-    const openO = r.doors.o !== undefined;
-    const openN = r.doors.n !== undefined;
-    const openS = r.doors.s !== undefined;
+    const th = THEME_KEY[theme] ?? 'classic';
     const midRow = oy + 2 + Math.floor(IH / 2);
     const midCol = ox + 1 + Math.floor(IW / 2);
+    const at = (name: string, x: number, y: number, tt = t) => tiles.drawAnchored(ctx, name, x * PX, y * PX, tt);
 
-    // Sol
-    for (let y = 0; y < IH; y++) for (let x = 0; x < IW; x++) this.floorTile(ox + 1 + x, oy + 2 + y, r.id);
-    // Mur du haut : chapeau + façade
-    for (let x = 0; x < IW + 2; x++) {
-      const tx = ox + x;
-      if (openN && tx === midCol) {
-        this.floorTile(tx, oy, r.id);
-        this.floorTile(tx, oy + 1, r.id);
-        continue;
+    // Sol (neuf cases : bords ombrés), de la ligne oy + 1 à oy + IH + 1, puis les murs, fins, autour
+    const top = oy + 1;
+    const bottom = oy + IH + 1;
+    for (let y = top; y <= bottom; y++) {
+      for (let x = ox + 1; x <= ox + IW; x++) {
+        const pos = (y === top ? 't' : y === bottom ? 'b' : '') + (x === ox + 1 ? 'l' : x === ox + IW ? 'r' : '');
+        tiles.tile(ctx, `fl_${th}_${pos || 'c'}`, x, y);
       }
-      tiles.tile(ctx, x === 0 ? 'wall_top_left' : x === IW + 1 ? 'wall_top_right' : 'wall_top_mid', tx, oy);
-      tiles.tile(ctx, x === 0 ? 'wall_left' : x === IW + 1 ? 'wall_right' : 'wall_mid', tx, oy + 1);
     }
-    // Décor du mur du haut
-    if (r.type === 'safe') {
-      tiles.tile(ctx, 'wall_banner_blue', ox + 2, oy + 1);
-      tiles.tile(ctx, 'wall_fountain_mid_blue_anim', ox + IW - 1, oy + 1, t);
-      tiles.tile(ctx, 'wall_fountain_top_1', ox + IW - 1, oy);
-      tiles.tile(ctx, 'wall_fountain_basin_blue_anim', ox + IW - 1, oy + 2, t);
-    } else if (r.type === 'arene') {
-      tiles.tile(ctx, 'wall_banner_red', ox + 2, oy + 1);
-      tiles.tile(ctx, 'wall_banner_red', ox + IW - 1, oy + 1);
+    const wall = (n: string, x: number, y: number) => tiles.tile(ctx, `wl_${th}_${n}`, x, y);
+    const floor = (x: number, y: number) => tiles.tile(ctx, `fl_${th}_c`, x, y);
+    for (let x = ox; x <= ox + IW + 1; x++) {
+      if (r.doors.n !== undefined && x === midCol) floor(x, oy);
+      else wall(x === ox ? 'tl' : x === ox + IW + 1 ? 'tr' : 'h', x, oy);
+      if (r.doors.s !== undefined && x === midCol) floor(x, oy + IH + 2);
+      else wall(x === ox ? 'bl' : x === ox + IW + 1 ? 'br' : 'h', x, oy + IH + 2);
+    }
+    for (let y = oy + 1; y <= oy + IH + 1; y++) {
+      if (r.doors.o !== undefined && y === midRow) floor(ox, y);
+      else wall('v', ox, y);
+      if (r.doors.e !== undefined && y === midRow) floor(ox + IW + 1, y);
+      else wall('v', ox + IW + 1, y);
+    }
+    // Mobilier contre le mur du haut, selon le type de salle
+    if (r.type === 'arene') {
+      at('dec_weapons', ox + 1.5, oy + 2);
+      at('dec_weapons', ox + IW + 0.5, oy + 2);
     } else if (r.type === 'boss') {
-      tiles.tile(ctx, 'wall_banner_yellow', ox + 2, oy + 1);
-      tiles.tile(ctx, 'wall_fountain_mid_red_anim', ox + IW - 1, oy + 1, t);
-      tiles.tile(ctx, 'wall_fountain_top_1', ox + IW - 1, oy);
-      tiles.tile(ctx, 'wall_fountain_basin_red_anim', ox + IW - 1, oy + 2, t);
-    } else if (hash(r.id) % 4 === 0) tiles.tile(ctx, hash(r.id) % 8 === 0 ? 'wall_hole_1' : 'wall_goo', ox + 1 + (hash(r.id) % IW), oy + 1);
-    // Murs latéraux et du bas
-    for (let y = 2; y < IH + 2; y++) {
-      const ty = oy + y;
-      if (!(openO && ty === midRow)) tiles.tile(ctx, 'wall_mid', ox, ty);
-      else this.floorTile(ox, ty, r.id);
-      if (!(openE && ty === midRow)) tiles.tile(ctx, 'wall_mid', ox + IW + 1, ty);
-      else this.floorTile(ox + IW + 1, ty, r.id);
+      at('dec_candelabra', ox + 1.5, oy + 2);
+      at('dec_candelabra', ox + IW + 0.5, oy + 2);
+      at('dec_skulls2', ox + 1.5, oy + IH + 2);
     }
-    for (let x = 0; x < IW + 2; x++) {
-      const tx = ox + x;
-      if (openS && tx === midCol) this.floorTile(tx, oy + IH + 2, r.id);
-      else tiles.tile(ctx, 'wall_mid', tx, oy + IH + 2);
-    }
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect((ox + 1) * PX, (oy + 2) * PX, IW * PX, 4); // ombre sous la façade
     this.drawDecor(r, ox, oy, theme);
 
     // Objets de la salle
     if (r.stairs) {
-      // La sortie de l'étage : des marches qui descendent, encadrées de deux colonnes, fermées par une grille
-      // tant que l'escalier est scellé ou gardé par le boss
-      for (let dy = 0; dy < 2; dy++) for (let dx = -1; dx <= 1; dx++) tiles.tile(ctx, 'floor_stairs', midCol + dx, oy + 2 + dy);
+      // La sortie de l'étage : l'escalier, entre deux statues, fermé par une grille tant qu'il est scellé ou gardé
+      tiles.tile(ctx, 'stairs', midCol, oy + 2);
       const seal = Math.max(0, (this.floor?.stairsInSec ?? 0) - (performance.now() - this.floorAt) / 1000);
       const closed = !!r.bossAlive || this.floor?.stairsInSec === null || seal > 0;
-      if (closed) this.drawStretched('doors_leaf_closed', (midCol - 1) * PX, (oy + 2) * PX, 3 * PX, 2 * PX);
-      else {
-        ctx.fillStyle = 'rgba(0,0,0,0.35)'; // l'ombre de la descente
-        ctx.fillRect((midCol - 1) * PX + 3, (oy + 3) * PX + 4, 3 * PX - 6, PX - 4);
-      }
-      tiles.drawAnchored(ctx, 'column', (midCol - 1.5) * PX, (oy + 4) * PX);
-      tiles.drawAnchored(ctx, 'column', (midCol + 2.5) * PX, (oy + 4) * PX);
-      this.stairsMark = { x: (midCol + 0.5) * PX, y: (oy + 3) * PX, bossAlive: !!r.bossAlive };
+      if (closed) tiles.tile(ctx, 'gate', midCol, oy + 2, t);
+      at('dec_statue', midCol - 0.5, oy + 3);
+      at('dec_statue', midCol + 1.5, oy + 3);
+      this.stairsMark = { x: (midCol + 0.5) * PX, y: (oy + 2.5) * PX, bossAlive: !!r.bossAlive };
     }
-    if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
-    if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
+    if (r.trapArmed) tiles.tile(ctx, 'spikes', midCol, midRow, t);
+    if (r.chest !== 'aucun') at(r.chest === 'ferme' ? 'chest_closed' : 'chest_open', midCol + 0.5, oy + 3);
     if (r.feature) {
-      // Salles spéciales : l'objet au milieu du mur du haut
-      const fx = (midCol + 0.5) * PX;
-      const fy = (oy + 2.6) * PX;
+      // Salles spéciales : l'objet au milieu du mur du haut (le puits au centre)
+      const fx = midCol + 0.5;
       if (r.feature === 'autel') {
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(fx - PX * 0.9 + 3, fy + PX * 0.35, PX * 1.8, 6);
-        ctx.fillStyle = '#8d8a96';
-        ctx.fillRect(fx - PX * 0.9, fy - PX * 0.35, PX * 1.8, PX * 0.75);
-        ctx.fillStyle = '#b0adb8';
-        ctx.fillRect(fx - PX, fy - PX * 0.5, PX * 2, PX * 0.2);
-        ctx.fillStyle = '#a3161b';
-        ctx.fillRect(fx - PX * 0.2, fy - PX * 0.3, PX * 0.4, PX * 0.6);
-        for (const dx of [-0.75, 0.75]) {
-          ctx.fillStyle = '#efe6cf';
-          ctx.fillRect(fx + dx * PX - 2, fy - PX * 0.85, 4, PX * 0.35);
-          ctx.fillStyle = `rgba(255,200,80,${0.75 + 0.25 * Math.sin(t * 9 + dx)})`;
-          ctx.beginPath();
-          ctx.ellipse(fx + dx * PX, fy - PX * 0.95, 3, 5, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        at('dec_altar', fx, oy + 2.4);
+        at('dec_candelabra', fx - 1.3, oy + 2.4);
+        at('dec_candelabra', fx + 1.3, oy + 2.4);
       } else if (r.feature === 'fontaine') {
-        tiles.tile(ctx, 'wall_fountain_top_1', midCol, oy);
-        tiles.tile(ctx, 'wall_fountain_mid_blue_anim', midCol, oy + 1, t);
-        tiles.tile(ctx, 'wall_fountain_basin_blue_anim', midCol, oy + 2, t);
-        ctx.fillStyle = `rgba(120,220,255,${0.12 + 0.06 * Math.sin(t * 3)})`;
-        ctx.beginPath();
-        ctx.ellipse(fx, fy + PX * 0.2, PX * 1.4, PX * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
+        tiles.tile(ctx, 'fountain', midCol, oy + 1, t);
+        at('gr_puddle_small', fx, oy + 2.8);
       } else if (r.feature === 'puits') {
-        const wy = (midRow + 0.5) * PX;
-        ctx.fillStyle = '#6f645c';
-        ctx.beginPath();
-        ctx.ellipse(fx, wy, PX * 0.85, PX * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#132a3a';
-        ctx.beginPath();
-        ctx.ellipse(fx, wy - 2, PX * 0.55, PX * 0.36, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,214,90,${0.5 + 0.4 * Math.sin(t * 5)})`;
-        ctx.fillRect(fx - 2, wy - 4, 3, 3);
+        at('well', fx, midRow + 1);
       } else if (r.feature === 'prisonnier') {
-        ctx.strokeStyle = '#9a9aa8';
-        ctx.lineWidth = 2;
-        for (const dx of [-0.45, 0.45]) {
-          ctx.beginPath();
-          ctx.moveTo(fx + dx * PX, (oy + 1.8) * PX);
-          ctx.lineTo(fx + dx * PX * (r.featureDone ? 0.6 : 0.4), fy + (r.featureDone ? PX * 0.6 : 0));
-          ctx.stroke();
-        }
-        if (!r.featureDone) tiles.drawAnchored(ctx, 'elf_f_idle_anim', fx, fy + PX * 0.6, t);
+        if (!r.featureDone) at('npc_prisoner', fx, oy + 2.6);
+        at('dec_cage', fx, oy + 2.6);
       } else if (r.feature === 'ogre') {
-        for (let i = 0; i < 5; i++) tiles.drawAnchored(ctx, 'coin_anim_f0', fx + (i - 2) * 7, fy + PX * 0.4 + (i % 2) * 4);
+        at('gold_pile', fx - 0.6, oy + 2.4);
+        at('gold_pile', fx + 0.5, oy + 2.2);
+        at('chest_closed', fx + 1.6, oy + 2.4);
       }
     }
     if (r.crypt) {
-      // La crypte : une pierre tombale par éliminé qui attend qu'on le ressuscite, et quelques crânes
-      tiles.drawAnchored(ctx, 'skull', (ox + 1.5) * PX, (oy + IH + 0.5) * PX);
-      tiles.drawAnchored(ctx, 'skull', (ox + IW - 1.2) * PX, (oy + 2.6) * PX);
+      // La crypte : une pierre tombale par éliminé qui attend qu'on le ressuscite
+      at('dec_coffin', ox + IW + 0.3, oy + IH + 1.9);
+      at('dec_skulls', ox + 1.5, oy + IH + 1.9);
+      const stones = ['dec_tomb_rip', 'dec_tomb_lines', 'dec_tomb_skull', 'dec_tomb_plain'];
       r.crypt.slice(0, 6).forEach((g, i) => {
-        const x = (ox + 1.6 + (i % 3) * 1.9) * PX;
-        const y = (oy + 2.2 + Math.floor(i / 3) * 1.6) * PX;
-        const w = PX * 0.8;
-        const h = PX * 1.05;
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(x - w / 2 + 3, y + 2, w, 5);
-        ctx.fillStyle = '#8d8a96';
-        ctx.beginPath();
-        ctx.roundRect(x - w / 2, y - h, w, h, [w / 2, w / 2, 2, 2]);
-        ctx.fill();
-        ctx.fillStyle = '#5d5a66';
-        ctx.fillRect(x - 1.5, y - h * 0.78, 3, h * 0.5);
-        ctx.fillRect(x - w * 0.22, y - h * 0.62, w * 0.44, 3);
-        this.labels.push({ text: g.name, x, y: y - h - 4, color: '#c9c2d8', hp: 0, maxHp: 0 });
+        const x = ox + 1.6 + (i % 3) * 2.4;
+        const y = oy + 2.4 + Math.floor(i / 3) * 1.8;
+        at(stones[g.no % stones.length], x, y);
+        this.labels.push({ text: g.name, x: x * PX, y: (y - 1.1) * PX, color: '#c9c2d8', hp: 0, maxHp: 0 });
       });
     }
     if (r.forge) {
-      // La forge : un feu de forge dans le mur, le forgeron (nain) et ses caisses
-      tiles.tile(ctx, 'wall_fountain_mid_red_anim', ox + 2, oy + 1, t);
-      tiles.tile(ctx, 'wall_fountain_top_1', ox + 2, oy);
-      tiles.tile(ctx, 'wall_fountain_basin_red_anim', ox + 2, oy + 2, t);
-      tiles.drawAnchored(ctx, 'crate', (ox + IW - 0.5) * PX, (oy + 3.4) * PX);
-      tiles.drawAnchored(ctx, 'dwarf_m_idle_anim', (ox + 3.6) * PX, (oy + 3.6) * PX, t);
-      ctx.fillStyle = `rgba(255,120,40,${0.18 + 0.08 * Math.sin(t * 6)})`; // lueur du feu
-      ctx.fillRect((ox + 1) * PX, (oy + 2) * PX, 3 * PX, 2 * PX);
+      // La forge : le four, le râtelier, le forgeron (nain) et un tonneau d'eau
+      at('dec_furnace', ox + 1.5, oy + 2);
+      at('dec_weapons', ox + IW + 0.5, oy + 2);
+      at('barrel', ox + IW + 0.3, oy + 3.6);
+      at('npc_smith', ox + 3.6, oy + 3.6);
+      ctx.fillStyle = `rgba(255,120,40,${0.12 + 0.06 * Math.sin(t * 6)})`; // lueur du feu
+      ctx.fillRect((ox + 1) * PX, (oy + 1) * PX, 2 * PX, 2 * PX);
       const b = this.bubbles.get(`marchand:${r.id}`);
-      if (b) this.bubblePos.push({ text: b.text, x: (ox + 3.6) * PX, y: (oy + 3.6) * PX - 30, t0: b.t0, dur: b.dur, npc: true });
+      if (b) this.bubblePos.push({ text: b.text, x: (ox + 3.6) * PX, y: (oy + 3.6) * PX - 22, t0: b.t0, dur: b.dur, npc: true });
     }
     if (r.merchant) {
-      tiles.drawAnchored(ctx, 'doc_idle_anim', (ox + 2.5) * PX, (oy + 3.2) * PX, t);
+      // La boutique : étagères, comptoir, le marchand derrière
+      at('dec_bookshelf', ox + 1.5, oy + 2);
+      at('dec_bookshelf', ox + 2.5, oy + 2);
+      at('dec_candelabra', ox + IW + 0.5, oy + 2);
+      at('npc_merchant', ox + 2.5, oy + 3.2);
+      at('dec_table', ox + 2.5, oy + 4);
       const b = this.bubbles.get(`marchand:${r.id}`);
-      if (b) this.bubblePos.push({ text: b.text, x: (ox + 2.5) * PX, y: (oy + 3.2) * PX - 26, t0: b.t0, dur: b.dur, npc: true });
+      if (b) this.bubblePos.push({ text: b.text, x: (ox + 2.5) * PX, y: (oy + 3.2) * PX - 20, t0: b.t0, dur: b.dur, npc: true });
     }
-    if ((r.ground?.length ?? 0) > 0) tiles.drawAnchored(ctx, 'skull', (ox + IW - 0.2) * PX, (oy + IH + 1.6) * PX);
-    if ((r.groundGold ?? 0) > 0) tiles.drawAnchored(ctx, 'coin_anim', (ox + IW - 0.9) * PX, (oy + IH + 1.6) * PX, t);
+    // Butin au sol : les objets eux-mêmes (trois au plus) et l'or
+    (r.ground ?? []).slice(0, 3).forEach((it, i) => at(`it_${it.tpl}`, ox + IW - 0.4 - i * 0.7, oy + IH + 1.8));
+    if ((r.groundGold ?? 0) > 0) at('gold_pile', ox + IW - 2.6, oy + IH + 1.8);
+    // Platino, le lézard caché que l'auteur de DawnLike demande à tous ses utilisateurs : une salle sur 400
+    if (hash(r.id * 977 + (this.floor?.n ?? 0) * 31) % 400 === 7) at('platino', ox + 1.4, oy + IH + 1.9);
 
     // Brouillard : salles connues mais pas surveillées
     if (!r.current && !r.players && !r.monsters) {
@@ -801,7 +666,6 @@ export class MapRenderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(ox * PX + 0.5, oy * PX + 0.5, (IW + 2) * PX - 1, (IH + 3) * PX - 1);
     }
-    void theme;
   }
 
   private drawEntities(r: RoomView, t: number) {
@@ -817,7 +681,7 @@ export class MapRenderer {
       this.fx.lastPos.set(key, p);
       this.visibleKeys.add(key);
       const o = this.fx.offset(key, now);
-      this.drawFlashing(key, m.sprite, p.x + o.x, p.y + o.y, t + (m.asleep ? 0 : i * 0.37), flip, now);
+      this.drawFlashing(key, monsterSprite(m), p.x + o.x, p.y + o.y, t + (m.asleep ? 0 : i * 0.37), flip, now, m.boss ? 2 : 1);
       if (m.asleep) {
         // Il ronfle : des « z » qui montent
         ctx.font = `700 ${Math.round(11 + 3 * ((t * 0.7) % 1))}px 'Alegreya Sans', system-ui, sans-serif`;
@@ -846,16 +710,16 @@ export class MapRenderer {
       const flip = pl.me && this.me ? this.me.flip : i % 2 === 1;
       this.drawFlashing(key, CLASS_SPRITE[pl.cls], p.x + o.x, p.y + o.y, t + i * 0.29, flip, now);
       const color = pl.me ? '#ffd65a' : pl.traitor ? '#ff4d8d' : pl.ally ? '#6dff8a' : pl.bot ? '#a9b8cc' : '#ffffff';
-      this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 31, color, pl.hp, pl.maxHp);
+      this.label(pl.name + (pl.traitor ? ' ☠' : ''), p.x, p.y - 22, color, pl.hp, pl.maxHp);
       const b = this.bubbles.get(pl.name);
-      if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 40, t0: b.t0, dur: b.dur, npc: false });
+      if (b) this.bubblePos.push({ text: b.text, x: p.x, y: p.y - 30, t0: b.t0, dur: b.dur, npc: false });
     });
   }
 
   /** Sprite avec flash blanc (coup reçu) ou rouge (piège, gag). */
-  private drawFlashing(key: string, sprite: string, x: number, y: number, t: number, flip: boolean, now: number) {
+  private drawFlashing(key: string, sprite: string, x: number, y: number, t: number, flip: boolean, now: number, scale = 1) {
     const { ctx, tiles } = this;
-    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip, scale);
     const f = this.fx.flash(key, now);
     if (f.a <= 0) return;
     ctx.save();
@@ -868,8 +732,8 @@ export class MapRenderer {
     }
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = f.a;
-    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
-    tiles.drawAnchored(ctx, sprite, x, y, t, flip);
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip, scale);
+    tiles.drawAnchored(ctx, sprite, x, y, t, flip, scale);
     ctx.restore();
   }
 

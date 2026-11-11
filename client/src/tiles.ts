@@ -1,4 +1,5 @@
-// Chargement de la planche 0x72 DungeonTileset II (CC0) et dessin de sprites.
+// Chargement de la planche DawnLike (DragonDePlatino, palette DawnBringer, CC-BY-SA 3.0 ; construite par
+// scripts/dawnlike/build_atlas.py) et dessin de sprites.
 
 export interface Rect {
   x: number;
@@ -18,9 +19,9 @@ export class Tiles {
         const i = new Image();
         i.onload = () => res(i);
         i.onerror = rej;
-        i.src = `${base}/tileset.png`;
+        i.src = `${base}/dawnlike.png`;
       }),
-      fetch(`${base}/tile_list.txt`).then((r) => r.text()),
+      fetch(`${base}/dawnlike.txt`).then((r) => r.text()),
     ]);
     this.img = img;
     for (const line of list.split('\n')) {
@@ -33,23 +34,31 @@ export class Tiles {
     }
   }
 
-  /** Résout un nom de sprite, animé (préfixe + _fN) ou fixe. */
-  resolve(name: string, t = 0, speed = 7): Rect | undefined {
+  has(name: string): boolean {
+    return this.frames.has(name) || this.rects.has(name);
+  }
+
+  /** Résout un nom de sprite, animé (préfixe + _fN, deux images à 2,5 par seconde) ou fixe ; les anciens noms
+   *  (planche 0x72) passent par ALIAS. */
+  resolve(name: string, t = 0, speed = 2.5): Rect | undefined {
+    if (!this.has(name) && ALIAS[name]) name = ALIAS[name];
     const n = this.frames.get(name);
     if (n) return this.rects.get(`${name}_f${Math.floor(t * speed) % n}`);
     return this.rects.get(name) ?? this.rects.get(`${name}_f0`);
   }
 
-  /** Dessine un sprite ancré en bas au centre de (x, y). */
-  drawAnchored(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, t = 0, flip = false) {
+  /** Dessine un sprite ancré en bas au centre de (x, y) (`scale` entier : 2 pour les boss). */
+  drawAnchored(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, t = 0, flip = false, scale = 1) {
     const r = this.resolve(name, t);
     if (!r) return;
+    const w = r.w * scale;
+    const h = r.h * scale;
     ctx.save();
     if (flip) {
       ctx.translate(Math.round(x), 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(this.img, r.x, r.y, r.w, r.h, Math.round(-r.w / 2), Math.round(y - r.h), r.w, r.h);
-    } else ctx.drawImage(this.img, r.x, r.y, r.w, r.h, Math.round(x - r.w / 2), Math.round(y - r.h), r.w, r.h);
+      ctx.drawImage(this.img, r.x, r.y, r.w, r.h, Math.round(-w / 2), Math.round(y - h), w, h);
+    } else ctx.drawImage(this.img, r.x, r.y, r.w, r.h, Math.round(x - w / 2), Math.round(y - h), w, h);
     ctx.restore();
   }
 
@@ -75,8 +84,22 @@ export class Tiles {
 }
 
 export const CLASS_SPRITE: Record<string, string> = {
-  barbare: 'dwarf_m_idle_anim',
-  chevalier: 'knight_m_idle_anim',
-  voleur: 'elf_m_idle_anim',
-  mage: 'wizzard_m_idle_anim',
+  barbare: 'cls_barbare',
+  chevalier: 'cls_chevalier',
+  voleur: 'cls_voleur',
+  mage: 'cls_mage',
+};
+
+/** Sprite d'un monstre : par espèce (planche DawnLike), sinon l'ancien nom envoyé par le serveur. */
+export const monsterSprite = (m: { kind: string; sprite: string }) => `mon_${m.kind}`;
+/** Icône d'un objet : par modèle. */
+export const itemSprite = (it: { tpl: string; sprite: string }) => `it_${it.tpl}`;
+
+/** Anciens noms (planche 0x72) encore utilisés çà et là. */
+const ALIAS: Record<string, string> = {
+  skull: 'dec_skulls', crate: 'dec_crate', coin_anim: 'coin', coin_anim_f0: 'coin', coin: 'coin',
+  chest_full_open_anim_f0: 'chest_closed', chest_empty_open_anim_f2: 'chest_open', ui_heart_full: 'heart', ui_heart_empty: 'heart_empty',
+  floor_spikes_anim: 'spikes', floor_spikes_anim_f3: 'spikes', doc_idle_anim: 'npc_merchant', dwarf_m_idle_anim: 'npc_smith',
+  elf_f_idle_anim: 'npc_prisoner', weapon_hammer: 'it_marteau', weapon_duel_sword: 'it_epee_courte', flask_big_red: 'it_grande_potion',
+  flask_big_blue: 'it_potion', ogre_idle_anim_f0: 'mon_ogre_dormeur', floor_stairs: 'stairs', column: 'dec_statue', doors_leaf_closed: 'gate',
 };

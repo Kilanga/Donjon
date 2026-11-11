@@ -1,11 +1,18 @@
-# Crédits
+# Credits
 
-## Graphismes
+## 2D (player map and control room)
 
-- **16x16 DungeonTileset II** (v1.7) par **0x72** — <https://0x72.itch.io/dungeontileset-ii>
-  Licence : CC0 1.0 (domaine public). Fichiers : `client/public/assets/tileset.png` et `client/public/assets/tile_list.txt`.
-  Le crédit n'est pas obligatoire, mais mérité.
+- **DawnLike** v1.81 by **DragonDePlatino**, on the **DawnBringer** palette — <https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181>
+  License: CC-BY-SA 3.0. Credit to DawnBringer for the palette and to DragonDePlatino for the tileset.
+  As the author asks, Platino is hidden somewhere in the dungeon.
+  Files: `client/public/assets/dawnlike.png` and `dawnlike.txt`, assembled by `scripts/dawnlike/build_atlas.py`
+  (the sprite sheet is a derivative of DawnLike and stays under CC-BY-SA 3.0).
 
-## Polices
+## 3D (stream)
 
-- Pixelify Sans et Inter, chargées depuis Google Fonts (licence SIL Open Font License).
+- **KayKit** dungeon, adventurers and skeletons by **Kay Lousberg** — <https://kaylousberg.itch.io> — CC0 1.0.
+- **Quaternius** monsters — <https://quaternius.com> — CC0 1.0.
+
+## Fonts
+
+- Alegreya, Alegreya Sans and Grenze Gotisch (SIL Open Font License), served from the game itself (@fontsource).

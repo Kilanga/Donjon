@@ -20,7 +20,7 @@ export interface Item {
   def?: number; // armure : bonus de défense
   plus?: number; // améliorations du forgeron (0 à 3)
   desc: string;
-  sprite: string; // nom de sprite dans la planche 0x72
+  sprite: string; // ancien nom de sprite (la carte 2D choisit par modèle : it_<tpl>, mon_<espèce>)
 }
 
 export interface MonsterView {
