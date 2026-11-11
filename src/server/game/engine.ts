@@ -855,7 +855,18 @@ export class Game {
     f.monsters = f.monsters.filter((x) => x !== m);
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
     if (!m.boss && m.kind !== 'mimique' && m.kind !== 'ogre_dormeur') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
-    if (!killer) return;
+    // Un boss lâche toujours un objet, au moins rare, au sol de sa salle : premier arrivé (!pickup), premier servi
+    let drop: Item | null = null;
+    const bossRoom = m.boss ? f.rooms.find((r) => r.id === m.roomId) : undefined;
+    if (bossRoom) {
+      drop = randomLoot(this.rng, this.nextId, floorN, false, 'rare');
+      bossRoom.ground.push(drop);
+    }
+    const dropTxt = drop ? ` It drops ${drop.name} (${RARITY_LABEL[drop.rarity]}): !pickup, first come first served.` : '';
+    if (!killer) {
+      if (drop) this.emit({ floor: floorN, roomId: m.roomId, kind: 'loot', scope: 'etage', drama: 40, text: `${m.name} falls.${dropTxt}` });
+      return;
+    }
     killer.kills++;
     killer.gold += m.gold;
     // XP partagée entre les alliés présents dans la salle
@@ -863,7 +874,7 @@ export class Game {
     const share = Math.ceil(m.xp / sharers.length);
     for (const s of sharers) this.gainXp(s, share);
     const shareTxt = sharers.length > 1 ? ` (XP shared: ${share} each)` : ` (+${m.xp} XP)`;
-    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} slays ${m.name} and grabs ${m.gold} gold${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
+    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} slays ${m.name} and grabs ${m.gold} gold${shareTxt}.${dropTxt}`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
     const wait = m.boss ? this.stairsInMs(f) : 0;
     const sealed = wait !== 0 ? ` But the stairs are still sealed${wait ? ` (opening in ${fmtWait(wait)})` : ''}.` : '';
     if (m.boss && floorN >= this.cfg.finalFloor) {

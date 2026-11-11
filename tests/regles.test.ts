@@ -267,3 +267,22 @@ describe('salles spéciales', () => {
     expect(ogre.asleep).toBe(false);
   });
 });
+
+describe('butin des boss', () => {
+  it('un boss lâche au sol un objet au moins rare', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const g = new Game(cfg({ seed }));
+      g.submit('a', '!join barbarian', T0);
+      const p = g.player('a')!;
+      const f = g.floor(1)!;
+      const boss = f.monsters.find((m) => m.boss)!;
+      p.roomId = boss.roomId;
+      const room = f.rooms.find((r) => r.id === boss.roomId)!;
+      const before = room.ground.length;
+      (g as unknown as { killMonster: (m: unknown, n: number, k: unknown) => void }).killMonster(boss, 1, p);
+      expect(room.ground.length).toBe(before + 1);
+      expect(['rare', 'epique', 'legendaire']).toContain(room.ground[room.ground.length - 1].rarity);
+      expect(g.flush().some((e) => /drops .*first come first served/.test(e.text))).toBe(true);
+    }
+  });
+});
