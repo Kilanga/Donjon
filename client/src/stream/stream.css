@@ -29,8 +29,13 @@
   --serif: 'Alegreya', Georgia, serif;
   --sans: 'Alegreya Sans', system-ui, sans-serif;
   --gothic: 'Grenze Gotisch', 'Alegreya', serif;
-  /* compat : anciennes variables encore lues par le script */
-  --txt: var(--ink);
+  /* encres claires, pour écrire directement sur le donjon */
+  --light: #f4f2ec;
+  --light-mut: #bdb4a5;
+  --red-l: #ef5a5f;
+  --pink-l: #f25c9a;
+  --green-l: #74c487;
+  --txt: var(--light);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--dungeon); color: var(--ink); font-family: var(--sans); font-variant-numeric: lining-nums tabular-nums; }
@@ -48,124 +53,136 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 .bub3d::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-top-color: var(--ink); border-bottom: 0; }
 
 .ui { position: fixed; inset: 0; pointer-events: none; }
-.panel { background: var(--paper); color: var(--ink); border: 1px solid var(--ink); border-radius: 2px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
-.panel h3 { margin: 0 0 6px; font: 700 18px/1.2 var(--serif); color: var(--ink); padding-bottom: 4px; border-bottom: 3px double var(--rule); }
+/* Pas de cartes flottantes : un bandeau collé en haut, et le reste écrit directement
+   sur l'image, sur deux voiles sombres le long des bords gauche et droit. */
+.ui::before, .ui::after { content: ''; position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.ui::before { left: 0; width: 560px; background: linear-gradient(90deg, rgba(21,17,14,.78) 0%, rgba(21,17,14,.55) 55%, rgba(21,17,14,0) 100%); }
+.ui::after { right: 0; width: 440px; background: linear-gradient(270deg, rgba(21,17,14,.8) 0%, rgba(21,17,14,.6) 55%, rgba(21,17,14,0) 100%); }
+.ui > * { z-index: 1; }
+.panel { color: var(--light); }
+.panel h3 { margin: 0 0 6px; font: 700 20px/1.2 var(--serif); color: var(--light); }
 .hidden { display: none !important; }
-.muted { color: var(--mut); }
+.muted { color: var(--light-mut); }
 
-/* Bandeau : la même bannière que la page web */
-#top { position: absolute; left: 20px; top: 18px; display: flex; gap: 14px; align-items: center; padding: 9px 18px 8px 10px; border-bottom: 3px solid var(--red); }
+/* Bandeau : collé au bord haut, sur toute la largeur, comme la page web */
+#top { position: absolute; left: 0; right: 0; top: 0; height: 66px; display: flex; gap: 16px; align-items: center; padding: 0 24px; background: var(--paper-solid); color: var(--ink); border-bottom: 3px solid var(--red); box-shadow: 0 4px 16px rgba(0,0,0,.35); z-index: 2; }
 .live { background: var(--red); color: #fff; font-weight: 700; font-size: 14px; padding: 4px 9px; border-radius: 2px; display: flex; gap: 7px; align-items: center; }
 .live i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
-.brand { font-family: var(--gothic); font-weight: 800; font-size: 38px; color: var(--red); line-height: 0.95; }
+#top > div:last-child { display: flex; align-items: baseline; gap: 16px; }
+.brand { font-family: var(--gothic); font-weight: 800; font-size: 40px; color: var(--red); line-height: 1; }
 .brand.big { font-size: 120px; }
-.meta { font-size: 15px; color: var(--mut); margin-top: 2px; }
+.meta { font-size: 17px; color: var(--mut); }
 .meta b { color: var(--ink); }
 
-#timers { position: absolute; right: 20px; top: 18px; padding: 10px 16px; min-width: 270px; text-align: right; }
+#timers { position: absolute; right: 24px; top: 0; height: 66px; display: flex; align-items: center; gap: 22px; color: var(--ink); z-index: 3; }
 .collapse { font-weight: 700; font-size: 19px; color: #8a4a00; }
 .collapse.urgent { color: var(--red); animation: blink .8s infinite; }
-.turn { display: flex; gap: 10px; align-items: center; margin-top: 6px; font-size: 14px; color: var(--mut); }
+.turn { display: flex; gap: 10px; align-items: center; font-size: 15px; color: var(--mut); width: 250px; }
 .bar { position: relative; height: 10px; flex: 1; background: #e6e1d6; border: 1px solid #8f8676; border-radius: 1px; overflow: hidden; }
 .bar.wide { width: 340px; flex: none; }
 .bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--or); }
 
-/* Fil des événements : des bandelettes, filet de couleur à gauche */
-#feed { position: absolute; left: 20px; top: 118px; width: 440px; display: flex; flex-direction: column; gap: 6px; }
-.fi { background: var(--paper); color: var(--ink); border: 1px solid rgba(35,29,25,0.55); border-left: 4px solid #8f8676; border-radius: 2px; padding: 6px 12px; font-size: 15px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,0.4); animation: slidein .35s ease-out; }
-.fi.mort { border-left-color: var(--red); }
-.fi.trahison { border-left-color: var(--pink); color: var(--pink); font-weight: 700; }
+/* Fil des événements : du texte sur le voile, un trait de couleur pour le genre */
+#feed { position: absolute; left: 24px; top: 96px; width: 470px; display: flex; flex-direction: column; gap: 9px; }
+.fi { color: var(--light); border-left: 3px solid rgba(244,242,236,.35); padding: 1px 0 1px 12px; font-size: 17px; line-height: 1.35; text-shadow: 0 1px 3px rgba(0,0,0,.9); animation: slidein .35s ease-out; }
+.fi:nth-child(n+4) { opacity: .7; }
+.fi.mort { border-left-color: var(--red-l); }
+.fi.trahison { border-left-color: var(--pink-l); color: #ffd0e0; font-weight: 700; }
 .fi.systeme { border-left-color: var(--or); }
-.fi.niveau, .fi.alliance { border-left-color: var(--green); }
-.fi.ia { border-left-color: var(--red); font-family: var(--serif); font-style: italic; }
-.fi.ia::before { content: 'IA du donjon'; font: 700 15px var(--serif); color: var(--red); margin-right: 7px; font-style: normal; }
-@keyframes slidein { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.fi.niveau, .fi.alliance { border-left-color: var(--green-l); }
+.fi.ia { border-left-color: var(--red-l); font-family: var(--serif); font-style: italic; }
+.fi.ia::before { content: 'IA du donjon'; font: 700 16px var(--serif); color: var(--red-l); margin-right: 7px; font-style: normal; }
+@keyframes slidein { from { transform: translateX(-24px); opacity: 0; } to { transform: none; } }
 
-#lb { position: absolute; right: 20px; top: 124px; width: 300px; padding: 10px 14px 8px; }
-#lb .r { display: flex; gap: 8px; align-items: baseline; font-size: 15px; padding: 3px 0; border-top: 1px solid #e0dbcf; }
-#lb h3 + .r { border-top: 0; }
-#lb .r .k { width: 18px; color: var(--mut); }
+/* Colonne de droite : classement, commandes, étages, en texte sur le voile */
+#lb, #cmds, #floors { position: absolute; right: 24px; width: 330px; padding: 0; }
+#lb h3, #cmds h3, #floors h3 { padding-bottom: 5px; border-bottom: 1px solid rgba(244,242,236,.3); }
+#lb { top: 96px; }
+#lb .r { display: flex; gap: 8px; align-items: baseline; font-size: 16px; padding: 3px 0; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+#lb .r .k { width: 18px; color: var(--light-mut); }
 #lb .r .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-#lb .r:nth-of-type(1) .nm { color: var(--red); font-weight: 700; }
-#lb .r .s { color: var(--mut); font-size: 13px; }
+#lb .r:nth-of-type(1) .nm { color: var(--or); font-weight: 800; }
+#lb .r .nm small { color: var(--light-mut); }
+#lb .r .s { color: var(--light-mut); font-size: 14px; }
 #lb .r.dead .nm { opacity: .5; text-decoration: line-through; }
 
-#floors { position: absolute; right: 20px; bottom: 20px; width: 300px; padding: 10px 14px 8px; }
-#floors .f { display: flex; gap: 8px; font-size: 14px; padding: 3px 0; border-top: 1px solid #e0dbcf; }
-#floors h3 + .f { border-top: 0; }
+#floors { bottom: 28px; }
+#floors .f { display: flex; gap: 8px; font-size: 15px; padding: 3px 0; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
 #floors .f .n { width: 84px; font-weight: 700; white-space: nowrap; }
-#floors .f .w { flex: 1; color: var(--mut); }
-#floors .f .t { color: var(--mut); }
-#floors .f .t.urgent { color: var(--red); font-weight: 700; }
-#floors .f.on { background: #f8efd6; box-shadow: -14px 0 0 #f8efd6, 14px 0 0 #f8efd6; }
-#floors .f.on .n { color: var(--gold); }
+#floors .f .w { flex: 1; color: var(--light-mut); }
+#floors .f .t { color: var(--light-mut); }
+#floors .f .t.urgent { color: var(--red-l); font-weight: 800; }
+#floors .f.on .n, #floors .f.on .w { color: var(--or); }
 
-#helpp { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 660px; padding: 18px 24px; border-top: 4px solid var(--red); animation: cmdIn .3s ease-out; }
-#helpp h3 { font: 800 36px/1 var(--gothic); color: var(--red); text-align: center; border: 0; margin-bottom: 10px; }
-#helpp .l { font-size: 16px; padding: 3px 0; }
-#helpp .l code { color: var(--red); font-family: inherit; font-weight: 700; }
-#helpp .foot { margin-top: 10px; text-align: center; color: var(--mut); font-size: 14px; }
-
-/* Grands moments : titre gothique sur le noir du donjon */
-#season { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,17,14,.86); color: var(--paper-solid); animation: cmdIn .8s ease-out; }
-#season .s1 { font: 800 120px/1 var(--gothic); color: var(--paper-solid); }
-#season .s2 { font: italic 400 26px var(--serif); color: #d8d2c4; margin: 10px 0 24px; }
-#season .s3 { margin-top: 26px; font-size: 19px; color: #b3aa9b; }
-#season .lg { display: flex; gap: 16px; align-items: baseline; font-size: 22px; padding: 7px 20px; background: var(--paper-solid); color: var(--ink); border-bottom: 1px solid #e0dbcf; min-width: 560px; }
-#season .lg:first-of-type { border-top: 4px solid var(--or); }
-#season .lg b { color: var(--ink); font: 700 26px var(--serif); flex: 1; }
-#season .lg span { color: var(--mut); }
-#card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,.72), rgba(0,0,0,.25) 60%, transparent 80%); animation: cardInOut 2.6s ease-in-out forwards; }
-#card .c1 { font: 800 140px/1 var(--gothic); color: var(--paper-solid); text-shadow: 0 4px 24px rgba(0,0,0,.8); }
-#card .c2 { margin-top: 10px; padding: 4px 16px; font: 700 24px var(--serif); color: var(--ink); background: var(--paper-solid); border-bottom: 3px solid var(--red); }
-@keyframes cardInOut { 0% { opacity: 0; transform: scale(1.06); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
-
-#cmds { position: absolute; right: 20px; top: 340px; width: 300px; padding: 10px 14px 8px; }
-#cmds .c { font-size: 14px; padding: 4px 0; border-top: 1px solid #e0dbcf; animation: cmdIn .3s ease-out; }
-#cmds .c:first-child { border-top: 0; }
-#cmds .c b { color: var(--ink); }
-#cmds .c code { color: var(--red); font-family: inherit; font-weight: 700; }
+#cmds { top: 360px; }
+#cmds .c { font-size: 15px; padding: 3px 0; animation: cmdIn .3s ease-out; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+#cmds .c b { color: var(--light); }
+#cmds .c code { color: var(--or); font-family: inherit; font-weight: 700; }
 #cmds .c .v { float: right; font-weight: 800; }
-#cmds .c.ok .v { color: var(--green); }
-#cmds .c.ko .v { color: var(--red); }
-#cmds .c .why { display: block; color: var(--mut); font-size: 13px; margin-top: 1px; }
+#cmds .c.ok .v { color: var(--green-l); }
+#cmds .c.ko .v { color: var(--red-l); }
+#cmds .c .why { display: block; color: var(--light-mut); font-size: 13px; margin-top: 1px; }
 #cmds .c.tw b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 1px; background: #9146ff; margin-right: 5px; vertical-align: 1px; }
 @keyframes cmdIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 
-/* Vote et paris : en haut au centre, l'un sous l'autre */
-#topc { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; }
-#vote { padding: 10px 14px 12px; border-top: 4px solid var(--or); text-align: center; }
-#vote .t { font: 700 18px var(--serif); color: var(--ink); margin-bottom: 8px; }
-#vote .o { display: inline-flex; flex-direction: column; align-items: center; width: 210px; margin: 0 4px; padding: 5px 8px 7px; background: #fffdf8; border: 1px solid #a89f8f; border-radius: 2px; vertical-align: top; }
+/* Aide : une feuille au centre, le seul vrai panneau (elle ne reste que 20 s) */
+#helpp { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 660px; padding: 18px 26px; background: var(--paper-solid); color: var(--ink); border-top: 4px solid var(--red); box-shadow: 0 10px 40px rgba(0,0,0,.6); animation: cmdIn .3s ease-out; }
+#helpp h3 { font: 800 38px/1 var(--gothic); color: var(--red); text-align: center; margin-bottom: 10px; }
+#helpp .l { font-size: 17px; padding: 3px 0; }
+#helpp .l code { color: var(--red); font-family: inherit; font-weight: 700; }
+#helpp .foot { margin-top: 10px; text-align: center; color: var(--mut); font-size: 15px; }
+
+/* Grands moments : titre gothique sur le noir du donjon */
+#season { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,17,14,.88); color: var(--light); animation: cmdIn .8s ease-out; z-index: 4; }
+#season .s1 { font: 800 120px/1 var(--gothic); color: var(--light); }
+#season .s2 { font: italic 400 26px var(--serif); color: #d8d2c4; margin: 10px 0 24px; }
+#season .s3 { margin-top: 26px; font-size: 19px; color: var(--light-mut); }
+#season .lg { display: flex; gap: 16px; align-items: baseline; font-size: 22px; padding: 7px 4px; border-bottom: 1px solid rgba(244,242,236,.2); min-width: 560px; }
+#season .lg b { color: var(--light); font: 700 26px var(--serif); flex: 1; }
+#season .lg:first-of-type b { color: var(--or); }
+#season .lg span { color: var(--light-mut); }
+#card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,.72), rgba(0,0,0,.25) 60%, transparent 80%); animation: cardInOut 2.6s ease-in-out forwards; z-index: 3; }
+#card .c1 { font: 800 140px/1 var(--gothic); color: var(--light); text-shadow: 0 4px 24px rgba(0,0,0,.8); }
+#card .c2 { margin-top: 8px; font: italic 400 28px var(--serif); color: var(--light); text-shadow: 0 2px 8px #000; }
+@keyframes cardInOut { 0% { opacity: 0; transform: scale(1.06); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Vote et paris : une languette qui pend du bandeau, sans cadre autour des options */
+#topc { position: absolute; top: 69px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 2; }
+#vote, #bet { background: var(--paper-solid); color: var(--ink); text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+#vote { padding: 8px 18px 10px; border-bottom: 3px solid var(--or); }
+#vote .t { font: 700 19px var(--serif); color: var(--ink); margin-bottom: 4px; }
+#vote .o { display: inline-flex; flex-direction: column; align-items: center; width: 220px; padding: 2px 12px; vertical-align: top; }
+#vote .o + .o { border-left: 1px solid var(--rule); }
 #vote .o b { font-size: 16px; }
-#vote .o .n { font: 700 26px/1.1 var(--serif); color: var(--gold); }
+#vote .o .n { font: 700 28px/1.1 var(--serif); color: var(--gold); }
 #vote .o small { color: var(--mut); font-size: 13px; line-height: 1.3; }
-#bet { min-width: 470px; max-width: 660px; padding: 10px 14px; border-top: 4px solid var(--green); text-align: center; }
-#bet .t { font: 700 17px var(--serif); color: var(--ink); }
-#bet .q { font-size: 16px; margin: 3px 0 7px; }
+#vote:not(.hidden) + #bet { border-top: 1px solid var(--rule); }
+#bet { min-width: 480px; max-width: 680px; padding: 8px 18px 10px; border-bottom: 3px solid var(--green); }
+#bet .t { font: 700 18px var(--serif); color: var(--ink); }
+#bet .q { font-size: 16px; margin: 2px 0 7px; }
 #bet .bar { display: flex; height: 24px; border-radius: 1px; overflow: hidden; background: #e6e1d6; font: 700 13px/22px var(--sans); color: #fff; }
 #bet .bar span { min-width: 52px; white-space: nowrap; }
 #bet .oui { background: var(--green); }
 #bet .non { background: var(--red); }
 #bet small { color: var(--mut); font-size: 13px; }
 
-#shot { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); font: italic 400 15px var(--serif); color: #d8d2c4; text-shadow: 0 1px 3px #000; }
-#ia { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; gap: 14px; align-items: baseline; padding: 12px 20px 13px; max-width: 800px; border-left: 5px solid var(--red); }
+#shot { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); font: italic 400 16px var(--serif); color: #d8d2c4; text-shadow: 0 1px 3px #000; }
+/* L'IA du donjon parle comme un sous-titre */
+#ia { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); display: block; width: max-content; max-width: 980px; padding: 14px 60px; text-align: center; background: radial-gradient(ellipse at center, rgba(21,17,14,.8) 0%, rgba(21,17,14,.55) 55%, rgba(21,17,14,0) 75%); }
 .orb { display: none; }
-.hl { flex: none; font: 700 17px/1.2 var(--serif); color: var(--red); margin-bottom: 3px; }
-#ia > div:last-child { display: flex; flex-direction: column; }
-#ia-text { font: italic 400 20px/1.4 var(--serif); color: var(--ink); }
+.hl { font: 700 16px/1.2 var(--serif); color: var(--red-l); margin-bottom: 2px; }
+#ia-text { font: italic 400 25px/1.35 var(--serif); color: var(--light); text-shadow: 0 2px 6px #000; }
 
-#lt { position: absolute; left: 50%; bottom: 36px; transform: translate(-50%, 160px); display: flex; align-items: stretch; max-width: min(1100px, 92vw); box-shadow: 0 6px 22px rgba(0,0,0,0.5); transition: transform .5s cubic-bezier(.2,1.2,.4,1); }
-#lt.on { transform: translate(-50%, 0); }
-.lt-tag { background: var(--red); color: #fff; font: 800 22px var(--gothic); padding: 8px 16px; display: flex; align-items: center; }
-#lt-text { background: var(--paper-solid); border: 2px solid var(--red); border-left: 0; font: 700 24px var(--serif); color: var(--ink); padding: 8px 18px; }
+#lt { position: absolute; left: 0; bottom: 80px; transform: translateX(-110%); display: flex; align-items: stretch; max-width: min(1200px, 80vw); box-shadow: 0 6px 22px rgba(0,0,0,0.5); transition: transform .5s cubic-bezier(.2,1.1,.4,1); z-index: 2; }
+#lt.on { transform: none; }
+.lt-tag { background: var(--red); color: #fff; font: 800 24px var(--gothic); padding: 8px 18px 8px 24px; display: flex; align-items: center; }
+#lt-text { background: var(--paper-solid); border-bottom: 3px solid var(--red); font: 700 25px var(--serif); color: var(--ink); padding: 8px 22px; }
 
-#cta { position: absolute; left: 20px; bottom: 20px; padding: 9px 14px; font-size: 16px; border-left: 4px solid var(--red); }
-#cta b { color: var(--red); }
-#cta .url { font-size: 19px; margin-bottom: 3px; }
-#cta .url small { color: var(--mut); font-size: 14px; }
+#cta { position: absolute; left: 24px; bottom: 26px; font-size: 18px; color: var(--light); text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+#cta b { color: var(--or); }
+#cta .url { font-size: 21px; margin-bottom: 2px; }
+#cta .url small { color: var(--light-mut); font-size: 15px; }
 
 #pause { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font: 800 150px var(--gothic); color: var(--paper-solid); text-shadow: 0 4px 24px rgba(0,0,0,.8); background: rgba(21,17,14,.45); }
 #load { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: var(--stone); z-index: 5; transition: opacity .6s; }

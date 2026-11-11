@@ -131,7 +131,9 @@ input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rg
 .item-sub { font-size: 12px; color: var(--muted); }
 
 /* Bas de page : le journal et le chat */
-#bottom { display: grid; grid-template-columns: 1fr 420px; gap: 10px; padding: 10px; min-height: 0; border-top: 1px solid #8f8676; background: var(--bg); }
+#bottom { display: grid; grid-template-columns: 1fr 420px; gap: 0; padding: 0; min-height: 0; border-top: 3px double #8f8676; background: var(--panel); }
+#bottom .card { background: transparent; border: 0; border-radius: 0; padding: 10px 16px 12px; }
+#bottom .chat-card { border-left: 1px solid var(--line); }
 .log-card, .chat-card { display: flex; flex-direction: column; min-height: 0; }
 #bottom .card-title { font-size: 16px; margin-bottom: 4px; }
 #log, #chat { overflow-y: auto; flex: 1; font-size: 14px; }
@@ -188,8 +190,8 @@ input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rg
   #map-help { display: none; }
   #dpad { right: 8px; bottom: 8px; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
   #side { border-left: 0; overflow: visible; }
-  #bottom { display: block; padding: 8px; }
-  #bottom .card { margin-bottom: 8px; }
+  #bottom { display: block; }
+  #bottom .chat-card { border-left: 0; border-top: 1px solid var(--line); }
   #log, #chat { max-height: 220px; }
   #cmd-form { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px; background: var(--panel); border-top: 1px solid #8f8676; z-index: 6; }
   .classes { grid-template-columns: repeat(2, 1fr); }
