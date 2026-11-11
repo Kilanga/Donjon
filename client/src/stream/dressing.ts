@@ -171,14 +171,11 @@ export function buildDressing(f: FloorView, group: THREE.Group) {
       return side === 0 ? [cx + t, cz - d, 0] : side === 1 ? [cx - d, cz + t, 1] : side === 2 ? [cx + d, cz + t, 2] : [cx + t, cz + d, 3];
     };
     // Tapis : jamais centré ni droit, parfois deux qui se chevauchent
-    if (r.type === 'safe' && !r.forge) {
-      const [x, z] = [cx + between(-2.2, -0.6), cz + between(0.6, 2.2)];
-      rugsBlue.push(mat4(x, 0.04, z, -Math.PI / 2, 0, between(-0.5, 0.5), between(2.6, 3.4), between(3.8, 4.8), 1));
-    } else if (r.type === 'normale' && chance(0.22)) {
+    if (r.type === 'normale' && chance(0.22)) {
       const [x, z] = inRoom(2.2);
       const list = chance(0.5) ? rugsRed : rugsBlue;
-      list.push(mat4(x, 0.04, z, -Math.PI / 2, 0, between(-0.9, 0.9), between(2.2, 3.2), between(3.2, 4.6), 1));
-      if (chance(0.3)) rugsRed.push(mat4(x + between(-1.4, 1.4), 0.05, z + between(-1.2, 1.2), -Math.PI / 2, 0, between(-1.5, 1.5), between(1.6, 2.4), between(2.2, 3.2), 1));
+      list.push(mat4(x, 0.075, z, -Math.PI / 2, 0, between(-0.9, 0.9), between(2.2, 3.2), between(3.2, 4.6), 1));
+      if (chance(0.3)) rugsRed.push(mat4(x + between(-1.4, 1.4), 0.085, z + between(-1.2, 1.2), -Math.PI / 2, 0, between(-1.5, 1.5), between(1.6, 2.4), between(2.2, 3.2), 1));
     }
     // Os : en tas (là où quelque chose s'est mal fini), avec quelques os égarés
     if (r.type === 'normale' || r.type === 'piege' || r.type === 'boss' || r.type === 'arene') {
@@ -214,16 +211,16 @@ export function buildDressing(f: FloorView, group: THREE.Group) {
       }
     }
     // Flaques : quelques taches irrégulières faites de disques qui se recouvrent (pas d'étage inondé : l'eau couvre tout)
-    if (!wet && chance(0.4)) {
+    if (!wet && r.type !== 'safe' && chance(0.4)) {
       const [px, pz] = inRoom(2);
       const n = 2 + Math.floor(rand() * 4);
-      for (let i = 0; i < n; i++) puddles.push(mat4(px + between(-0.9, 0.9), 0.045 + i * 0.001, pz + between(-0.7, 0.7), -Math.PI / 2, 0, 0, between(0.35, 0.9), between(0.25, 0.7), 1));
+      for (let i = 0; i < n; i++) puddles.push(mat4(px + between(-0.9, 0.9), 0.07 + i * 0.001, pz + between(-0.7, 0.7), -Math.PI / 2, 0, 0, between(0.35, 0.9), between(0.25, 0.7), 1));
     }
     if (fire && chance(0.6)) {
       const n = 1 + Math.floor(rand() * 4);
       for (let i = 0; i < n; i++) {
         const [x, z] = inRoom(1.5);
-        scorch.push(mat4(x, 0.05 + i * 0.001, z, -Math.PI / 2, 0, rand() * 6, between(0.6, 2), between(0.5, 1.6), 1));
+        scorch.push(mat4(x, 0.072 + i * 0.001, z, -Math.PI / 2, 0, rand() * 6, between(0.6, 2), between(0.5, 1.6), 1));
       }
     }
   }
@@ -342,4 +339,91 @@ export function makeMotes(n = 260): THREE.Points {
   const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.11, map: tex().mote, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   p.frustumCulled = false;
   return p;
+}
+
+// ------------------------------------------------------- la safe room du marchand
+// Une boutique tenue : tout est rangé, aligné, propre. Le contraire du reste du donjon.
+
+const WOOD = new THREE.MeshStandardMaterial({ color: 0x7a4e2c, roughness: 0.85 });
+const WOOD_DARK = new THREE.MeshStandardMaterial({ color: 0x4f321d, roughness: 0.9 });
+const POT = new THREE.MeshStandardMaterial({ color: 0xa65c38, roughness: 0.8 });
+const LEAF = new THREE.MeshStandardMaterial({ color: 0x3f7f45, roughness: 0.9, flatShading: true });
+const GLASS: Record<string, THREE.MeshStandardMaterial> = {};
+const glass = (c: number) =>
+  (GLASS[c] ??= new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.9 }));
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+const BOTTLE_GEO = new THREE.CylinderGeometry(0.13, 0.15, 0.36, 10);
+const NECK_GEO = new THREE.CylinderGeometry(0.05, 0.06, 0.14, 8);
+const FLASK_GEO = new THREE.SphereGeometry(0.17, 12, 10);
+const POT_GEO = new THREE.CylinderGeometry(0.42, 0.3, 0.7, 12);
+const BUSH_GEO = new THREE.IcosahedronGeometry(0.62, 0);
+
+function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+/** Étagère murale du marchand, remplie de fioles bien alignées. `along` : 'x' (mur nord) ou 'z' (mur ouest). */
+function shelf(g: THREE.Group, x: number, z: number, along: 'x' | 'z') {
+  const L = 2.6;
+  const D = 0.6;
+  const sx = along === 'x' ? L : D;
+  const sz = along === 'x' ? D : L;
+  for (const k of [-1, 1]) {
+    const px = along === 'x' ? x + (k * (L - 0.15)) / 2 : x;
+    const pz = along === 'z' ? z + (k * (L - 0.15)) / 2 : z;
+    g.add(part(BOX, WOOD_DARK, px, 1.25, pz, along === 'x' ? 0.15 : D, 2.5, along === 'z' ? 0.15 : D));
+  }
+  const colors = [0xd23a3a, 0x3a6fd2, 0x3fae5f, 0xe0b030, 0xa060e0];
+  [0.35, 1.1, 1.85].forEach((y, row) => {
+    g.add(part(BOX, WOOD, x, y, z, sx, 0.09, sz));
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const t = -L / 2 + 0.35 + (i * (L - 0.7)) / (n - 1);
+      const bx = along === 'x' ? x + t : x;
+      const bz = along === 'z' ? z + t : z;
+      const col = colors[(i + row * 2) % colors.length];
+      if ((i + row) % 3 === 2) {
+        g.add(part(FLASK_GEO, glass(col), bx, y + 0.22, bz));
+        g.add(part(NECK_GEO, glass(col), bx, y + 0.42, bz));
+      } else {
+        g.add(part(BOTTLE_GEO, glass(col), bx, y + 0.23, bz));
+        g.add(part(NECK_GEO, glass(col), bx, y + 0.48, bz));
+      }
+    }
+  });
+}
+
+function plant(g: THREE.Group, x: number, z: number) {
+  g.add(part(POT_GEO, POT, x, 0.35, z));
+  g.add(part(BUSH_GEO, LEAF, x, 1.1, z, 1, 1.15, 1));
+  g.add(part(BUSH_GEO, LEAF, x + 0.2, 1.55, z - 0.1, 0.6, 0.7, 0.6));
+}
+
+/**
+ * Aménagement de la safe room : tapis centré, comptoir et étagère à potions,
+ * plantes dans les coins. Évite les portes (milieu de chaque mur).
+ * Renvoie la place du marchand, derrière son comptoir.
+ */
+export function buildSafeRoom(g: THREE.Group, cx: number, cz: number, doors: { n?: number; s?: number; e?: number; o?: number }): THREE.Vector3 {
+  // Grand tapis bleu bien centré, et un chemin de tapis vers chaque porte
+  const blue = mats().rugBlue;
+  const rug = new THREE.Mesh(PLANE_GEO, blue);
+  rug.rotation.x = -Math.PI / 2;
+  rug.scale.set(5, 6.4, 1);
+  rug.position.set(cx, 0.075, cz + 0.6);
+  rug.receiveShadow = true;
+  g.add(rug);
+  // Étagère : contre le mur ouest (côté nord) s'il n'y a pas de porte à l'ouest, sinon dans le coin nord-ouest
+  if (doors.o === undefined) shelf(g, cx - HALF + 0.75, cz - 2.6, 'z');
+  else shelf(g, cx - 3.6, cz - HALF + 0.75, 'x');
+  // Plantes : coins sud, et à côté du comptoir
+  plant(g, cx - HALF + 1.1, cz + HALF - 1.1);
+  plant(g, cx + HALF - 1.1, cz + HALF - 1.1);
+  plant(g, cx + HALF - 0.9, cz - 1.8);
+  return new THREE.Vector3(cx + 2.8, 0, cz - 4.95);
 }
