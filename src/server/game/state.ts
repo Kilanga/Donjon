@@ -158,7 +158,7 @@ export interface GameState {
   seasonOver: boolean; // le dernier étage s'est effondré : la saison est finie, la partie est figée
   graveyard: Grave[]; // vrais joueurs éliminés (game over) : candidats au vote de résurrection
   graveNo: number; // dernier numéro attribué
-  wallets: Record<string, Wallet>; // points de faveur des viewers (paris, sponsors, voix achetées)
+  wallets: Record<string, Wallet>; // points de faveur des viewers (paris et sponsors)
   resurrection: { endTurn: number; floorTo: number; votes: Record<string, { no: number; voices: number }> } | null;
   flashBet: FlashBet | null; // pari éclair en cours (lancé par la production)
   nextFlashAt: number; // pas de nouveau pari éclair avant (ms)
