@@ -96,8 +96,8 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 @keyframes slidein { from { transform: translateX(-24px); opacity: 0; } to { transform: none; } }
 
 /* Colonne de droite : classement, commandes, étages, en texte sur le voile */
-#lb, #cmds, #floors { position: absolute; right: 24px; width: 330px; padding: 0; }
-#lb h3, #cmds h3, #floors h3 { padding-bottom: 5px; border-bottom: 1px solid rgba(244,242,236,.3); }
+#lb, #chat, #floors { position: absolute; right: 24px; width: 330px; padding: 0; }
+#lb h3, #chat h3, #floors h3 { padding-bottom: 5px; border-bottom: 1px solid rgba(244,242,236,.3); }
 #lb { top: 96px; }
 #lb .r { display: flex; gap: 8px; align-items: baseline; font-size: 16px; padding: 3px 0; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
 #lb .r .k { width: 18px; color: var(--light-mut); }
@@ -115,15 +115,22 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 #floors .f .t.urgent { color: var(--red-l); font-weight: 800; }
 #floors .f.on .n, #floors .f.on .w { color: var(--or); }
 
-#cmds { top: 360px; }
-#cmds .c { font-size: 15px; padding: 3px 0; animation: cmdIn .3s ease-out; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
-#cmds .c b { color: var(--light); }
-#cmds .c code { color: var(--or); font-family: inherit; font-weight: 700; }
-#cmds .c .v { float: right; font-weight: 800; }
-#cmds .c.ok .v { color: var(--green-l); }
-#cmds .c.ko .v { color: var(--red-l); }
-#cmds .c .why { display: block; color: var(--light-mut); font-size: 13px; margin-top: 1px; }
-#cmds .c.tw b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 1px; background: #9146ff; margin-right: 5px; vertical-align: 1px; }
+/* Chat en direct, en transparence : les plus anciennes lignes s'estompent vers le haut */
+#chat { top: 340px; bottom: 260px; display: flex; flex-direction: column; justify-content: flex-end; }
+#chat.empty { visibility: hidden; }
+#chat-list { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; overflow: hidden; }
+#chat-list.full { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 70px); mask-image: linear-gradient(to bottom, transparent 0, #000 70px); }
+#chat .m { font-size: 16px; line-height: 1.3; color: var(--light); text-shadow: 0 1px 3px rgba(0,0,0,.95); overflow-wrap: anywhere; animation: chatIn .25s ease-out; }
+#chat .m b { font-weight: 800; }
+#chat .m.pnj { color: #d8d2c4; }
+#chat .m.pnj b::after { content: ' PNJ'; font-size: 11px; font-weight: 500; color: var(--light-mut); }
+#chat .m code { color: var(--or); font-family: inherit; font-weight: 700; }
+#chat .m .v { font-weight: 800; }
+#chat .m.ok .v { color: var(--green-l); }
+#chat .m.ko .v { color: var(--red-l); }
+#chat .m .why { display: block; color: var(--light-mut); font-size: 13px; font-style: italic; }
+#chat .m.tw b::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 1px; background: #a970ff; margin-right: 5px; vertical-align: 2px; }
+@keyframes chatIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes cmdIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 
 /* Aide : une feuille au centre, le seul vrai panneau (elle ne reste que 20 s) */

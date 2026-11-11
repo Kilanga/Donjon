@@ -54,6 +54,9 @@ export class MapRenderer {
   private bubbles = new Map<string, { text: string; t0: number; dur: number }>();
   private floorAt = 0; // réception de l'étage (pour décompter le scellé de l'escalier)
   private stairsMark: { x: number; y: number; bossAlive: boolean } | null = null;
+  // Repères des salles déjà visitées (liseré + écusson), et ce qu'on y a vu en dernier
+  private marks: { x: number; y: number; color: string; icon: string | null; dim: boolean; count: number; loot: boolean }[] = [];
+  private memo = new Map<string, { monsters: number; boss: boolean; loot: boolean }>();
 
   /** Bulle de dialogue au-dessus d'un crawler (6,5 s). */
   bubble(name: string, text: string) {
@@ -450,6 +453,7 @@ export class MapRenderer {
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLabels((x, y) => [ox + x * s, oy + y * s]);
+    this.drawMarks((x, y) => [ox + x * s, oy + y * s]);
     const sign = stairs ? [ox + stairs.x * s, oy + (stairs.y - PX * 1.6) * s, w, h, t, sealed ? (f.stairsInSec === null ? -1 : seal) : 0, stairs.bossAlive] as const : null;
     this.fx.drawScreen(ctx, nowFx, (x, y) => [ox + x * s, oy + y * s]);
 
@@ -606,6 +610,7 @@ export class MapRenderer {
       ctx.fillStyle = 'rgba(8,6,14,0.62)';
       ctx.fillRect(ox * PX, oy * PX, (IW + 2) * PX, (IH + 3) * PX);
     }
+    this.markRoom(r, ox, oy);
     if (r.current) {
       ctx.strokeStyle = 'rgba(255,214,90,0.9)';
       ctx.lineWidth = 1;
@@ -753,6 +758,102 @@ export class MapRenderer {
     ctx.font = `600 ${small}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.fillStyle = '#f2ecff';
     ctx.fillText(status, x, top + 32 * dpr);
+  }
+
+  /**
+   * Repères des salles connues : un liseré de couleur selon ce qu'est la salle
+   * (bleu safe room, or forge ou trésor, rouge boss ou piège, pourpre arène),
+   * un écusson avec son icône, et le nombre de monstres vus la dernière fois qu'on y était.
+   */
+  private markRoom(r: RoomView, ox: number, oy: number) {
+    const key = `${this.floor?.uid ?? this.floor?.n}:${r.id}`;
+    if (r.monsters) {
+      this.memo.set(key, {
+        monsters: r.monsters.filter((m) => !m.boss && m.hp > 0).length,
+        boss: r.monsters.some((m) => m.boss && m.hp > 0),
+        loot: (r.ground?.length ?? 0) > 0 || (r.groundGold ?? 0) > 0,
+      });
+    }
+    if (r.current) return;
+    const seen = this.memo.get(key);
+    let color: string | null = null;
+    let icon: string | null = null;
+    let dash = false;
+    let dim = false;
+    if (r.forge) { color = '#e0a826'; icon = 'weapon_hammer'; }
+    else if (r.type === 'safe') { color = '#5b8fe6'; icon = 'ui_heart_full'; }
+    else if (r.type === 'boss') { color = r.bossAlive ? '#e5484d' : '#8f8676'; icon = 'skull'; dim = !r.bossAlive; }
+    else if (r.type === 'piege') { color = r.trapArmed ? '#e5484d' : '#b8544f'; icon = 'floor_spikes_anim_f3'; dash = !r.trapArmed; }
+    else if (r.type === 'tresor') { color = '#e0a826'; icon = r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'coin'; dash = true; dim = r.chest !== 'ferme'; }
+    else if (r.type === 'arene') { color = '#b07cff'; icon = 'weapon_duel_sword'; }
+    else if (r.chest === 'ferme') icon = 'chest_full_open_anim_f0';
+    if (r.stairs) icon = null; // l'escalier a déjà son panneau
+    if (color) {
+      const { ctx } = this;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = dim ? 0.55 : 0.95;
+      ctx.lineWidth = 2;
+      if (dash) ctx.setLineDash([6, 4]);
+      ctx.strokeRect(ox * PX + 2, oy * PX + 2, (IW + 2) * PX - 4, (IH + 3) * PX - 4);
+      ctx.restore();
+    }
+    const count = seen && !r.monsters ? seen.monsters + (seen.boss ? 1 : 0) : 0;
+    const loot = !!seen && !r.ground && seen.loot;
+    if (icon || count || loot) this.marks.push({ x: (ox + 0.5) * PX, y: (oy + 0.5) * PX, color: color ?? '#e0a826', icon, dim, count, loot });
+  }
+
+  private drawMarks(toScreen: (x: number, y: number) => [number, number]) {
+    const { ctx } = this;
+    const dpr = devicePixelRatio;
+    const S = 22 * dpr;
+    for (const m of this.marks) {
+      let [x, y] = toScreen(m.x, m.y);
+      ctx.globalAlpha = m.dim ? 0.6 : 1;
+      if (m.icon) {
+        // Écusson : haut droit, pointe en bas, comme un petit blason
+        ctx.fillStyle = '#f4f2ec';
+        ctx.strokeStyle = m.color;
+        ctx.lineWidth = 2 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + S, y);
+        ctx.lineTo(x + S, y + S * 0.62);
+        ctx.quadraticCurveTo(x + S, y + S * 1.05, x + S / 2, y + S * 1.22);
+        ctx.quadraticCurveTo(x, y + S * 1.05, x, y + S * 0.62);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        const r = this.tiles.resolve(m.icon);
+        if (r) {
+          const k = Math.min((S - 6 * dpr) / r.w, (S - 6 * dpr) / r.h);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(this.tiles.img, r.x, r.y, r.w, r.h, Math.round(x + S / 2 - (r.w * k) / 2), Math.round(y + 3 * dpr + (S - 4 * dpr - r.h * k) / 2), Math.round(r.w * k), Math.round(r.h * k));
+        }
+        x += S + 4 * dpr;
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (m.count) {
+        // Monstres vus la dernière fois (l'info peut être périmée : pastille, pas de certitude)
+        const rr = 9 * dpr;
+        ctx.fillStyle = '#a3161b';
+        ctx.beginPath();
+        ctx.arc(x + rr, y + rr + 1 * dpr, rr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = `800 ${Math.round(12 * dpr)}px 'Alegreya Sans', system-ui, sans-serif`;
+        ctx.fillText(String(m.count), x + rr, y + rr + 1.5 * dpr);
+        x += rr * 2 + 4 * dpr;
+      }
+      if (m.loot) {
+        const r = this.tiles.resolve('coin');
+        if (r) ctx.drawImage(this.tiles.img, r.x, r.y, r.w, r.h, Math.round(x), Math.round(y + 2 * dpr), Math.round(r.w * 2 * dpr), Math.round(r.h * 2 * dpr));
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
+    this.marks = [];
   }
 
   /** Noms et barres de vie dessinés en résolution écran, pour rester nets. */

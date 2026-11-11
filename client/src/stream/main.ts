@@ -102,6 +102,7 @@ function onMessage(m: ServerMsg) {
     if (win?.victory) showCard('Victoire !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
   } else if (m.type === 'chat' && !m.cmd) {
     for (const w of worlds) w.bubble(m.from, m.text);
+    chatLine(m.from, m.text, undefined, m.src === 'twitch');
   } else if (m.type === 'pos') {
     for (const w of worlds) w.setPos(m.name, m.floor, m.roomId, m.x, m.y);
   } else if (m.type === 'forecast') {
@@ -120,7 +121,7 @@ function onMessage(m: ServerMsg) {
     }
     if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
-    showCommand(m.from, m.text, m.ok, m.reply ?? '', m.src === 'twitch');
+    chatLine(m.from, m.text, { ok: m.ok, reply: m.reply ?? '' }, m.src === 'twitch');
     if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();
   } else if (m.type === 'feedback' && !m.ok) {
     const lm = document.getElementById('load-msg');
@@ -140,17 +141,43 @@ function showHelp() {
   helpTimer = window.setTimeout(() => $('helpp').classList.add('hidden'), 20000);
 }
 
-/** Bandeau des commandes du chat : le joueur Twitch voit si sa commande est passée (✓) ou pourquoi elle a échoué (✗). */
-function showCommand(from: string, text: string, ok: boolean, reply: string, twitch: boolean) {
-  $('cmds').classList.remove('hidden');
-  const list = $('cmds-list');
-  const row = document.createElement('div');
-  row.className = `c ${ok ? 'ok' : 'ko'}${twitch ? ' tw' : ''}`;
-  const why = !ok && reply ? `<span class="why">${esc(reply)}</span>` : '';
-  row.innerHTML = `<span class="v">${ok ? '✓' : '✗'}</span><b>${esc(from)}</b> <code>${esc(text.slice(0, 40))}</code>${why}`;
-  list.prepend(row);
-  while (list.children.length > 6) list.lastElementChild!.remove();
+/**
+ * Chat en direct, écrit en transparence sur le voile de droite : les messages, et les commandes avec
+ * leur verdict (✓ passée, ✗ refusée + pourquoi), pour que le joueur Twitch sache où il en est.
+ * Les lignes s'effacent au bout de 2 minutes : quand le chat est calme, l'image reste propre.
+ */
+const CHAT_MAX = 14;
+const CHAT_TTL = 120_000;
+const chatHue = new Map<string, number>();
+function hueOf(name: string) {
+  if (!chatHue.has(name)) {
+    let h = 0;
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+    chatHue.set(name, h);
+  }
+  return chatHue.get(name)!;
 }
+function chatLine(from: string, text: string, cmd?: { ok: boolean; reply: string }, twitch = false) {
+  const list = $('chat-list');
+  const row = document.createElement('div');
+  const bot = !!state?.leaderboard.find((r) => r.name === from && r.bot);
+  row.className = `m${cmd ? (cmd.ok ? ' ok' : ' ko') : ''}${twitch ? ' tw' : ''}${bot ? ' pnj' : ''}`;
+  row.dataset.t = String(Date.now());
+  const name = `<b style="color:hsl(${hueOf(from)} 70% ${bot ? 66 : 74}%)">${esc(from)}</b>`;
+  if (cmd) {
+    const why = !cmd.ok && cmd.reply ? `<span class="why">${esc(cmd.reply)}</span>` : '';
+    row.innerHTML = `${name} <code>${esc(text.slice(0, 50))}</code> <span class="v">${cmd.ok ? '✓' : '✗'}</span>${why}`;
+  } else row.innerHTML = `${name} ${esc(text)}`;
+  list.append(row);
+  while (list.children.length > CHAT_MAX) list.firstElementChild!.remove();
+  list.classList.toggle('full', list.scrollHeight > list.clientHeight + 2);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const el of [...$('chat-list').children] as HTMLElement[]) if (now - Number(el.dataset.t) > CHAT_TTL) el.remove();
+  $('chat').classList.toggle('empty', $('chat-list').children.length === 0);
+  $('chat-list').classList.toggle('full', $('chat-list').scrollHeight > $('chat-list').clientHeight + 2);
+}, 2000);
 
 // ------------------------------------------------------------ réalisation multi-étages
 // Le stream va là où ça se passe : vrais joueurs d'abord, puis l'action récente (drame), avec un carton « ÉTAGE N ».
