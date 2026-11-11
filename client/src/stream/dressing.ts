@@ -7,6 +7,18 @@ import type { FloorView, RoomView } from '../../../src/shared/types';
 const CELL = 16;
 const HALF = 6;
 
+/** Petit générateur pseudo-aléatoire à graine (mulberry32) : même salle, même désordre à chaque affichage. */
+export function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export const hash = (n: number) => {
   let x = (n * 2654435761) >>> 0;
   x ^= x >>> 13;
@@ -32,27 +44,6 @@ function tex() {
     // Tapis : aplat héraldique, bordure or, losange au centre
     rugRed: canvasTex(128, 192, (g) => rug(g, '#7d1c1c', '#c99a2e')),
     rugBlue: canvasTex(128, 192, (g) => rug(g, '#1f3f7a', '#d8c9a0')),
-    web: canvasTex(128, 128, (g) => {
-      g.strokeStyle = 'rgba(235,230,220,0.75)';
-      g.lineWidth = 1.2;
-      for (let a = 0; a < 7; a++) {
-        const ang = (a / 6) * (Math.PI / 2);
-        g.beginPath();
-        g.moveTo(0, 0);
-        g.lineTo(Math.cos(ang) * 128, Math.sin(ang) * 128);
-        g.stroke();
-      }
-      for (let r = 16; r < 128; r += 16) {
-        g.beginPath();
-        for (let a = 0; a <= 6; a++) {
-          const ang = (a / 6) * (Math.PI / 2);
-          const rr = r * (1 + (a % 2) * 0.08);
-          if (a === 0) g.moveTo(Math.cos(ang) * rr, Math.sin(ang) * rr);
-          else g.quadraticCurveTo(Math.cos(ang - 0.13) * rr * 0.9, Math.sin(ang - 0.13) * rr * 0.9, Math.cos(ang) * rr, Math.sin(ang) * rr);
-        }
-        g.stroke();
-      }
-    }),
     // Rayon de lumière : opaque en bas, transparent en haut
     beam: canvasTex(4, 128, (g) => {
       const gr = g.createLinearGradient(0, 0, 0, 128);
@@ -119,6 +110,8 @@ const BONE = new THREE.MeshStandardMaterial({ color: 0xd9cfb6, roughness: 0.8 })
 const PUDDLE = new THREE.MeshStandardMaterial({ color: 0x0b0a0c, roughness: 0.05, metalness: 0.6, transparent: true, opacity: 0.75 });
 const SCORCH = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false });
 const BONE_GEO = new THREE.CylinderGeometry(0.06, 0.06, 0.55, 6);
+const ROCK_GEO = new THREE.DodecahedronGeometry(1, 0);
+const ROCK = new THREE.MeshStandardMaterial({ color: 0x6f645c, roughness: 1, flatShading: true });
 const SKULL_GEO = new THREE.SphereGeometry(0.2, 10, 8);
 const DISC_GEO = new THREE.CircleGeometry(1, 24);
 const PLANE_GEO = new THREE.PlaneGeometry(1, 1);
@@ -129,7 +122,6 @@ function mats() {
   _mats = {
     rugRed: new THREE.MeshStandardMaterial({ map: t.rugRed, roughness: 1 }),
     rugBlue: new THREE.MeshStandardMaterial({ map: t.rugBlue, roughness: 1 }),
-    web: new THREE.MeshBasicMaterial({ map: t.web, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
   };
   return _mats;
 }
@@ -160,56 +152,89 @@ export function buildDressing(f: FloorView, group: THREE.Group) {
   const scorch: THREE.Matrix4[] = [];
   const rugsRed: THREE.Matrix4[] = [];
   const rugsBlue: THREE.Matrix4[] = [];
-  const webs: THREE.Matrix4[] = [];
   const wet = f.theme === 'inondé';
   const fire = f.theme === 'en feu';
+  const rubble: THREE.Matrix4[] = [];
   for (const r of f.rooms) {
     const cx = r.x * CELL;
     const cz = r.y * CELL;
-    const h = hash(r.id * 13 + 7);
-    const rnd = (k: number) => (hash(r.id * 97 + k * 31) % 1000) / 1000;
-    const spot = (k: number, lim = HALF - 1.4) => [cx + (rnd(k) - 0.5) * 2 * lim, cz + (rnd(k + 50) - 0.5) * 2 * lim] as const;
-    // Tapis : safe rooms (bleu), et quelques salles ordinaires (rouge)
-    if (r.type === 'safe' && !r.forge) rugsBlue.push(mat4(cx - 1.6, 0.04, cz + 1.5, -Math.PI / 2, 0, 0, 3, 4.6, 1));
-    else if (r.type === 'normale' && h % 5 === 0) rugsRed.push(mat4(cx + (h % 2 ? 1.5 : -1.5), 0.04, cz + 0.5, -Math.PI / 2, 0, (h % 3) * 0.08 - 0.08, 2.8, 4.2, 1));
-    // Os éparpillés : salles ordinaires, pièges et salle du boss
+    // Hasard propre à chaque salle (toujours le même pour une salle donnée) : rien n'est aligné ni répété
+    const rand = rng(hash(r.id * 7919 + f.n * 104729));
+    const between = (a: number, b: number) => a + rand() * (b - a);
+    const chance = (p: number) => rand() < p;
+    const inRoom = (margin = 1.2) => [cx + between(-HALF + margin, HALF - margin), cz + between(-HALF + margin, HALF - margin)] as const;
+    // Un point le long d'un mur (là où les choses s'entassent)
+    const alongWall = (): readonly [number, number, number] => {
+      const side = Math.floor(rand() * 4);
+      const t = between(-HALF + 1.3, HALF - 1.3);
+      const d = HALF - between(0.9, 1.6);
+      return side === 0 ? [cx + t, cz - d, 0] : side === 1 ? [cx - d, cz + t, 1] : side === 2 ? [cx + d, cz + t, 2] : [cx + t, cz + d, 3];
+    };
+    // Tapis : jamais centré ni droit, parfois deux qui se chevauchent
+    if (r.type === 'safe' && !r.forge) {
+      const [x, z] = [cx + between(-2.2, -0.6), cz + between(0.6, 2.2)];
+      rugsBlue.push(mat4(x, 0.04, z, -Math.PI / 2, 0, between(-0.5, 0.5), between(2.6, 3.4), between(3.8, 4.8), 1));
+    } else if (r.type === 'normale' && chance(0.22)) {
+      const [x, z] = inRoom(2.2);
+      const list = chance(0.5) ? rugsRed : rugsBlue;
+      list.push(mat4(x, 0.04, z, -Math.PI / 2, 0, between(-0.9, 0.9), between(2.2, 3.2), between(3.2, 4.6), 1));
+      if (chance(0.3)) rugsRed.push(mat4(x + between(-1.4, 1.4), 0.05, z + between(-1.2, 1.2), -Math.PI / 2, 0, between(-1.5, 1.5), between(1.6, 2.4), between(2.2, 3.2), 1));
+    }
+    // Os : en tas (là où quelque chose s'est mal fini), avec quelques os égarés
     if (r.type === 'normale' || r.type === 'piege' || r.type === 'boss' || r.type === 'arene') {
-      const n = r.type === 'boss' ? 10 : r.type === 'arene' ? 6 : h % 4 === 0 ? 7 : h % 3 === 0 ? 3 : 0;
+      const piles = r.type === 'boss' ? 3 : chance(0.55) ? 1 + Math.floor(rand() * 2) : 0;
+      for (let pI = 0; pI < piles; pI++) {
+        const [px, pz] = chance(0.6) ? alongWall() : inRoom(1.8);
+        const n = 3 + Math.floor(rand() * 7);
+        for (let i = 0; i < n; i++) {
+          const a = rand() * Math.PI * 2;
+          const d = Math.pow(rand(), 1.6) * 1.1;
+          bones.push(mat4(px + Math.cos(a) * d, 0.07 + rand() * 0.12, pz + Math.sin(a) * d, Math.PI / 2 + between(-0.3, 0.3), rand() * Math.PI, between(-0.3, 0.3), 1, between(0.5, 1.5), 1));
+        }
+        if (chance(0.7)) skulls.push(mat4(px + between(-0.4, 0.4), 0.18, pz + between(-0.4, 0.4), between(-0.4, 0.2), rand() * 6, between(-0.5, 0.5), 1, 0.9, 1.1));
+      }
+      const strays = Math.floor(rand() * 4);
+      for (let i = 0; i < strays; i++) {
+        const [x, z] = inRoom();
+        bones.push(mat4(x, 0.07, z, Math.PI / 2, rand() * Math.PI, 0, 1, between(0.5, 1.2), 1));
+      }
+    }
+    // Éboulis contre les murs : des pierres de toutes tailles
+    if (r.type !== 'safe' && chance(0.6)) {
+      const heaps = 1 + Math.floor(rand() * 2);
+      for (let k = 0; k < heaps; k++) {
+        const [px, pz] = alongWall();
+        const n = 4 + Math.floor(rand() * 8);
+        for (let i = 0; i < n; i++) {
+          const a = rand() * Math.PI * 2;
+          const d = Math.pow(rand(), 1.3) * 1.3;
+          const sc = between(0.12, 0.42) * (1.2 - d * 0.4);
+          rubble.push(mat4(px + Math.cos(a) * d, sc * 0.6, pz + Math.sin(a) * d, rand() * 6, rand() * 6, rand() * 6, sc * between(0.8, 1.3), sc, sc * between(0.8, 1.4)));
+        }
+      }
+    }
+    // Flaques : quelques taches irrégulières faites de disques qui se recouvrent (pas d'étage inondé : l'eau couvre tout)
+    if (!wet && chance(0.4)) {
+      const [px, pz] = inRoom(2);
+      const n = 2 + Math.floor(rand() * 4);
+      for (let i = 0; i < n; i++) puddles.push(mat4(px + between(-0.9, 0.9), 0.045 + i * 0.001, pz + between(-0.7, 0.7), -Math.PI / 2, 0, 0, between(0.35, 0.9), between(0.25, 0.7), 1));
+    }
+    if (fire && chance(0.6)) {
+      const n = 1 + Math.floor(rand() * 4);
       for (let i = 0; i < n; i++) {
-        const [x, z] = spot(i);
-        bones.push(mat4(x, 0.08, z, Math.PI / 2, rnd(i + 200) * Math.PI, 0, 1, 0.6 + rnd(i + 300) * 0.8, 1));
-        if (i % 3 === 0) skulls.push(mat4(x + 0.3, 0.17, z + 0.2, 0, rnd(i + 400) * 6, 0, 1, 0.9, 1.1));
+        const [x, z] = inRoom(1.5);
+        scorch.push(mat4(x, 0.05 + i * 0.001, z, -Math.PI / 2, 0, rand() * 6, between(0.6, 2), between(0.5, 1.6), 1));
       }
     }
-    // Flaques (pas quand l'étage est inondé : l'eau couvre tout) ; traces de brûlé si l'étage est en feu
-    if (!wet && h % 3 === 1) {
-      for (let i = 0; i < 2; i++) {
-        const [x, z] = spot(i + 600, HALF - 2);
-        puddles.push(mat4(x, 0.045, z, -Math.PI / 2, 0, 0, 0.7 + rnd(i + 700) * 0.9, 0.5 + rnd(i + 800) * 0.6, 1));
-      }
-    }
-    if (fire && h % 2 === 0) {
-      for (let i = 0; i < 3; i++) {
-        const [x, z] = spot(i + 900, HALF - 1.5);
-        scorch.push(mat4(x, 0.05, z, -Math.PI / 2, 0, rnd(i + 950) * 6, 1 + rnd(i) * 1.2, 0.8 + rnd(i + 1) * 0.8, 1));
-      }
-    }
-    // Toiles d'araignée dans les coins du fond
-    if (r.type !== 'safe' && h % 3 !== 2) webs.push(mat4(cx - HALF + 1.3, 3.2, cz - HALF + 1.3, 0, Math.PI / 4, Math.PI, 2.4, 2.4, 1));
-    if (r.type !== 'safe' && h % 4 === 1) webs.push(mat4(cx + HALF - 1.3, 3.2, cz - HALF + 1.3, 0, -Math.PI / 4, Math.PI / 2, 2.2, 2.2, 1));
   }
   const m = mats();
   if (bones.length) group.add(instanced(BONE_GEO, BONE, bones, true));
+  if (rubble.length) group.add(instanced(ROCK_GEO, ROCK, rubble, true));
   if (skulls.length) group.add(instanced(SKULL_GEO, BONE, skulls, true));
   if (puddles.length) group.add(instanced(DISC_GEO, PUDDLE, puddles));
   if (scorch.length) group.add(instanced(DISC_GEO, SCORCH, scorch));
   if (rugsRed.length) group.add(instanced(PLANE_GEO, m.rugRed, rugsRed));
   if (rugsBlue.length) group.add(instanced(PLANE_GEO, m.rugBlue, rugsBlue));
-  if (webs.length) {
-    const w = instanced(PLANE_GEO, m.web, webs);
-    w.userData.piece = 'web'; // arasée comme les murs dans la vue en coupe
-    group.add(w);
-  }
   // Étage inondé : une nappe d'eau sur tout l'étage
   if (wet) {
     const xs = f.rooms.map((r) => r.x);

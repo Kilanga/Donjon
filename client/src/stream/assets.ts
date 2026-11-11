@@ -183,8 +183,8 @@ export class InstancedBuilder {
   private items = new Map<PieceName, THREE.Matrix4[]>();
   constructor(private assets: Assets) {}
 
-  add(name: PieceName, x: number, y: number, z: number, rotY = 0, scale: [number, number, number] = [1, 1, 1]) {
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotY, 0)), new THREE.Vector3(...scale));
+  add(name: PieceName, x: number, y: number, z: number, rotY = 0, scale: [number, number, number] = [1, 1, 1], rotX = 0, rotZ = 0) {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ, 'YXZ')), new THREE.Vector3(...scale));
     const list = this.items.get(name) ?? [];
     list.push(m);
     this.items.set(name, list);

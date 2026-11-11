@@ -6,10 +6,10 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { buildDressing, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
+import { buildDressing, rng, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
 
 /** Pièces de décor coupées quand elles sont entre la caméra et la salle filmée (vue en coupe). */
-const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue', 'web']);
+const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue']);
 const CUT = { uCutZ: { value: 1e9 }, uCutY: { value: 0.75 } };
 function patchCut(m: THREE.Material) {
   m.onBeforeCompile = (sh) => {
@@ -260,6 +260,8 @@ export class World {
     for (const r of f.rooms) {
       const c = center(r);
       const h = hash(r.id + 1);
+      const rand = rng(hash(r.id * 31337 + f.n * 7));
+      const jit = (a: number) => (rand() - 0.5) * 2 * a;
       // Sol
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         if (r.type === 'piege' && i === 0 && j === 0) continue;
@@ -304,12 +306,15 @@ export class World {
             forges.push(c.clone());
             break;
           }
-          b.add('banner_shield_blue', c.x - 1.5, 0, c.z - HALF);
-          b.add('table_long_decorated_A', c.x + 2.5, 0, c.z - 3, 0);
-          b.add('stool', c.x + 1, 0, c.z - 1.5, 0.4);
-          b.add('stool', c.x + 4, 0, c.z - 1.5, 2.1);
-          b.add('keg_decorated', c.x - 4.6, 0, c.z - 4.4, 0, [0.8, 0.8, 0.8]);
-          b.add('candle_triple', c.x - 4.6, 0, c.z + 4.4);
+          b.add('banner_shield_blue', c.x - 1.5 + jit(0.8), 0, c.z - HALF);
+          // Le coin du marchand : table de travers, tabourets poussés n'importe comment
+          const tx = c.x + 2.3 + jit(0.6);
+          const tz = c.z - 2.8 + jit(0.5);
+          b.add('table_long_decorated_A', tx, 0, tz, jit(0.35));
+          b.add('stool', tx - 1.6 + jit(0.4), 0, tz + 1.4 + jit(0.3), rand() * 6);
+          if (rand() < 0.75) b.add('stool', tx + 1.4 + jit(0.5), 0, tz + 1.2 + jit(0.4), rand() * 6, [1, 1, 1], rand() < 0.25 ? Math.PI / 2 : 0);
+          b.add('keg_decorated', c.x - 4.5 + jit(0.3), 0, c.z - 4.3 + jit(0.4), rand() * 6, [0.8, 0.8, 0.8]);
+          b.add('candle_triple', c.x - 4.4 + jit(0.6), 0, c.z + 3.8 + jit(0.8), rand() * 6);
           break;
         }
         case 'arene':
@@ -322,14 +327,28 @@ export class World {
           b.add('banner_shield_blue', c.x + 3.5, 0, c.z - HALF);
           for (const [x, z] of [corner(-4.6, -4.4), corner(4.6, -4.4), corner(-4.6, 4.4), corner(4.6, 4.4)]) b.add('pillar_decorated', x, 0, z, 0, [0.6, 0.6, 0.6]);
           break;
-        case 'tresor':
-          b.add('coin_stack_large', c.x + 2.4, 0, c.z - 4, 0.7, [0.7, 0.7, 0.7]);
-          b.add('coin_stack_large', c.x - 2.6, 0, c.z - 4.2, 2, [0.5, 0.5, 0.5]);
+        case 'tresor': {
+          const n = 2 + Math.floor(rand() * 3);
+          for (let i = 0; i < n; i++) {
+            const s = 0.35 + rand() * 0.45;
+            b.add('coin_stack_large', c.x + jit(4.3), 0, c.z - 1.5 + jit(3.2), rand() * 6, [s, s, s]);
+          }
           break;
+        }
         default: {
-          const props: PieceName[] = ['barrel_large', 'barrel_small_stack', 'crates_stacked', 'box_small_decorated'];
-          if (h % 2 === 0) b.add(props[h % 4], c.x - 4.4, 0, c.z - 4.2, (h % 6) * 0.5, [0.8, 0.8, 0.8]);
-          if (h % 3 === 0) b.add(props[(h >>> 3) % 4], c.x + 4.4, 0, c.z + 4.2, (h % 5) * 0.6, [0.8, 0.8, 0.8]);
+          // Bric-à-brac le long des murs : nombre, place, angle au hasard ; parfois un tonneau renversé
+          const props: PieceName[] = ['barrel_large', 'barrel_small_stack', 'crates_stacked', 'box_small_decorated', 'barrel_large', 'box_small_decorated'];
+          const n = Math.floor(rand() * 4);
+          for (let i = 0; i < n; i++) {
+            const name = props[Math.floor(rand() * props.length)];
+            const side = Math.floor(rand() * 4);
+            const t = jit(HALF - 1.6);
+            const d = HALF - 1.1 - rand() * 0.8;
+            const [x, z] = side === 0 ? [c.x + t, c.z - d] : side === 1 ? [c.x - d, c.z + t] : side === 2 ? [c.x + d, c.z + t] : [c.x + t, c.z + d];
+            const s = 0.65 + rand() * 0.3;
+            const tipped = name === 'barrel_large' && rand() < 0.35;
+            b.add(name, x, tipped ? 0.55 * s : 0, z, rand() * 6, [s, s, s], tipped ? Math.PI / 2 : 0);
+          }
         }
       }
     }
