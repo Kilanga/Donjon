@@ -4,7 +4,6 @@ import { sfx } from '../sfx';
 import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../src/shared/types';
 import { Assets } from './assets';
 import { World } from './world';
-import { HELP_TEXT } from '../../../src/shared/commands';
 import { THEME_LABEL } from '../../../src/shared/themes';
 import { initTelemetry, telemetryReady } from '../telemetry';
 
@@ -126,23 +125,10 @@ function onMessage(m: ServerMsg) {
     if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
     chatLine(m.from, m.text, { ok: m.ok, reply: m.reply ?? '' }, m.src === 'twitch');
-    if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();
   } else if (m.type === 'feedback' && !m.ok) {
     const lm = document.getElementById('load-msg');
     if (lm) lm.textContent = m.text + ' Add ?cle=<control-room key> to the address.';
   }
-}
-
-/** !commandes ou !aide dans le chat : le panneau des commandes s'affiche 20 s sur le stream. */
-let helpTimer = 0;
-function showHelp() {
-  $('helpp-list').innerHTML = HELP_TEXT.map((l) => {
-    const [cmd, what] = l.split(' — ');
-    return `<div class="l"><code>${esc(cmd)}</code> — ${esc(what ?? '')}</div>`;
-  }).join('');
-  $('helpp').classList.remove('hidden');
-  clearTimeout(helpTimer);
-  helpTimer = window.setTimeout(() => $('helpp').classList.add('hidden'), 20000);
 }
 
 /**
@@ -355,7 +341,12 @@ function renderHud(s: PlayerViewMsg) {
     $('bet').innerHTML = `<div class="t">Big bet: who gets out first?</div><div class="q">Pot: ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!bet &lt;name&gt; &lt;amount&gt; · !sponsor &lt;name&gt; potion|gold|monster</small>`;
   }
   // Appel à jouer
-  const tips = [
+  const tips = s.joinsClosed ? [
+    'The gates are sealed: <b>!bet</b> on who survives',
+    '<b>!sponsor &lt;name&gt; potion</b> to help a crawler (or <b>monster</b> to troll them)',
+    'After each collapse, chat votes to bring one of the dead back: <b>!vote &lt;#&gt;</b>',
+    s.effects.bounty ? `Bounty on <b>${esc(s.effects.bounty.target)}</b>: ${s.effects.bounty.gold} gold` : 'Attacking an ally = betrayal (and everyone will know)',
+  ] : [
     'Type <b>!join</b> in chat to enter the dungeon',
     'Classes: <b>!join barbarian</b>, <b>knight</b>, <b>rogue</b> or <b>mage</b>',
     s.publicUrl ? 'On the map page, your Twitch name + <b>!link</b> in chat: you control your character' : 'One command per turn: the last one typed counts',
@@ -401,6 +392,12 @@ function tickHud() {
     const left = Math.max(0, (view.turnEndsAt - now) / 1000);
     $('turn').textContent = `Turn ${state.turn} · ${Math.ceil(left)} s`;
     $('turn-bar').style.width = `${100 - (100 * left) / state.turnSeconds}%`;
+    const se = state.seasonEndsInSec;
+    if (se !== null && se !== undefined) {
+      const r = Math.max(0, se - (now - state.serverNow) / 1000);
+      const h = Math.floor(r / 3600);
+      $('season-left').innerHTML = `Season ends in <b>${h ? `${h}:${String(Math.floor((r % 3600) / 60)).padStart(2, '0')}:${String(Math.floor(r % 60)).padStart(2, '0')}` : fmt(r)}</b>`;
+    } else $('season-left').textContent = '';
     const c = view.floor?.collapseInSec;
     const lobby = state.lobbyInSec;
     if (lobby !== null && lobby !== undefined) {

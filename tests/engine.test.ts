@@ -180,19 +180,22 @@ describe('progression', () => {
 });
 
 describe('étages', () => {
-  it('effondrement : GAME OVER pour les joueurs restés (ils peuvent refaire !join), les nouveaux entrent dans un étage 1 recreusé', () => {
+  it('effondrement de l\'étage 1 : GAME OVER pour les joueurs restés, puis portes scellées (plus de !join, PNJ compris)', () => {
     const g = setup({ floorMinutes: 1, respawnTurns: 1 });
     g.submit('a', '!join', T0);
-    const oldUid = g.floor(1)!.uid;
     const ev = g.tick(T0 + 61_000);
-    expect(ev.some((e) => /COLLAPSES/.test(e.text) && /GAME OVER for a/.test(e.text))).toBe(true);
+    expect(ev.some((e) => /COLLAPSES/.test(e.text) && /GAME OVER for a/.test(e.text) && /SEALED/.test(e.text))).toBe(true);
     expect(g.player('a')).toBeUndefined(); // éliminé
-    // Il recommence (et un nouveau joueur aussi) à l'étage 1, recreusé à neuf
-    expect(g.submit('a', '!join', T0 + 82_000).ok).toBe(true);
-    g.submit('c', '!join', T0 + 82_000);
-    expect(g.player('c')!.floor).toBe(1);
-    expect(g.floor(1)!.collapsed).toBe(false);
-    expect(g.floor(1)!.uid).not.toBe(oldUid);
+    expect(g.state.joinsClosed).toBe(true);
+    const r = g.submit('a', '!join', T0 + 82_000);
+    expect(r.ok).toBe(false);
+    expect(r.text).toMatch(/sealed/);
+    expect(g.submit('c', '!join', T0 + 82_000).ok).toBe(false);
+    expect(g.joinBot('Krag', 'barbare')).toBe(false);
+    // Personne ne vote pour le ramener, il n'y a plus personne dedans : la saison s'arrête
+    let t = T0 + 61_000;
+    for (let i = 0; i < 6 && !g.state.seasonOver; i++) g.tick((t += 20_000));
+    expect(g.state.seasonOver).toBe(true);
   });
 
   it('effondrement : un retardataire, lui, tombe vivant à l\'étage suivant (PV et or perdus, équipement gardé)', () => {

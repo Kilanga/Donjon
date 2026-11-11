@@ -2,7 +2,7 @@
 
 Mis de côté pendant le passage du jeu en anglais. À reprendre dans cet ordre.
 
-## 1. Ce qui casse la partie
+## 1. Ce qui casse la partie — FAIT (12/11)
 - Bloquer la création de nouveaux personnages après la fin de l'étage 1, pour tout le monde (PNJ compris). Seule la résurrection reste possible. Règle aussi la « partie infinie » (les PNJ en game over refaisaient !join et l'étage 1 était recreusé en boucle).
 - Bug : un joueur ressuscité par le vote alors qu'il a refait !join est téléporté avec son nouveau perso à l'étage n+1 (Kilak, game over n°1 puis n°2).
 - Inondé : supprimer les déplacements ratés (1 sur 3, beaucoup trop). Proposition : l'eau cache les pièges, −1 agilité, des objets dérivent.

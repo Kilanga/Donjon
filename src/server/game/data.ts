@@ -180,7 +180,7 @@ export const MERCHANT_WELCOME =
   "Welcome, adventurer! One command per turn, the last one you type is the one that counts. !north, !south, !east, !west to move, !attack to hit, !search to search. Come back to me to !rest.";
 export const MERCHANT_RESPAWN = [
   "Hello again. Your loot stayed where you died: go back and get it with !pickup.",
-  "Back already? You're untouchable for 3 minutes. Make the most of it and !rest… oh wait, you're already in perfect shape.",
+  "Back already? You're untouchable for a minute, unless you attack someone. Make the most of it and !rest… oh wait, you're already in perfect shape.",
   "Death is mostly embarrassing. Your stuff is waiting for you on the floor, over there.",
 ];
 /** The blacksmith: gear upgrades (+1 per visit, up to FORGE_MAX). */
@@ -202,7 +202,7 @@ export const MERCHANT_TIPS = [
   "The dead leave all their loot on the floor. !pickup. I don't judge.",
   "Every floor collapses when the timer runs out. Find the boss, beat it, then !descend.",
   "The stairs stay sealed for the first half of the floor. Use that time to loot and level up: down there, things hit hard.",
-  "Nobody fights in here. When you arrive or come back from the dead, you're untouchable for 3 minutes, and you can't touch anyone either.",
+  "Nobody fights in here. When you arrive or come back from the dead, you're untouchable for a minute. Attack another player and that protection is gone.",
   "Attacking an ally is a betrayal: big bonus, and everyone will know.",
   "!rest heals you, but only in here. !shop to see my stock. Fair prices. Almost.",
   "When you level up: !levelup str, dex, int or cha. Don't save your points for your old age.",

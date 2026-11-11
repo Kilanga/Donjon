@@ -3,7 +3,7 @@
   "turnSeconds": 20,
   "floorMinutes": 15,
   "respawnTurns": 5,
-  "immunitySeconds": 180,
+  "immunitySeconds": 60,
   "roomsPerPlayer": 2,
   "minRooms": 20,
   "deathXpLoss": 0.25,

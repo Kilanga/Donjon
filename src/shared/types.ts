@@ -203,6 +203,8 @@ export interface PlayerViewMsg {
   obituary: { turn: number; text: string }[];
   floors?: FloorSummary[]; // étages debout et qui y est (vue stream, régie)
   seasonOver?: boolean; // saison terminée (effondrement du dernier étage)
+  joinsClosed?: boolean; // l'étage 1 est tombé : plus de !join, seulement des résurrections
+  seasonEndsInSec?: number | null; // temps avant l'effondrement du dernier étage (fin de saison)
   publicUrl?: string; // adresse publique de la page joueur (tunnel), affichée sur le stream
   champions?: Legend[]; // vainqueurs de cette saison (vue stream)
 }

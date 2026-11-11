@@ -156,6 +156,7 @@ export interface GameState {
   floodUntil: number; // tour de fin de l'inondation
   champions: import('../../shared/types.js').Legend[]; // sortis vainqueurs pendant cette partie
   seasonOver: boolean; // le dernier étage s'est effondré : la saison est finie, la partie est figée
+  joinsClosed?: boolean; // l'étage 1 s'est effondré : plus de nouveaux persos (PNJ compris), seulement des résurrections
   graveyard: Grave[]; // vrais joueurs éliminés (game over) : candidats au vote de résurrection
   graveNo: number; // dernier numéro attribué
   wallets: Record<string, Wallet>; // points de faveur des viewers (paris et sponsors)

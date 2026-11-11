@@ -11,7 +11,7 @@ export const THEME_LABEL: Record<string, string> = {
 
 export const THEME_EFFECTS: Record<string, string> = {
   classique: '',
-  'inondé': 'Slippery floor: one move in three ends flat on your face.',
+  'inondé': 'Knee-deep water: −1 Dexterity outside safe rooms, traps are hidden under the surface, and loot drifts from room to room.',
   'en feu': 'Embers burst from the floor: you can get burned every turn (outside safe rooms).',
   'plongé dans le noir': 'Hard to see: −2 to hit for everyone, but running away is easier.',
   'moisi': 'The mold feeds the monsters: they regain 1 HP per turn.',

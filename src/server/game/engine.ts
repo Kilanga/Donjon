@@ -17,6 +17,8 @@ import { emptyState, migrate, type FlashBet, type FloorState, type GameState, ty
 
 export const INVENTORY_MAX = 8;
 export const ALLIANCE_MAX = 4;
+/** Au plus un quart des salles d'un étage sont piégées. */
+export const TRAP_SHARE_MAX = 0.25;
 export const xpNext = (level: number) => 50 * level;
 const half = (n: number) => Math.floor(n / 2);
 
@@ -108,6 +110,13 @@ export class Game {
 
   player(name: string): PlayerState | undefined {
     return this.state.players[playerKey(name)];
+  }
+
+  /** Sous l'eau (étage inondé ou inondation de la production), hors safe room. */
+  private wet(floorN: number, roomId: number): boolean {
+    const f = this.state.floors[floorN];
+    if (!f || f.rooms[roomId]?.type === 'safe') return false;
+    return f.theme === 'inondé' || this.state.turn < this.state.floodUntil;
   }
 
   private isImmune(p: PlayerState) {
@@ -279,6 +288,7 @@ export class Game {
     if (cmd.name === 'help') return { ok: true, text: HELP_TEXT.join('\n') };
     // Ouvert à tout le chat, perso ou pas (les éliminés parient, sponsorisent et votent pour revenir)
     if (cmd.name === 'vote' && this.state.resurrection) return this.voteResurrection(name, cmd.arg);
+    if (cmd.name === 'vote') return this.castVote(name, cmd.arg); // ouvert à tout le chat, pas aux PNJ
     if (cmd.name === 'bet') return this.placeBet(name, cmd.arg);
     if (cmd.name === 'sponsor') return this.sponsor(name, cmd.arg);
     if (cmd.name === 'favor') return this.favorText(name);
@@ -300,8 +310,6 @@ export class Game {
         return this.ally(p, cmd.arg);
       case 'leave':
         return this.leaveAlliance(p, true);
-      case 'vote':
-        return this.castVote(p, cmd.arg);
       default:
         break;
     }
@@ -315,6 +323,7 @@ export class Game {
     if (!key) return { ok: false, text: 'Invalid name.' };
     if (this.state.seasonOver) return { ok: false, text: 'The season is over: the Dungeon is closed. See you next time!' };
     if (this.state.players[key]) return { ok: false, text: 'You are already in the dungeon!' };
+    if (this.state.joinsClosed) return { ok: false, text: 'The gates are sealed: floor 1 is gone, no new adventurers this season. You can still !bet, !sponsor and !vote to bring the dead back.' };
     const cls = parseClass(arg) ?? this.rng.pick(Object.keys(CLASSES) as ClassId[]);
     const def = CLASSES[cls];
     const f = this.entryFloor();
@@ -331,7 +340,7 @@ export class Game {
     this.discover(p);
     this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} the ${def.label} enters the dungeon (floor ${f.n})!`, scope: 'global', actors: [key], drama: 5 });
     this.merchantSays(f.n, p.roomId, MERCHANT_WELCOME, key);
-    return { ok: true, text: `Welcome, ${def.label}! You are in the safe room of floor ${f.n}. Other players can't hurt you for ${Math.round(this.cfg.immunitySeconds / 60)} min.` };
+    return { ok: true, text: `Welcome, ${def.label}! You are in the safe room of floor ${f.n}. Other players can't hurt you for ${fmtWait(this.cfg.immunitySeconds * 1000)}, unless you attack one of them first.` };
   }
 
   private statusText(p: PlayerState): string {
@@ -573,6 +582,12 @@ export class Game {
     // 7. Fin de tour : effets, réapparitions, effondrements, votes
     this.endOfTurn(players);
     this.updateProduction();
+    // Portes scellées et plus personne dedans (ni vote de résurrection en cours) : la saison s'arrête là
+    const st = this.state;
+    if (st.joinsClosed && !st.seasonOver && !st.resurrection && !Object.keys(st.players).length) {
+      const deepest = Object.values(st.floors).filter((x) => !x.collapsed).sort((a, b) => b.n - a.n)[0];
+      this.endSeason(deepest ?? ({ n: 1 } as FloorState), true);
+    }
     this.sync();
     return this.out;
   }
@@ -610,7 +625,7 @@ export class Game {
     const r = this.room(a);
     if (r.type === 'safe') return 'No fighting in a safe room. The merchant insists.';
     const left = (q: PlayerState) => Math.max(1, Math.ceil((q.immuneUntil - this.now) / 1000));
-    if (this.isImmune(a)) return `You are still protected for ${left(a)} s: you can't attack other players.`;
+    if (this.isImmune(a)) return `You are still protected for ${left(a)} s, and so are they: no fight yet.`;
     if (this.isImmune(b)) return `${b.name} is protected for another ${left(b)} s (just arrived or respawned).`;
     return null;
   }
@@ -627,6 +642,11 @@ export class Game {
 
     let treachery = false;
     if (ap && dp) {
+      // Attaquer un joueur fait perdre sa propre protection d'arrivée
+      if (this.isImmune(ap) && !this.isImmune(dp) && this.room(ap).type !== 'safe') {
+        ap.immuneUntil = 0;
+        this.say(ap, 'You attack another player: your arrival protection is gone.');
+      }
       const err = this.pvpAllowed(ap, dp);
       if (err) {
         this.say(ap, err);
@@ -656,7 +676,7 @@ export class Game {
     if (this.state.floors[floorN]?.theme === 'plongé dans le noir') bonus -= 2; // on y voit mal
     const nat = this.rng.die(20);
     const total = nat + bonus;
-    const defRoll = dp ? this.rng.die(20) + dp.stats.agi + half(dp.level) + (dp.armor?.def ?? 0) : this.rng.die(20) + (def as { m: MonsterState }).m.def;
+    const defRoll = dp ? this.rng.die(20) + dp.stats.agi - (this.wet(dp.floor, dp.roomId) ? 1 : 0) + half(dp.level) + (dp.armor?.def ?? 0) : this.rng.die(20) + (def as { m: MonsterState }).m.def;
     const margin = total - defRoll;
     const dice = `(${total} vs ${defRoll})`;
     const actors = [ap?.key, dp?.key].filter(Boolean) as string[];
@@ -1000,7 +1020,7 @@ export class Game {
   }
 
   private check(p: PlayerState, stat: StatId, dc: number): { ok: boolean; total: number } {
-    let total = this.rng.die(20) + p.stats[stat] + half(p.level);
+    let total = this.rng.die(20) + p.stats[stat] + half(p.level) - (stat === 'agi' && this.wet(p.floor, p.roomId) ? 1 : 0);
     if (p.buffs.mirror) {
       total += 3;
       p.buffs.mirror = false;
@@ -1050,7 +1070,7 @@ export class Game {
     }
     const it = randomLoot(this.rng, this.nextId, f.n);
     this.giveItem(p, it);
-    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} trouve ${it.name} (${RARITY_LABEL[it.rarity]}).`, it.rarity === 'legendaire' ? 60 : it.rarity === 'epique' ? 30 : 0);
+    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} finds ${it.name} (${RARITY_LABEL[it.rarity]}).`, it.rarity === 'legendaire' ? 60 : it.rarity === 'epique' ? 30 : 0);
   }
 
   private springTrap(p: PlayerState, f: FloorState) {
@@ -1068,9 +1088,6 @@ export class Game {
     const r = f.rooms[p.roomId];
     const target = r.doors[dir];
     if (target === undefined) return this.say(p, `There is no door to the ${DIR_LABEL[dir]}. Just a very convincing wall.`);
-    if ((this.state.turn < this.state.floodUntil || f.theme === 'inondé') && r.type !== 'safe' && this.rng.chance(1 / 3)) {
-      return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} slips in the water heading ${DIR_LABEL[dir]} and lands a magnificent belly flop.`, 15);
-    }
     const hostiles = this.monstersIn(p.floor, p.roomId).filter((m) => m.distracted <= 0);
     if (hostiles.length && r.type !== 'safe') {
       if (p.buffs.smoke) p.buffs.smoke = false;
@@ -1090,7 +1107,7 @@ export class Game {
       this.emit({ floor: f.n, roomId: nr.id, kind: 'combat', text: `${p.name} walks into the boss room. Brave. Or reckless.`, scope: 'etage', actors: [p.key], drama: 30 });
     }
     if (nr.type === 'piege' && nr.trapArmed && !nr.trapRevealed) {
-      const c = this.check(p, 'agi', 11 + f.n);
+      const c = this.check(p, 'agi', 11 + f.n + (this.wet(f.n, nr.id) ? 2 : 0)); // sous l'eau, on ne le voit pas venir
       if (c.ok) this.roomEvent(p, f.n, nr.id, 'piege', `${p.name} narrowly dodges a trap on the way in (${c.total}).`, 10);
       else this.springTrap(p, f);
     }
@@ -1174,7 +1191,7 @@ export class Game {
       p.immuneUntil = this.now + this.cfg.immunitySeconds * 1000;
       if (!p.weapon) p.weapon = makeItem(CLASSES[p.cls].startWeapon, this.nextId);
       this.discover(p);
-      this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} respawns in the safe room of floor ${f.n}, looking offended. Protected for ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
+      this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} respawns in the safe room of floor ${f.n}, looking offended. Protected for ${fmtWait(this.cfg.immunitySeconds * 1000)} (unless they attack someone).`, scope: 'etage', actors: [p.key], drama: 5 });
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
     this.themeEffects(players.filter((p) => this.state.players[p.key]));
@@ -1205,6 +1222,20 @@ export class Game {
       if (f.collapsed) continue;
       const here = players.filter((p) => p.alive && p.floor === f.n);
       if (!here.length) continue;
+      // Sous l'eau, le butin resté au sol dérive vers une salle voisine
+      if (f.theme === 'inondé' || this.state.turn < this.state.floodUntil) {
+        for (const r of f.rooms) {
+          if (r.type === 'safe' || !r.ground.length || !this.rng.chance(0.2)) continue;
+          const next = (Object.values(r.doors) as (number | undefined)[]).filter((id): id is number => id !== undefined && f.rooms[id].type !== 'safe');
+          if (!next.length) continue;
+          const it = this.rng.pick(r.ground);
+          const to = f.rooms[this.rng.pick(next)];
+          r.ground = r.ground.filter((x) => x !== it);
+          to.ground.push(it);
+          const dir = (Object.entries(r.doors).find(([, id]) => id === to.id)?.[0] ?? 'n') as Dir;
+          this.roomEvent(null, f.n, r.id, 'drole', `The current carries ${it.name} away through the ${DIR_LABEL[dir]} door. Bye bye.`, 5);
+        }
+      }
       if (f.theme === 'en feu') {
         for (const p of here) {
           if (f.rooms[p.roomId].type === 'safe' || !this.rng.chance(0.12)) continue;
@@ -1512,7 +1543,7 @@ export class Game {
     p.alive = false; // la suite du tour l'ignore
   }
 
-  private endSeason(f: FloorState) {
+  private endSeason(f: FloorState, emptied = false) {
     this.state.seasonOver = true;
     for (const [key, x] of Object.entries(this.state.grandBet.stakes)) if (this.state.wallets[key]) this.state.wallets[key].pts += x.amount; // personne n'est sorti : remboursé
     this.state.grandBet.stakes = {};
@@ -1520,7 +1551,7 @@ export class Game {
     const champs = this.state.champions.map((c) => c.name);
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: 200, seasonEnd: true,
-      text: `END OF THE SEASON! Floor ${f.n} collapses and the Dungeon shuts its doors.${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
+      text: `END OF THE SEASON! ${emptied ? 'Nobody is left alive in the Dungeon, and the gates are sealed.' : `Floor ${f.n} collapses and the Dungeon shuts its doors.`}${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
     });
   }
 
@@ -1559,9 +1590,11 @@ export class Game {
     }
     const humans = lost.filter((p) => !p.bot).map((p) => `${p.name} (#${graves.get(p.key)})`);
     const npcs = lost.filter((p) => p.bot).length;
+    const sealing = f.n === 1 && this.state.seasonStart !== null && !this.state.joinsClosed;
+    if (sealing) this.state.joinsClosed = true; // fin de l'étage 1 : plus de nouveaux persos, la partie a une fin
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: lost.length ? 90 : 60,
-      text: `FLOOR ${f.n} COLLAPSES! ${lost.length ? `GAME OVER for ${[...humans, ...(npcs ? [`${npcs} NPC${npcs > 1 ? 's' : ''}`] : [])].join(', ')}: left inside. Type !join to start over on floor 1.` : 'Nobody got stuck, well done.'}`,
+      text: `FLOOR ${f.n} COLLAPSES! ${lost.length ? `GAME OVER for ${[...humans, ...(npcs ? [`${npcs} NPC${npcs > 1 ? 's' : ''}`] : [])].join(', ')}: left inside.${humans.length ? ' Only chat can bring them back now.' : ''}` : 'Nobody got stuck, well done.'}${sealing ? ' The dungeon gates are now SEALED: no new adventurers this season.' : ''}`,
     });
     this.afterCollapse(f, humans.length > 0);
     if (!victims.length) return;
@@ -1598,15 +1631,18 @@ export class Game {
     return Math.max(3, Math.round((this.cfg.voteEveryMinutes * 60 * this.phases) / this.cfg.turnSeconds));
   }
 
-  private castVote(p: PlayerState, arg: string): SubmitResult {
+  private castVote(name: string, arg: string): SubmitResult {
     const v = this.state.vote;
     if (!v) return { ok: false, text: 'No vote running. Production is cooking up the next one.' };
+    const key0 = playerKey(name);
+    if (!key0) return { ok: false, text: 'Invalid name.' };
+    if (this.state.players[key0]?.bot) return { ok: false, text: 'NPCs don\'t vote: production listens to chat only.' };
     const a = normalize(arg);
     let key: string | undefined;
     if (/^\d+$/.test(a)) key = v.options[Number(a) - 1];
     else key = v.options.find((k) => normalize(PRODUCTION_BY_KEY[k].label).includes(a) || k.includes(a));
-    if (!a || !key) return { ok: false, text: `Vote : ${v.options.map((k, i) => `!vote ${i + 1} = ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}` };
-    v.votes[p.key] = key;
+    if (!a || !key) return { ok: false, text: `Vote: ${v.options.map((k, i) => `!vote ${i + 1} = ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}` };
+    v.votes[key0] = key;
     return { ok: true, text: `Vote recorded: ${PRODUCTION_BY_KEY[key].label}.` };
   }
 
@@ -1712,7 +1748,7 @@ export class Game {
       }
       case 'inondation':
         st.floodUntil = st.turn + 5 * this.phases;
-        detail = 'The dungeon is flooded for 5 turns: one move in three ends in a slip.';
+        detail = 'The dungeon is knee-deep in water for 5 turns: −1 Dexterity, traps hidden under the surface, loot drifting away.';
         break;
       case 'festin':
         for (const p of Object.values(st.players)) if (p.alive) p.hp = p.maxHp;
@@ -1724,12 +1760,17 @@ export class Game {
             r.trapArmed = true;
             r.trapRevealed = false;
           }
-          for (const r of this.rng.shuffle(f.rooms.filter((x) => x.type === 'normale')).slice(0, 3)) {
-            r.type = 'piege';
-            r.trapArmed = true;
+          // Un piège de plus par étage, jamais plus d'un quart des salles piégées
+          const traps = f.rooms.filter((x) => x.type === 'piege').length;
+          if (traps < Math.floor(f.rooms.length * TRAP_SHARE_MAX)) {
+            const r = this.rng.shuffle(f.rooms.filter((x) => x.type === 'normale' && !this.playersIn(f.n, x.id).length))[0];
+            if (r) {
+              r.type = 'piege';
+              r.trapArmed = true;
+            }
           }
         }
-        detail = 'Every trap is re-armed, and three more rooms are trapped.';
+        detail = 'Every trap is re-armed, and one more room per floor is trapped.';
         break;
       case 'prolongation':
         for (const f of live) if (f.collapseAt !== null) {

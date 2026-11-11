@@ -291,6 +291,8 @@ function sendState(c: Client) {
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
     ...game.socialView(c.spectator ? null : key, now),
     seasonOver: game.state.seasonOver,
+    joinsClosed: !!game.state.joinsClosed,
+    seasonEndsInSec: game.state.seasonStart !== null && !game.state.seasonOver ? Math.max(0, Math.ceil((game.waveEnd(cfg.finalFloor) - now) / 1000)) : null,
     lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
     ...(c.spectator ? { floors: game.floorsSummary(now), champions: game.state.champions } : {}),
