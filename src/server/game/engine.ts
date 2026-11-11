@@ -1258,7 +1258,7 @@ export class Game {
     const list = [...st.graveyard].sort((a, b) => b.snap.level - a.snap.level).slice(0, 8).map((g) => `n°${g.no} ${g.name} (niv ${g.snap.level})`);
     this.emit({
       floor: 0, kind: 'systeme', scope: 'global', drama: 85,
-      text: `⚰️ VOTE DE RÉSURRECTION (1 min) : qui mérite une seconde chance ? ${list.join(' · ')}${st.graveyard.length > 8 ? ' …' : ''}. Tapez !vote <n°> (et !vote <n°> <points> pour peser plus lourd : 10 points = 1 voix).`,
+      text: `⚰️ VOTE DE RÉSURRECTION (1 min) : qui mérite une seconde chance ? ${list.join(' · ')}${st.graveyard.length > 8 ? ' …' : ''}. Tapez !vote <n°> (une seule voix par pseudo).`,
     });
   }
 
@@ -1266,17 +1266,13 @@ export class Game {
     const r = this.state.resurrection!;
     const key = playerKey(name);
     if (this.state.players[key]?.bot) return { ok: false, text: 'Les PNJ ne votent pas pour les morts.' };
-    const [noS, ptsS] = arg.trim().split(/\s+/);
-    const no = Number(noS);
+    const prev = r.votes[key];
+    if (prev) return { ok: false, text: `Tu as déjà voté (n°${prev.no}). Un seul vote par pseudo.` };
+    const no = Number(arg.trim().split(/\s+/)[0]);
     const g = this.state.graveyard.find((x) => x.no === no);
     if (!g) return { ok: false, text: `Vote de résurrection : !vote <n°> parmi ${this.state.graveyard.map((x) => `n°${x.no} ${x.name}`).join(', ')}.` };
-    const w = this.wallet(name);
-    const pts = Math.max(0, Math.min(w.pts, Math.floor(Number(ptsS) || 0)));
-    w.pts -= pts;
-    const prev = r.votes[key];
-    const voices = (prev && prev.no === no ? prev.voices : 1) + Math.floor(pts / 10);
-    r.votes[key] = { no, voices };
-    return { ok: true, text: `Voix pour n°${no} ${g.name} : ${voices}${pts ? ` (−${pts} points de faveur)` : ''}.` };
+    r.votes[key] = { no, voices: 1 }; // une voix par pseudo, définitive
+    return { ok: true, text: `Ta voix va au n°${no} ${g.name}. Un seul vote par pseudo : c'est fait.` };
   }
 
   /** Fin du vote : le plus de voix revient (égalité : jet de d20 entre les ex æquo, relancé tant qu'il y a égalité). */

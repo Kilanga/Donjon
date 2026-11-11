@@ -288,7 +288,7 @@ function renderShared(s: PlayerViewMsg) {
   if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
   if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
   if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
-  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris, sponsors (!sponsor), voix au vote de résurrection">⭐ ${s.myFavor} faveur</span>`);
+  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris (!parie) et sponsors (!sponsor)">⭐ ${s.myFavor} faveur</span>`);
   if (s.myGrave) chips.push(`<span class="chip urgent">⚰️ Tu es le n°${s.myGrave} au vote de résurrection : fais campagne dans le chat !</span>`);
   $('hud-effects').innerHTML = chips.join('');
   $('paused').classList.toggle('hidden', !s.paused);
@@ -305,7 +305,7 @@ function renderShared(s: PlayerViewMsg) {
       return `<${tag} ${attr} title="${esc(o.desc)}"><span class="n">${o.votes}</span><b>${o.n}. ${esc(o.label)}</b><small>${esc(o.desc)}</small></${tag}>`;
     }).join('');
     box.innerHTML = v.title
-      ? `<div class="vote-title">⚰️ ${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; (et !vote &lt;n°&gt; &lt;points&gt; : 10 points = 1 voix)</span></div><div class="vote-options">${opts}</div>`
+      ? `<div class="vote-title">⚰️ ${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; · une seule voix par pseudo</span></div><div class="vote-options">${opts}</div>`
       : `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
   } else box.classList.add('hidden');
 

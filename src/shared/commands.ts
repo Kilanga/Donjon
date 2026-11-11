@@ -127,7 +127,7 @@ export const HELP_TEXT = [
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',
   '!descendre — prendre l\'escalier (boss vaincu, et escalier descellé : dernière moitié du chrono)',
-  '!vote <n°> — voter pour l\'événement proposé par la production (ou pour ressusciter un mort : !vote <n°> <points> pour peser plus lourd)',
+  '!vote <n°> — voter pour l\'événement proposé par la production (ou pour ressusciter un mort après un effondrement : une seule voix par pseudo)',
   '!parie <pseudo> <mise> — grand pari : qui sortira en premier ? · !parie oui|non <mise> — pari éclair en cours',
   '!sponsor <pseudo> potion|or|monstre — offrir un cadeau (ou un sale tour) avec tes points de faveur · !faveur — tes points',
   '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',

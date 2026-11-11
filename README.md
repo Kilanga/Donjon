@@ -167,9 +167,9 @@ la page garde un jeton, donc pas de nouveau code au rechargement). Les pseudos j
 - **Cimetière** : chaque vrai joueur éliminé à un effondrement reçoit un **numéro** (annoncé dans le message du game over,
   et affiché sur sa page) pour faire campagne dans le chat.
 - **Vote de résurrection** : juste après chaque effondrement, 1 min de vote (`!vote <n°>`) parmi **tous** les éliminés.
-  `!vote <n°> <points>` ajoute des voix (10 points de faveur = 1 voix). Égalité : jet de d20 à l'écran entre les ex æquo,
+  **Une seule voix par pseudo**, définitive. Égalité : jet de d20 à l'écran entre les ex æquo,
   relancé tant qu'il y a égalité. Le gagnant revient avec son perso, **tous ses PV**, dans la safe room de l'étage suivant.
-- **Points de faveur** (`!faveur`) : 100 au départ, +10 pour chaque effondrement suivi en écrivant dans le chat. Ouverts
+- **Points de faveur** (`!faveur`, pour parier et sponsoriser) : 100 au départ, +10 pour chaque effondrement suivi en écrivant dans le chat. Ouverts
   à tout le chat, avec ou sans perso.
 - **Grand pari** : `!parie <pseudo> <mise>`, qui sortira en premier ? Ouvert jusqu'à l'effondrement de l'étage 2 ; les
   gagnants se partagent la cagnotte + 100 points (remboursé si personne ne sort).

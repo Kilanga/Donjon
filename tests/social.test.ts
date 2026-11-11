@@ -24,10 +24,12 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     expect(ev.some((e) => /VOTE DE RÉSURRECTION/.test(e))).toBe(true);
     expect(g.player('ana')).toBeUndefined();
     expect(g.voteView(null)?.title).toMatch(/SECONDE CHANCE/);
-    // le chat vote (même sans perso) ; bob achète des voix avec ses points
-    expect(g.submit('viewer1', '!vote 1', t).ok).toBe(true);
-    expect(g.submit('viewer2', '!vote 1', t).ok).toBe(true);
-    expect(g.submit('bob', '!vote 2 30', t).text).toMatch(/4/); // 1 + 30/10
+    // le chat vote (même sans perso) : une voix par pseudo, définitive
+    expect(g.submit('viewer1', '!vote 2', t).ok).toBe(true);
+    expect(g.submit('viewer2', '!vote 2', t).ok).toBe(true);
+    expect(g.submit('viewer1', '!vote 1', t).ok).toBe(false); // déjà voté
+    expect(g.submit('bob', '!vote 1 300', t).ok).toBe(true); // les points n'achètent rien
+    expect(g.voteView(null)!.options.find((o) => o.n === 1)!.votes).toBe(1);
     for (let i = 0; i < 4; i++) ev.push(...g.tick((t += 20_000)).map((e) => e.text));
     const res = ev.find((e) => /RÉSURRECTION !/.test(e))!;
     expect(res).toMatch(/bob \(n°2\)/);
