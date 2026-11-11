@@ -65,9 +65,16 @@ const FALLBACK_ANY = [
   'I love this job. Truly. Where else do people pay to watch hope die this beautifully?',
 ];
 
-/** Réponses au chat : une fois sur N messages au plus, avec une pause minimale entre deux. */
-const CHAT_CHANCE = 1 / 8;
+/** Réglage « bavarde » de la régie : réponses au chat, seuil des commentaires, rubriques contre les blancs. */
+export type Chatty = 'calm' | 'normal' | 'chatty';
+export const CHATTY: Record<Chatty, { chatChance: number; drama: number; quietMs: number }> = {
+  calm: { chatChance: 1 / 14, drama: 90, quietMs: 240_000 },
+  normal: { chatChance: 1 / 8, drama: 80, quietMs: 120_000 },
+  chatty: { chatChance: 1 / 4, drama: 70, quietMs: 60_000 },
+};
 const CHAT_COOLDOWN_MS = 120_000;
+const AIR_WINDOW_MS = 10 * 60_000;
+const AIR_SHARE_MAX = 0.35; // jamais plus d'un tiers du temps à l'antenne (hors annonces urgentes)
 
 /** La réplique reprend-elle 4 mots d'affilée du message ? (on ne fait jamais lire le chat à Victoria) */
 export function echoes(line: string, message: string): boolean {
@@ -86,6 +93,10 @@ export class Narrator {
   private lastTalk = new Map<string, number>();
   private lastChatReply = 0;
   private fallbackIdx = new Map<string, number>();
+  private inFlight = 0; // répliques en cours d'écriture par l'IA
+  private aired: { at: number; ms: number }[] = [];
+  chatty: Chatty = 'normal';
+  lastSpokeAt = Date.now();
 
   constructor(
     private game: Game,
@@ -104,7 +115,21 @@ export class Narrator {
   }
 
   /** Une réplique de Victoria : affichée (sous-titre, fil) et dite à voix haute. */
+  /** Victoria parle déjà, ou s'apprête à parler (l'IA écrit, la voix se génère, le clip passe). */
+  busy(now = Date.now()): boolean {
+    return this.inFlight > 0 || this.pumping || !!this.voice?.busy(now);
+  }
+
+  /** Part de temps de parole sur les 10 dernières minutes. */
+  airShare(now = Date.now()): number {
+    this.aired = this.aired.filter((a) => now - a.at < AIR_WINDOW_MS);
+    return this.aired.reduce((s, a) => s + a.ms, 0) / AIR_WINDOW_MS;
+  }
+
   private speak(line: string, floor: number, roomId?: number, urgent = false) {
+    const now = Date.now();
+    this.lastSpokeAt = now;
+    this.aired.push({ at: now, ms: 1500 + line.split(/\s+/).length * 380 });
     this.recent = [...this.recent, line].slice(-4);
     this.deliver([this.game.narrate(line, floor, roomId)]);
     void this.voice?.say(line, urgent);
@@ -113,7 +138,7 @@ export class Narrator {
   /** À appeler après chaque tour : Victoria commente le moment le plus fort (une réplique par tour au plus). */
   onTurn(events: GameEvent[]) {
     const top = events
-      .filter((e) => e.drama >= 80 && !e.narrator && e.scope !== 'prive')
+      .filter((e) => e.drama >= CHATTY[this.chatty].drama && !e.narrator && e.scope !== 'prive')
       .sort((a, b) => b.drama - a.drama)[0];
     if (!top) return;
     if (!this.ai.enabled) {
@@ -163,7 +188,7 @@ export class Narrator {
     if (!msg || msg.startsWith('!') || !this.ai.enabled) return;
     if (msg.split(/\s+/).length < 3 || hasHate(msg) || !nameAllowed(name)) return;
     if (now - this.lastChatReply < CHAT_COOLDOWN_MS || this.voice?.busy(now) || !this.ai.canCall(now)) return;
-    if (this.rand() >= CHAT_CHANCE) return;
+    if (this.airShare(now) > AIR_SHARE_MAX || this.rand() >= CHATTY[this.chatty].chatChance) return;
     this.lastChatReply = now;
     const p = this.game.player(name);
     const who = p ? `${name} (a ${p.alive ? 'living' : 'dead'} contestant on floor ${p.floor})` : `${name} (a viewer)`;
@@ -177,6 +202,35 @@ export class Narrator {
         console.warn('[ai] chat reply lost:', err);
       }
     });
+  }
+
+  /**
+   * Une annonce d'animatrice (déroulé, rubriques, Twitch) : l'IA la reformule à la manière de Victoria en gardant
+   * tous les faits ; sans IA (ou trop lente), c'est la phrase écrite `fallback` qui part.
+   * Sans `urgent`, rien ne passe si elle parle déjà ou si elle a trop parlé ces dernières minutes.
+   * Renvoie false si l'annonce n'est pas partie.
+   */
+  async announce(facts: string, fallback: string, opts: { floor?: number; urgent?: boolean; tone?: string } = {}): Promise<boolean> {
+    const now = Date.now();
+    if (!opts.urgent && (this.busy(now) || this.airShare(now) > AIR_SHARE_MAX)) return false;
+    const floor = opts.floor ?? this.game.spectatorView(null)?.n ?? 1;
+    let line: string | null = null;
+    if (this.ai.enabled && this.ai.canCall(now)) {
+      this.inFlight++;
+      try {
+        const before = this.recent.length ? `\nYour latest lines (don't reuse their openings or their phrasing): ${this.recent.map((r) => `"${r}"`).join(' / ')}` : '';
+        line = await this.ai.ask(
+          NARRATOR_SYSTEM,
+          `You are hosting the show. Say this on air in your own words, keeping EVERY fact and name below (you may drop nothing):\n${this.safeNames(facts)}\nTone to use: ${opts.tone ?? 'confident, glamorous, teasing'}.${before}`,
+        );
+      } catch {
+        line = null;
+      } finally {
+        this.inFlight--;
+      }
+    }
+    this.speak(this.safeNames(line ?? fallback), floor, undefined, !!opts.urgent);
+    return true;
   }
 
   /** La régie fait dire une phrase à Victoria (champ « Say this »). */

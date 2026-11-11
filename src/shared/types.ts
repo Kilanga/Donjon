@@ -182,7 +182,7 @@ export interface EffectsView {
 
 export interface PlayerViewMsg {
   type: 'state';
-  voice?: { status: string; muted: boolean; volume: number }; // régie : état de la voix de Victoria
+  voice?: { status: string; muted: boolean; volume: number; chatty: 'calm' | 'normal' | 'chatty' }; // régie : état de la voix de Victoria
   turn: number;
   turnEndsAt: number;
   turnSeconds: number;
@@ -284,4 +284,4 @@ export type ClientMsg =
   | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string } // images/seconde (journal)
   | { type: 'pos'; x: number; y: number }; // déplacement libre dans la salle (0..1, purement visuel)
 
-export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots' | 'ai' | 'voiceMute' | 'voiceSkip' | 'voiceSay' | 'voiceVolume';
+export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots' | 'ai' | 'voiceMute' | 'voiceSkip' | 'voiceSay' | 'voiceVolume' | 'voiceChatty';

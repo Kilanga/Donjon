@@ -352,7 +352,7 @@ function renderShared(s: PlayerViewMsg) {
   const adm = $('admin-card');
   if (!s.admin) return adm.classList.add('hidden');
   adm.classList.remove('hidden');
-  const voiceKey = `${s.voice?.muted}`;
+  const voiceKey = `${s.voice?.muted}:${s.voice?.chatty}`;
   if (adm.dataset.ready && adm.dataset.paused === String(s.paused) && adm.dataset.voice === voiceKey) {
     const st = document.getElementById('adm-voice-status');
     if (st) st.textContent = s.voice?.status ?? ''; // ne pas réécrire le panneau pendant la saisie
@@ -378,11 +378,12 @@ function renderShared(s: PlayerViewMsg) {
     <div class="section-label">Victoria Steele <span class="muted" id="adm-voice-status">${esc(s.voice?.status ?? '')}</span></div>
     <div class="admin-row"><input id="adm-say" maxlength="240" placeholder="Say this (Victoria reads it on air)"><button data-admin="voiceSay">Say</button></div>
     <div class="admin-row"><button data-admin="voiceSkip">Skip</button><button data-admin="voiceMute">${s.voice?.muted ? 'Unmute' : 'Mute'}</button><label class="muted" style="display:flex;align-items:center;gap:6px">Volume <input id="adm-voice-vol" type="range" min="0" max="100" value="${Math.round((s.voice?.volume ?? 1) * 100)}"></label><button data-admin="voiceVolume">OK</button></div>
+    <div class="admin-row"><span class="muted">Talkative:</span>${(['calm', 'normal', 'chatty'] as const).map((c) => `<button data-admin="voiceChatty" data-arg="${c}"${s.voice?.chatty === c ? ' class="primary"' : ''}>${c === 'calm' ? 'Calm' : c === 'normal' ? 'Normal' : 'Chatty'}</button>`).join('')}</div>
     <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Tonight's recap</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Logs for Claude</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">3D stream view</a></div>`;
 }
 
-function adminAction(action: string) {
-  let arg: string | number | undefined;
+function adminAction(action: string, preset?: string) {
+  let arg: string | number | undefined = preset;
   if (action === 'event') arg = ($('adm-event') as HTMLSelectElement).value;
   if (action === 'turnSeconds') arg = Number(($('adm-turn') as HTMLInputElement).value);
   if (action === 'kick') arg = ($('adm-kick') as HTMLInputElement).value.trim();
@@ -450,7 +451,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.dataset.cmd) cmd(b.dataset.cmd);
   if (b.dataset.floor) send({ type: 'floor', n: Number(b.dataset.floor) });
-  if (b.dataset.admin) adminAction(b.dataset.admin);
+  if (b.dataset.admin) adminAction(b.dataset.admin, b.dataset.arg);
   if (b.dataset.class) cmd(`!join ${CLASS_INFO[b.dataset.class]?.label.toLowerCase() ?? b.dataset.class}`);
 });
 $('cmd-form').addEventListener('submit', (e) => {

@@ -20,7 +20,7 @@ export const DEFAULT_AI: AiConfig = {
   ollamaModel: 'qwen2.5:14b',
   anthropicModel: 'claude-haiku-5-5',
   timeoutMs: 12000,
-  maxPerMinute: 8,
+  maxPerMinute: 15, // Victoria anime : commentaires, annonces, chat, marchand et PNJ
 };
 
 import { screenAi } from './moderation.js';

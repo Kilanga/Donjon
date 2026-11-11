@@ -21,6 +21,7 @@ export type JournalKind =
   | 'error' // erreur côté serveur
   | 'clientError' // erreur JavaScript remontée par une page
   | 'clientPerf' // images/seconde et infos de la page
+  | 'twitch' // abonnement, cadeau, bits ou raid sur la chaîne
   | 'log'; // console.log du serveur
 
 export interface JournalLine {

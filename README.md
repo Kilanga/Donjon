@@ -366,7 +366,7 @@ l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable av
 | `ollamaUrl` / `ollamaModel` | `http://localhost:11434` / `qwen2.5:14b` | Adresse et modèle Ollama |
 | `anthropicModel` | `claude-haiku-5-5` | Modèle de l'API Claude |
 | `timeoutMs` | 12000 | Au-delà, la réponse est abandonnée |
-| `maxPerMinute` | 8 | Nombre maximum d'appels par minute |
+| `maxPerMinute` | 15 | Nombre maximum d'appels par minute |
 
 Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
 Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
@@ -384,7 +384,13 @@ Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voi
   une réplique qui en recopie un morceau est jetée, et les pseudos refusés par la modération deviennent « a contestant ».
 - **Le son :** les effets et l'ambiance baissent pendant qu'elle parle. `?sansvoix` sur l'adresse du stream la coupe
   (sous-titres seuls), `?muet` coupe tout.
-- **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute » et le volume de sa voix.
+- **Elle anime :** inscriptions, règles au lancement, arrivée sur un nouvel étage (thème et danger), « 5 minutes »,
+  « dernière minute », escalier descellé, accueil des nouveaux (par petits groupes), et quand l'antenne est calme,
+  une rubrique (classement, course à la sortie, joueur à l'honneur, histoires de la soirée, comment rejoindre, enjeux).
+  Elle remercie les abonnements, cadeaux, bits et raids Twitch (le pseudo et le nombre, jamais le message).
+  Elle ne parle jamais par-dessus elle-même et pas plus d'un tiers du temps (hors annonces urgentes).
+- **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute », le volume de sa voix et « Talkative »
+  (calme / normale / bavarde : réponses au chat, commentaires, rubriques toutes les 4, 2 ou 1 min de silence).
 
 **Installation (une fois) :** double-clic sur `voix\installer-voix.bat`. Il installe un Python à part avec PyTorch
 (environ 3 Go) et le modèle de voix (environ 4,5 Go) dans `D:\DonjonVoix`. Ensuite, « Le Donjon » la lance tout seul,

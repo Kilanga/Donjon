@@ -15,6 +15,7 @@ import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
 import { Voice } from './voice.js';
+import { Host } from './host.js';
 import { BotManager } from './bots.js';
 import { maskPlayerText, nameAllowed } from './moderation.js';
 import { readJsonSafe, writeAtomic } from './fsutil.js';
@@ -308,7 +309,7 @@ function sendState(c: Client) {
   if (c.spectator) {
     const shown = game.spectatorView(c.floor, now);
     const standby = c.standby != null && c.standby !== shown?.n ? game.liveFloorView(c.standby, now) : null;
-    send(c, { ...base, voice: { status: voice.describe(), muted: voice.muted, volume: voice.volume }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
+    send(c, { ...base, voice: { status: voice.describe(), muted: voice.muted, volume: voice.volume, chatty: narrator.chatty }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
   } else if (c.name) {
     const v = game.viewFor(c.name, now);
     send(c, { ...base, ...v, spectator: false });
@@ -362,6 +363,15 @@ const voice = new Voice(cfg.voice, (clip) => {
   for (const c of clients) if (c.spectator) send(c, { type: 'voice', ...clip, volume: voice.volume });
 });
 const narrator = new Narrator(game, ai, (evs) => deliver(evs), voice);
+// …et elle anime l'émission : déroulé, accueil, rubriques, Twitch
+const host = new Host(game, narrator);
+setInterval(() => {
+  try {
+    host.tick();
+  } catch (e) {
+    console.error('[host] error:', e);
+  }
+}, 1000).unref();
 
 /** Bots de chat connus : on ignore leurs messages (le rappel de Cloudbot s'affichait en bulle). */
 const CHAT_BOTS = new Set(['streamlabs', 'nightbot', 'streamelements', 'moobot', 'fossabot', 'wizebot', 'wzbot', 'sery_bot', 'soundalerts', 'commanderroot', 'kilakbot']);
@@ -678,6 +688,12 @@ function admin(c: Client, action: string, arg?: string | number) {
       voice.volume = Math.max(0, Math.min(1, Number(arg))) || 0;
       msg = `Victoria's volume: ${Math.round(voice.volume * 100)}%.`;
       break;
+    case 'voiceChatty': {
+      const v = String(arg);
+      if (v === 'calm' || v === 'normal' || v === 'chatty') narrator.chatty = v;
+      msg = `Victoria is now ${narrator.chatty}.`;
+      break;
+    }
     case 'voiceSay': {
       const r = narrator.controlRoomSay(String(arg ?? ''));
       msg = r.text;
@@ -733,6 +749,7 @@ function runTurn() {
   if (game.state.turn % 10 === 0) journal.write('snapshot', { leaderboard: game.leaderboard() });
   deliver(events);
   narrator.onTurn(events);
+  host.onEvents(events);
   // Les PNJ figurants s'ajustent, se souviennent, saluent, et choisissent leur action du prochain tour
   try {
     npcs.greetings();
@@ -855,6 +872,10 @@ if (cfg.twitchChannel) {
       muted.set(playerKey(user), Date.now() + seconds * 1000);
       journal.write('admin', { action: 'muted', arg: user, msg: why });
       console.log(`[twitch] ${user}: ${why} → ignored by the game ${Number.isFinite(seconds) ? `for ${seconds} s` : 'until restart'}`);
+    },
+    (ev) => {
+      journal.write('twitch', { ...ev });
+      if (!isMuted(ev.user)) host.onTwitch(ev);
     },
   );
 }
