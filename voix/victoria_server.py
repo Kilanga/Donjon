@@ -36,19 +36,43 @@ USE_STUDIO = os.environ.get('VOIX_STUDIO', '1') != '0'
 MAX_CHARS = 400  # une réplique fait au plus ~35 mots ; au-delà, c'est une erreur ou un abus
 MAX_TOKENS = 260  # 12 trames par seconde : ~20 s d'audio au maximum, jamais de génération qui s'emballe
 
+LOG = os.path.join(HERE, '..', 'logs', 'voix.log')  # lu par Claude avec les journaux du Donjon
+
+
+def log(msg: str):
+    line = f'[voix] {msg}'
+    print(line, flush=True)
+    try:
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        if os.path.exists(LOG) and os.path.getsize(LOG) > 2_000_000:
+            os.replace(LOG, LOG + '.old')
+        with open(LOG, 'a', encoding='utf-8') as fh:
+            fh.write(time.strftime('%Y-%m-%d %H:%M:%S ') + line + '\n')
+    except OSError:
+        pass
+
+
+def gpu_info() -> str:
+    if not torch.cuda.is_available():
+        return f'CUDA unavailable (torch {torch.__version__}): running on the CPU, lines will be slow'
+    free, total = torch.cuda.mem_get_info()
+    return f'{torch.cuda.get_device_name(0)}, VRAM free {free / 2**30:.1f} / {total / 2**30:.1f} GB (torch {torch.__version__})'
+
+
 state = {'ready': False, 'model': None, 'prompt': None}
 lock = threading.Lock()  # une seule génération à la fois sur la carte graphique
 
 
 def load():
     t0 = time.time()
+    log(f'device {DEVICE}; {gpu_info()}')
     dtype = torch.bfloat16 if DEVICE.startswith('cuda') or os.environ.get('VOIX_BF16') == '1' else torch.float32
     model = Qwen3TTSModel.from_pretrained(MODEL, device_map=DEVICE, dtype=dtype)
     prompt = model.create_voice_clone_prompt(ref_audio=REF_WAV, ref_text=REF_TEXT)
     state['model'], state['prompt'] = model, prompt
     synth('Testing, testing. Victoria Steele, live.')  # premier passage : chauffe la carte
     state['ready'] = True
-    print(f'[voix] Victoria est prete ({DEVICE}, {time.time() - t0:.0f} s)', flush=True)
+    log(f'Victoria est prete ({DEVICE}, {time.time() - t0:.0f} s) ; {gpu_info()}')
 
 
 def synth(text: str) -> bytes:
@@ -82,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/health':
-            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready']}).encode(), 'application/json')
+            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready'], 'device': DEVICE}).encode(), 'application/json')
         self.reply(404, b'{}', 'application/json')
 
     def do_POST(self):
@@ -103,15 +127,16 @@ class Handler(BaseHTTPRequestHandler):
         try:
             t0 = time.time()
             wav = synth(text)
-            print(f'[voix] {len(text)} caracteres en {time.time() - t0:.1f} s', flush=True)
+            secs = (len(wav) - 44) / 2 / 24000
+            log(f'{len(text)} caracteres -> {secs:.1f} s de voix en {time.time() - t0:.1f} s')
             self.reply(200, wav, 'audio/wav')
         except Exception as e:  # une réplique ratée ne doit pas arrêter le service
-            print('[voix] erreur :', e, file=sys.stderr, flush=True)
+            log(f'erreur : {e}')
             self.reply(500, b'{"error":"synthesis failed"}', 'application/json')
 
 
 if __name__ == '__main__':
     httpd = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)  # jamais accessible depuis le réseau
     threading.Thread(target=load, daemon=True).start()
-    print(f'[voix] chargement de Victoria sur {DEVICE}... (http://127.0.0.1:{PORT})', flush=True)
+    log(f'chargement de Victoria sur {DEVICE}... (http://127.0.0.1:{PORT})')
     httpd.serve_forever()

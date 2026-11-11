@@ -58,7 +58,8 @@ export class Voice {
   muted = false;
   volume = 1;
   private ready = false;
-  private misses = 0; // contrôles de santé ratés d'affilée (le service peut être occupé à générer)
+  private misses = 0;
+  private device = ''; // contrôles de santé ratés d'affilée (le service peut être occupé à générer)
   private clips = new Map<string, Buffer>();
   private busyUntil = 0; // fin estimée de la réplique en cours à l'antenne
   private pending = 0;
@@ -76,12 +77,14 @@ export class Voice {
       const was = this.ready;
       try {
         const res = await fetch(`${this.cfg.url}/health`, { signal: AbortSignal.timeout(5000) });
-        this.ready = res.ok && ((await res.json()) as { ready?: boolean }).ready === true;
+        const h = (await res.json()) as { ready?: boolean; device?: string };
+        this.ready = res.ok && h.ready === true;
+        this.device = h.device ?? '';
         this.misses = 0;
       } catch {
         if (++this.misses >= 2) this.ready = false;
       }
-      if (this.ready && !was) console.log('  Victoria (voice): ready.');
+      if (this.ready && !was) console.log(`  Victoria (voice): ready${this.device ? ` on ${this.device}` : ''}.`);
       if (!this.ready && was) console.log('  Victoria (voice): service lost, subtitles only.');
     };
     void check();
@@ -122,6 +125,7 @@ export class Voice {
       return;
     }
     this.pending++;
+    const t0 = Date.now();
     try {
       const res = await fetch(`${this.cfg.url}/tts`, {
         method: 'POST',
@@ -133,13 +137,14 @@ export class Voice {
       const buf = Buffer.from(await res.arrayBuffer());
       const ms = wavMs(buf);
       if (!ms || ms > MAX_MS) throw new Error(`clip of ${ms} ms refused`);
+      console.log(`[voice] ${(ms / 1000).toFixed(1)} s of voice generated in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       const id = crypto.randomBytes(8).toString('hex');
       this.clips.set(id, buf);
       while (this.clips.size > KEEP) this.clips.delete(this.clips.keys().next().value!);
       this.busyUntil = Math.max(Date.now(), this.busyUntil) + ms + 600;
       this.broadcast({ id, text: line, ms });
     } catch (e) {
-      console.warn('[voice] no audio:', (e as Error).message);
+      console.warn(`[voice] no audio after ${((Date.now() - t0) / 1000).toFixed(1)} s:`, (e as Error).message);
       this.busyUntil = Date.now() + estimate;
       this.broadcast({ id: null, text: line, ms: estimate });
     } finally {
