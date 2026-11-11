@@ -217,10 +217,9 @@ describe('salles spéciales', () => {
     throw new Error('aucun ogre sur 30 graines');
   });
 
-  it('autel, fontaine et puits : une seule fois par joueur', () => {
-    for (const kind of ['autel', 'fontaine', 'puits']) {
+  it('autel et fontaine : une seule fois par joueur', () => {
+    for (const kind of ['autel', 'fontaine']) {
       const { g, p } = featured(kind);
-      p.gold = 500;
       act(g, T0 + 20_000);
       const ev = act(g, T0 + 40_000);
       expect(ev.some((e) => e.to === 'a' && /already/.test(e.text))).toBe(true);
@@ -233,6 +232,19 @@ describe('salles spéciales', () => {
     p.gold = 25;
     act(g, T0 + 20_000);
     expect(p.gold === 15 || p.gold === 35 || p.items.length > 2).toBe(true);
+  });
+
+  it('puits : chaque nouveau vœu coûte le triple', () => {
+    const { g, p, r } = featured('puits');
+    p.gold = 1000;
+    const spent: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const before = p.gold;
+      act(g, T0 + 20_000 * (i + 1));
+      spent.push(Math.abs(p.gold - before)); // −coût (objet ou rien) ou +coût (le puits rend le double)
+    }
+    expect(spent).toEqual([10, 30, 90]);
+    expect(r.featureUsedBy).toEqual(['a', 'a', 'a']);
   });
 
   it('le prisonnier ne se libère qu\'une fois', () => {

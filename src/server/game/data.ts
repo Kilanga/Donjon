@@ -130,7 +130,7 @@ export const BOSSES: MonsterTpl[] = [
 export const FEATURE_DESC: Record<string, string> = {
   autel: 'An altar to a forgotten god, still warm. !search to pray: blessing or curse, depending on your Charisma.',
   fontaine: 'A fountain of glowing water. !search to drink: it heals… most of the time.',
-  puits: 'A wishing well. !search to throw in some gold (10 × the floor) and make a wish. One wish per crawler.',
+  puits: 'A wishing well. !search to throw in some gold (10 × the floor) and make a wish. Each extra wish costs you triple the last one.',
   prisonnier: 'Someone is chained to the wall, begging. !search to free them. Probably a good idea.',
   ogre: 'An ogre is snoring on a pile of loot. !search to steal some of it (Dexterity). Or wake him up the hard way.',
 };

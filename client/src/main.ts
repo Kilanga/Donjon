@@ -265,8 +265,8 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
 
   const acts: string[] = [];
   if (room.feature) {
-    const label = { autel: 'Pray at the altar', fontaine: 'Drink from the fountain', puits: `Make a wish · ${10 * (s.floor?.n ?? 1)} gold`, prisonnier: 'Free the prisoner', ogre: 'Steal from the ogre' }[room.feature];
-    acts.push(`<button data-cmd="!search" ${room.featureDone ? 'disabled' : ''}>${label}</button>`);
+    const label = { autel: 'Pray at the altar', fontaine: 'Drink from the fountain', puits: `Make a wish · ${room.featureCost ?? 10 * (s.floor?.n ?? 1)} gold`, prisonnier: 'Free the prisoner', ogre: 'Steal from the ogre' }[room.feature];
+    acts.push(`<button data-cmd="!search" ${room.featureDone || (room.featureCost ?? 0) > me.gold ? 'disabled' : ''}>${label}</button>`);
   } else if (room.chest === 'ferme') acts.push('<button data-cmd="!search">Open the chest</button>');
   else if (!room.searched && room.type !== 'safe') acts.push('<button data-cmd="!search">Search</button>');
   if (room.type === 'piege') acts.push('<button data-cmd="!search">Look for traps</button>');

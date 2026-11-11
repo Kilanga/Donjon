@@ -70,6 +70,7 @@ export interface RoomView {
   groundGold?: number;
   crypt?: { no: number; name: string; level: number; cls: ClassId }[];
   feature?: 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre'; // salle spéciale
+  featureCost?: number; // puits : prix de mon prochain vœu
   featureDone?: boolean; // déjà utilisée (par moi, ou pour de bon) // la crypte de l'étage : tombes à ressusciter
 }
 

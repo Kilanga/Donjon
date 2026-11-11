@@ -1436,6 +1436,11 @@ export class Game {
     this.startTimer(f, p);
   }
 
+  /** Prix du prochain vœu d'un joueur au puits : 10 × l'étage, puis ×3 à chaque vœu déjà fait ici. */
+  private wishCost(f: FloorState, used: string[], key: string): number {
+    return 10 * f.n * 3 ** used.filter((k) => k === key).length;
+  }
+
   /** Salles spéciales : !search s'en sert. */
   private useFeature(p: PlayerState, r: RoomState, f: FloorState) {
     const used = (r.featureUsedBy ??= []);
@@ -1470,10 +1475,9 @@ export class Game {
         return ev(`${p.name} drinks from the fountain… it was NOT water. −${dmg} HP and a very green face.`, 25, 'piege');
       }
       case 'puits': {
-        // Un vœu par joueur et par puits (sinon un joueur riche y farme des objets rares à chaque tour)
-        if (used.includes(p.key)) return this.say(p, 'You already made your wish here. The well only grants one per crawler.');
-        const cost = 10 * f.n;
-        if (p.gold < cost) return this.say(p, `A wish costs ${cost} gold here. You have ${p.gold}.`);
+        // Chaque nouveau vœu d'un même joueur dans ce puits coûte le triple du précédent (pas de farm d'objets rares)
+        const cost = this.wishCost(f, used, p.key);
+        if (p.gold < cost) return this.say(p, `${used.includes(p.key) ? 'Your next wish here' : 'A wish here'} costs ${cost} gold. You have ${p.gold}.`);
         used.push(p.key);
         p.gold -= cost;
         const roll = this.rng.next();
@@ -2175,7 +2179,8 @@ export class Game {
     if (r.feature) {
       v.feature = r.feature;
       const used = r.featureUsedBy ?? [];
-      v.featureDone = r.feature === 'prisonnier' ? used.length > 0 : r.feature === 'ogre' ? !f.monsters.some((m) => m.roomId === r.id && m.asleep) : !!viewer && used.includes(viewer.key);
+      v.featureDone = r.feature === 'prisonnier' ? used.length > 0 : r.feature === 'ogre' ? !f.monsters.some((m) => m.roomId === r.id && m.asleep) : r.feature === 'puits' ? false : !!viewer && used.includes(viewer.key);
+      if (r.feature === 'puits' && viewer) v.featureCost = this.wishCost(f, used, viewer.key);
     }
     if (f.cryptRoom === r.id) v.crypt = this.state.graveyard.filter((g) => g.cryptFloor === f.n).map((g) => ({ no: g.no, name: g.name, level: g.snap.level, cls: g.snap.cls }));
     return v;
