@@ -36,7 +36,7 @@ export class Stage {
     btn.id = 'sound-btn';
     const paint = () => {
       btn.textContent = sfx.muted ? '🔇' : '🔈';
-      btn.title = sfx.muted ? 'Activer le son' : 'Couper le son';
+      btn.title = sfx.muted ? 'Unmute' : 'Mute';
     };
     paint();
     btn.addEventListener('click', () => {
@@ -68,7 +68,7 @@ export class Stage {
     this.director?.onEvent(e);
     const me = this.state?.me;
     const concernsMe = !!me && (e.actors?.includes(keyOf(me.name)) ?? false);
-    if (e.kind === 'trahison' && e.text.startsWith('TRAHISON')) sfx.play('betrayal', concernsMe || this.spectator ? 0.9 : 0.45);
+    if (e.kind === 'trahison' && e.text.startsWith('BETRAYAL')) sfx.play('betrayal', concernsMe || this.spectator ? 0.9 : 0.45);
     else if (e.kind === 'alliance' && e.text.startsWith('Alliance')) sfx.play('alliance', concernsMe ? 1 : 0.35);
   }
 
@@ -100,7 +100,7 @@ export class Stage {
     const host = document.getElementById('spec-tools');
     if (!host || !this.director) return;
     const d = this.director;
-    const label = d.followName ? `Suivi : ${d.followName}` : d.auto ? 'Caméra auto : on' : 'Caméra auto : off';
+    const label = d.followName ? `Following: ${d.followName}` : d.auto ? 'Auto camera: on' : 'Auto camera: off';
     let b = host.querySelector('button');
     if (!b) {
       b = document.createElement('button');

@@ -59,7 +59,7 @@ describe('thèmes d\'étage', () => {
       const { g, p } = onTheme('en feu', seed);
       p.maxHp = p.hp = 999;
       let t = T0;
-      for (let i = 0; i < 30; i++) burns += g.tick((t += 20_000)).filter((e) => e.text.includes('braise')).length;
+      for (let i = 0; i < 30; i++) burns += g.tick((t += 20_000)).filter((e) => e.text.includes('ember')).length;
     }
     expect(burns).toBeGreaterThan(3);
   });
@@ -78,7 +78,7 @@ describe('thèmes d\'étage', () => {
       const { g, p } = onTheme('hanté', seed);
       p.gold = 100;
       let t = T0;
-      for (let i = 0; i < 30; i++) thefts += g.tick((t += 20_000)).filter((e) => e.text.includes('fantôme')).length;
+      for (let i = 0; i < 30; i++) thefts += g.tick((t += 20_000)).filter((e) => e.text.includes('ghost')).length;
     }
     expect(thefts).toBeGreaterThan(3);
   });
@@ -117,7 +117,7 @@ describe('dernier étage et légendes', () => {
     expect(g.state.seasonOver).toBe(true);
     expect(p.floor).toBe(2); // pas de chute : la saison est finie
     expect(g.tick(T0 + 81_000)).toHaveLength(0);
-    expect(g.submit('ana', '!nord', T0 + 82_000).text).toContain('saison est terminée');
+    expect(g.submit('ana', '!nord', T0 + 82_000).text).toContain('season is over');
     g.reset();
     expect(g.state.seasonOver).toBe(false);
   });

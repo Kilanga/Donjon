@@ -9,7 +9,7 @@ import {
 } from './data.js';
 import { DIR_LABEL, generateFloor, spawnMimic, spawnMonster } from './dungeon.js';
 import { BOSSES, FORGE_LINES, FORGE_MAX, MERCHANT_RESPAWN, MERCHANT_TIPS, MERCHANT_WELCOME, MONSTERS } from './data.js';
-import { THEME_EFFECTS } from '../../shared/themes.js';
+import { THEME_EFFECTS, THEME_LABEL } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
@@ -27,7 +27,7 @@ export interface SubmitResult {
   text: string;
 }
 
-/** « 7 min 30 s », « 45 s » */
+/** "7 min 30 s", "45 s" */
 function fmtWait(ms: number): string {
   const s = Math.ceil(ms / 1000);
   const m = Math.floor(s / 60);
@@ -58,7 +58,7 @@ export class Game {
     this.state.nextId = keepId;
     this.rng = new Rng(this.state.rng);
     this.ensureFloor(1);
-    this.emit({ floor: 1, kind: 'systeme', text: 'NOUVELLE SAISON ! Le donjon a été entièrement recreusé. Tapez !join pour entrer.', scope: 'global', drama: 50 });
+    this.emit({ floor: 1, kind: 'systeme', text: 'NEW SEASON! The dungeon has been dug out from scratch. Type !join to enter.', scope: 'global', drama: 50 });
     this.sync();
   }
 
@@ -80,14 +80,14 @@ export class Game {
   /** Réplique du marchand (IA ou écrite), pour toute la salle. */
   merchantReply(floor: number, roomId: number, line: string): GameEvent {
     this.out = [];
-    this.emit({ floor, roomId, kind: 'info', text: line.startsWith('Le marchand') ? line : `Le marchand : « ${line} »`, scope: 'salle', drama: 0, npc: 'marchand' });
+    this.emit({ floor, roomId, kind: 'info', text: line.startsWith('The merchant') ? line : `The merchant: "${line}"`, scope: 'salle', drama: 0, npc: 'marchand' });
     this.sync();
     return this.out[0];
   }
 
   /** Réplique du marchand de la safe room : à un joueur (privé) ou à toute la salle. */
   private merchantSays(floor: number, roomId: number, line: string, to?: string) {
-    this.emit({ floor, roomId, kind: 'info', text: `Le marchand : « ${line} »`, scope: to ? 'prive' : 'salle', ...(to ? { to } : {}), drama: 0, npc: 'marchand' });
+    this.emit({ floor, roomId, kind: 'info', text: `The merchant: "${line}"`, scope: to ? 'prive' : 'salle', ...(to ? { to } : {}), drama: 0, npc: 'marchand' });
   }
 
   private roomEvent(p: PlayerState | null, floor: number, roomId: number, kind: GameEvent['kind'], text: string, drama = 0, actors: string[] = [], fx?: GameFx) {
@@ -148,8 +148,8 @@ export class Game {
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
       f = generateFloor(n, rooms, this.rng, this.nextId);
       this.state.floors[n] = f;
-      const effect = (n >= this.cfg.finalFloor ? 'DERNIER ÉTAGE : battez le boss et prenez la sortie pour entrer dans la Légende. Son effondrement termine la saison ! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
-      this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} vient d'être creusé (${f.rooms.length} salles, thème : ${f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
+      const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: beat the boss and take the exit to become a Legend. When it collapses, the season is over! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
+      this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out (${f.rooms.length} rooms, theme: ${THEME_LABEL[f.theme] ?? f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
   }
@@ -187,7 +187,7 @@ export class Game {
   private openLobby() {
     this.state.lobbyUntil = this.now + this.cfg.lobbySeconds * 1000;
     this.state.lobbyWarned = false;
-    this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 70, text: `INSCRIPTIONS OUVERTES ! La partie commence dans ${fmtWait(this.cfg.lobbySeconds * 1000)} : tapez !join pour en être. En attendant, échauffement avec les PNJ (tout repart à zéro au coup d'envoi).` });
+    this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 70, text: `SIGN-UPS ARE OPEN! The game starts in ${fmtWait(this.cfg.lobbySeconds * 1000)}: type !join to be part of it. Until then, warm up with the NPCs (everything resets at kick-off).` });
   }
 
   /** Fin des inscriptions : donjon neuf, tout le monde (PNJ compris) repart niveau 1 à l'entrée, et l'horloge démarre. */
@@ -212,7 +212,7 @@ export class Game {
     for (const r of roster) if (!r.bot) this.merchantSays(1, f.spawnRoom, MERCHANT_WELCOME, playerKey(r.name));
     this.emit({
       floor: 1, kind: 'systeme', scope: 'global', drama: 95,
-      text: `LA PARTIE COMMENCE ! ${humans} aventurier${humans > 1 ? 's' : ''} et ${roster.length - humans} PNJ entrent dans un donjon tout neuf, niveau 1 pour tout le monde. L'étage 1 s'effondre dans ${Math.round(this.floorSpan(1) / 60_000)} min.`,
+      text: `THE GAME BEGINS! ${humans} adventurer${humans > 1 ? 's' : ''} and ${roster.length - humans} NPC${roster.length - humans === 1 ? '' : 's'} enter a brand-new dungeon, level 1 for everyone. Floor 1 collapses in ${Math.round(this.floorSpan(1) / 60_000)} min.`,
     });
   }
 
@@ -256,7 +256,7 @@ export class Game {
       for (const p of Object.values(this.state.players)) delete p.discovered[n];
     }
     const f = this.ensureFloor(n);
-    if (old) this.emit({ floor: n, kind: 'systeme', text: `L'étage ${n} a été recreusé : nouveau plan, nouveaux monstres, de quoi accueillir les nouveaux aventuriers.`, scope: 'global', drama: 10 });
+    if (old) this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out again: new layout, new monsters, room for the newcomers.`, scope: 'global', drama: 10 });
     return f;
   }
 
@@ -265,10 +265,10 @@ export class Game {
   submit(name: string, raw: string, now = Date.now()): SubmitResult {
     this.now = now;
     const cmd = parseCommand(raw);
-    if (this.state.seasonOver && cmd?.name !== 'help') return { ok: false, text: 'La saison est terminée : merci d\'avoir joué ! Rendez-vous à la prochaine.' };
+    if (this.state.seasonOver && cmd?.name !== 'help') return { ok: false, text: 'The season is over: thanks for playing! See you next time.' };
     if (!cmd) {
       const guess = suggestCommand(raw);
-      return { ok: false, text: guess ? `Commande inconnue. Tu voulais dire ${guess} ?` : 'Commande inconnue. Tape !aide pour la liste.' };
+      return { ok: false, text: guess ? `Unknown command. Did you mean ${guess}?` : 'Unknown command. Type !help for the list.' };
     }
     const res = this.handle(name, cmd);
     this.sync();
@@ -284,7 +284,7 @@ export class Game {
     if (cmd.name === 'favor') return this.favorText(name);
     const p = this.player(name);
     if (cmd.name === 'join') return this.join(name, cmd.arg);
-    if (!p) return { ok: false, text: 'Tu n\'es pas encore dans le donjon. Tape !join [barbare|chevalier|voleur|mage].' };
+    if (!p) return { ok: false, text: 'You are not in the dungeon yet. Type !join [barbarian|knight|rogue|mage].' };
 
     switch (cmd.name) {
       case 'status':
@@ -305,16 +305,16 @@ export class Game {
       default:
         break;
     }
-    if (!p.alive) return { ok: false, text: `Tu es mort. Réapparition dans ${p.respawnIn} tour(s). Patience, fantôme.` };
+    if (!p.alive) return { ok: false, text: `You are dead. Respawning in ${p.respawnIn} turn(s). Patience, ghost.` };
     p.pending = cmd;
-    return { ok: true, text: `Action prévue pour la fin du tour : ${cmd.raw}` };
+    return { ok: true, text: `Queued for the end of the turn: ${cmd.raw}` };
   }
 
   private join(name: string, arg: string, bot = false): SubmitResult {
     const key = playerKey(name);
-    if (!key) return { ok: false, text: 'Pseudo invalide.' };
-    if (this.state.seasonOver) return { ok: false, text: 'La saison est terminée : le Donjon est fermé. Rendez-vous à la prochaine !' };
-    if (this.state.players[key]) return { ok: false, text: 'Tu es déjà dans le donjon !' };
+    if (!key) return { ok: false, text: 'Invalid name.' };
+    if (this.state.seasonOver) return { ok: false, text: 'The season is over: the Dungeon is closed. See you next time!' };
+    if (this.state.players[key]) return { ok: false, text: 'You are already in the dungeon!' };
     const cls = parseClass(arg) ?? this.rng.pick(Object.keys(CLASSES) as ClassId[]);
     const def = CLASSES[cls];
     const f = this.entryFloor();
@@ -329,44 +329,44 @@ export class Game {
     this.state.players[key] = p;
     this.startTimer(f, p); // (un PNJ figurant ne lance pas la saison, mais arme un étage recreusé une fois qu'elle a commencé)
     this.discover(p);
-    this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} le ${def.label} entre dans le donjon (étage ${f.n}) !`, scope: 'global', actors: [key], drama: 5 });
+    this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} the ${def.label} enters the dungeon (floor ${f.n})!`, scope: 'global', actors: [key], drama: 5 });
     this.merchantSays(f.n, p.roomId, MERCHANT_WELCOME, key);
-    return { ok: true, text: `Bienvenue, ${def.label} ! Tu es dans la safe room de l'étage ${f.n}. Tu es immunisé contre les autres joueurs pendant ${Math.round(this.cfg.immunitySeconds / 60)} min.` };
+    return { ok: true, text: `Welcome, ${def.label}! You are in the safe room of floor ${f.n}. Other players can't hurt you for ${Math.round(this.cfg.immunitySeconds / 60)} min.` };
   }
 
   private statusText(p: PlayerState): string {
     const c = CLASSES[p.cls];
     const st = (Object.keys(STAT_LABELS) as StatId[]).map((s) => `${s.toUpperCase()} ${fmt(p.stats[s])}`).join(' ');
-    return `${p.name}, ${c.label} niv. ${p.level} — ${p.hp}/${p.maxHp} PV — ${st} — ${p.gold} po — XP ${p.xp}/${xpNext(p.level)}${p.statPoints ? ` — ${p.statPoints} point(s) à dépenser (!monte)` : ''}`;
+    return `${p.name}, ${c.label} lvl ${p.level} — ${p.hp}/${p.maxHp} HP — ${st} — ${p.gold} gold — XP ${p.xp}/${xpNext(p.level)}${p.statPoints ? ` — ${p.statPoints} point(s) to spend (!levelup)` : ''}`;
   }
 
   private shopText(p: PlayerState): SubmitResult {
     if (this.room(p).forge) return this.forgeText(p);
     const r = this.room(p);
-    if (r.type !== 'safe') return { ok: false, text: 'Il n\'y a pas de marchand ici. Cherche une safe room.' };
-    if (!r.merchant.length) return { ok: true, text: 'Le marchand n\'a plus rien. Il te vend son regard, gratuitement.' };
-    return { ok: true, text: 'Marchand : ' + r.merchant.map((it, i) => `${i + 1}. ${it.name} (${RARITY_LABEL[it.rarity]}) ${this.price(it)} po`).join(' | ') };
+    if (r.type !== 'safe') return { ok: false, text: 'There is no merchant here. Find a safe room.' };
+    if (!r.merchant.length) return { ok: true, text: 'The merchant is sold out. He offers you a long stare, free of charge.' };
+    return { ok: true, text: 'Merchant: ' + r.merchant.map((it, i) => `${i + 1}. ${it.name} (${RARITY_LABEL[it.rarity]}) ${this.price(it)} gold`).join(' | ') };
   }
 
   private levelUp(p: PlayerState, arg: string): SubmitResult {
-    if (p.statPoints <= 0) return { ok: false, text: 'Aucun point de stat à dépenser. Monte de niveau d\'abord.' };
+    if (p.statPoints <= 0) return { ok: false, text: 'No stat points to spend. Level up first.' };
     const stat = parseStat(arg);
-    if (!stat) return { ok: false, text: 'Précise la stat : !monte for, agi, int ou cha.' };
+    if (!stat) return { ok: false, text: 'Pick a stat: !levelup str, dex, int or cha.' };
     p.stats[stat] += 1;
     p.statPoints -= 1;
-    return { ok: true, text: `${STAT_LABELS[stat]} passe à ${fmt(p.stats[stat])}.` };
+    return { ok: true, text: `${STAT_LABELS[stat]} is now ${fmt(p.stats[stat])}.` };
   }
 
   private ally(p: PlayerState, arg: string): SubmitResult {
     const t = this.findPlayerByName(arg);
-    if (!t) return { ok: false, text: 'Joueur introuvable. Tape !alliance <pseudo>.' };
-    if (t.key === p.key) return { ok: false, text: 'S\'allier avec soi-même : touchant, mais refusé.' };
-    if (this.isAlly(p, t)) return { ok: false, text: `Tu es déjà allié avec ${t.name}.` };
+    if (!t) return { ok: false, text: 'Player not found. Type !ally <name>.' };
+    if (t.key === p.key) return { ok: false, text: 'Allying with yourself: touching, but denied.' };
+    if (this.isAlly(p, t)) return { ok: false, text: `You are already allied with ${t.name}.` };
     if (p.allyProposals.includes(t.key)) {
       const target = t.allianceId ? this.state.alliances[t.allianceId] : p.allianceId ? this.state.alliances[p.allianceId] : null;
       if (target && target.length >= ALLIANCE_MAX) {
         p.allyProposals = p.allyProposals.filter((k) => k !== t.key);
-        return { ok: false, text: `Alliance complète (${ALLIANCE_MAX} maximum).` };
+        return { ok: false, text: `Alliance is full (${ALLIANCE_MAX} max).` };
       }
       if (t.allianceId) {
         this.leaveAlliance(p, false);
@@ -383,17 +383,17 @@ export class Game {
       p.allyProposals = p.allyProposals.filter((k) => k !== t.key);
       t.allyProposals = t.allyProposals.filter((k) => k !== p.key);
       const names = this.state.alliances[p.allianceId!].map((k) => this.state.players[k]?.name).join(', ');
-      this.emit({ floor: p.floor, kind: 'alliance', text: `Alliance scellée : ${names}. Combien de temps avant la trahison ?`, scope: 'global', actors: [p.key, t.key], drama: 15 });
+      this.emit({ floor: p.floor, kind: 'alliance', text: `Alliance sealed: ${names}. How long until the betrayal?`, scope: 'global', actors: [p.key, t.key], drama: 15 });
       this.sync();
-      return { ok: true, text: `Tu es maintenant allié avec ${t.name}.` };
+      return { ok: true, text: `You are now allied with ${t.name}.` };
     }
     if (!t.allyProposals.includes(p.key)) t.allyProposals.push(p.key);
-    this.say(t, `${p.name} te propose une alliance. Réponds !alliance ${p.name} pour accepter.`, 'alliance');
-    return { ok: true, text: `Proposition envoyée à ${t.name}. Il doit répondre !alliance ${p.name}.` };
+    this.say(t, `${p.name} offers you an alliance. Reply !ally ${p.name} to accept.`, 'alliance');
+    return { ok: true, text: `Offer sent to ${t.name}. They need to reply !ally ${p.name}.` };
   }
 
   private leaveAlliance(p: PlayerState, announce: boolean): SubmitResult {
-    if (!p.allianceId) return { ok: false, text: 'Tu n\'es dans aucune alliance.' };
+    if (!p.allianceId) return { ok: false, text: 'You are not in any alliance.' };
     const id = p.allianceId;
     const members = (this.state.alliances[id] ?? []).filter((k) => k !== p.key);
     p.allianceId = null;
@@ -401,8 +401,8 @@ export class Game {
       for (const k of members) if (this.state.players[k]) this.state.players[k].allianceId = null;
       delete this.state.alliances[id];
     } else this.state.alliances[id] = members;
-    if (announce) this.emit({ floor: p.floor, kind: 'alliance', text: `${p.name} quitte son alliance.`, scope: 'global', actors: [p.key], drama: 5 });
-    return { ok: true, text: 'Tu as quitté ton alliance.' };
+    if (announce) this.emit({ floor: p.floor, kind: 'alliance', text: `${p.name} leaves their alliance.`, scope: 'global', actors: [p.key], drama: 5 });
+    return { ok: true, text: 'You left your alliance.' };
   }
 
   private findPlayerByName(arg: string): PlayerState | undefined {
@@ -429,7 +429,7 @@ export class Game {
       }
       if (left <= 60_000 && this.cfg.lobbySeconds > 90 && !this.state.lobbyWarned) {
         this.state.lobbyWarned = true;
-        this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 50, text: 'Plus qu\'UNE MINUTE pour rejoindre la partie : !join ! Ensuite, tout repart à zéro et le donjon commence à s\'effondrer.' });
+        this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 50, text: 'ONE MINUTE LEFT to join the game: !join! Then everything resets and the dungeon starts to collapse.' });
       }
     }
     this.state.turn++;
@@ -446,7 +446,7 @@ export class Game {
       p.pending = null;
       if (p.stunned) {
         p.stunned = false;
-        this.say(p, 'Tu es encore étourdi : tu perds ce tour.');
+        this.say(p, 'You are still dazed: you lose this turn.');
         actions.set(p.key, null);
         continue;
       }
@@ -518,12 +518,12 @@ export class Game {
       const attackers = attackedBy.get(p.key) ?? [];
       for (const att of attackers) {
         if (att.kind === 'monster' && att.m.hp > 0 && att.m.roomId === p.roomId) {
-          this.roomEvent(p, p.floor, p.roomId, 'combat', `${p.name}, surpris, riposte !`);
+          this.roomEvent(p, p.floor, p.roomId, 'combat', `${p.name}, caught off guard, strikes back!`);
           this.attack({ kind: 'player', p }, att, attackedBy);
           break;
         }
         if (att.kind === 'player' && att.p.alive && att.p.roomId === p.roomId && att.p.floor === p.floor && this.pvpAllowed(p, att.p) === null) {
-          this.roomEvent(p, p.floor, p.roomId, 'combat', `${p.name} riposte contre ${att.p.name} !`, 5, [att.p.key]);
+          this.roomEvent(p, p.floor, p.roomId, 'combat', `${p.name} strikes back at ${att.p.name}!`, 5, [att.p.key]);
           this.attack({ kind: 'player', p }, att, attackedBy);
           break;
         }
@@ -592,26 +592,26 @@ export class Game {
         const aggro = monsters.find((m) => m.aggro === p.key);
         return { target: { kind: 'monster', m: aggro ?? monsters[0] } };
       }
-      return { error: silent ? undefined : 'Attaquer qui ? Il n\'y a aucun monstre ici. Pour un joueur : !attaque <pseudo>.' };
+      return { error: silent ? undefined : 'Attack whom? There are no monsters here. To attack a player: !attack <name>.' };
     }
     if (/^\d+$/.test(a)) {
       const m = monsters[Number(a) - 1];
-      return m ? { target: { kind: 'monster', m } } : { error: 'Pas de monstre à ce numéro.' };
+      return m ? { target: { kind: 'monster', m } } : { error: 'No monster with that number.' };
     }
     const op = others.find((o) => o.key === playerKey(a)) ?? others.find((o) => normalize(o.name).startsWith(a));
     if (op) return { target: { kind: 'player', p: op } };
     const m = monsters.find((mm) => normalize(mm.name).includes(a) || normalize(mm.kind).includes(a));
     if (m) return { target: { kind: 'monster', m } };
-    return { error: silent ? undefined : `Personne ne répond au nom de « ${arg} » dans cette salle.` };
+    return { error: silent ? undefined : `Nobody here answers to "${arg}".` };
   }
 
   /** Le combat joueur contre joueur est-il permis ? Renvoie un message d'erreur sinon. */
   private pvpAllowed(a: PlayerState, b: PlayerState): string | null {
     const r = this.room(a);
-    if (r.type === 'safe') return 'Pas de combat dans une safe room. Le marchand y tient.';
+    if (r.type === 'safe') return 'No fighting in a safe room. The merchant insists.';
     const left = (q: PlayerState) => Math.max(1, Math.ceil((q.immuneUntil - this.now) / 1000));
-    if (this.isImmune(a)) return `Tu es encore immunisé ${left(a)} s : tu ne peux pas attaquer d'autres joueurs.`;
-    if (this.isImmune(b)) return `${b.name} est immunisé encore ${left(b)} s (il vient d'arriver ou de réapparaître).`;
+    if (this.isImmune(a)) return `You are still protected for ${left(a)} s: you can't attack other players.`;
+    if (this.isImmune(b)) return `${b.name} is protected for another ${left(b)} s (just arrived or respawned).`;
     return null;
   }
 
@@ -637,7 +637,7 @@ export class Game {
 
     // Cape d'invisibilité
     if (dp && dp.buffs.cloakTurns > 0 && this.rng.chance(0.5)) {
-      this.roomEvent(dp, floorN, roomId, 'drole', `${name(att)} attaque ${dp.name}… qui n'est plus là. La cape trouée a fonctionné, pour une fois.`, 10, [], { kind: 'miss', src: ek(att), dst: ek(def) });
+      this.roomEvent(dp, floorN, roomId, 'drole', `${name(att)} attacks ${dp.name}… who is no longer there. The holey cloak worked, for once.`, 10, [], { kind: 'miss', src: ek(att), dst: ek(def) });
       return;
     }
 
@@ -658,7 +658,7 @@ export class Game {
     const total = nat + bonus;
     const defRoll = dp ? this.rng.die(20) + dp.stats.agi + half(dp.level) + (dp.armor?.def ?? 0) : this.rng.die(20) + (def as { m: MonsterState }).m.def;
     const margin = total - defRoll;
-    const dice = `(${total} contre ${defRoll})`;
+    const dice = `(${total} vs ${defRoll})`;
     const actors = [ap?.key, dp?.key].filter(Boolean) as string[];
 
     if (treachery && ap && dp) this.betray(ap, dp);
@@ -673,9 +673,9 @@ export class Game {
 
     if (nat === 1) {
       const self = this.rng.die(4);
-      const text = this.rng.pick(GAG_TEXTS).replace('{a}', name(att)) + ` (−${self} PV)`;
+      const text = this.rng.pick(GAG_TEXTS).replace('{a}', name(att)) + ` (−${self} HP)`;
       this.roomEvent(ap, floorN, roomId, 'drole', text, 60, actors, { kind: 'gag', src: ek(att) });
-      if (ap) this.damagePlayer(ap, self, 'sa propre maladresse', null);
+      if (ap) this.damagePlayer(ap, self, 'their own clumsiness', null);
       else (att as { m: MonsterState }).m.hp = Math.max(1, (att as { m: MonsterState }).m.hp - self);
       return;
     }
@@ -695,13 +695,13 @@ export class Game {
     let drama = 0;
     if (crit) {
       dmg *= 2;
-      text = this.rng.pick(CRIT_TEXTS).replace('{a}', name(att)).replace('{t}', name(def)) + ` (−${dmg} PV)`;
+      text = this.rng.pick(CRIT_TEXTS).replace('{a}', name(att)).replace('{t}', name(def)) + ` (−${dmg} HP)`;
       drama = 60;
     } else if (margin >= 10) {
       dmg = Math.ceil(dmg * 1.5);
-      text = `${name(att)} touche ${name(def)} de plein fouet ${dice} : −${dmg} PV.`;
+      text = `${name(att)} lands a heavy blow on ${name(def)} ${dice}: −${dmg} HP.`;
       drama = 20;
-    } else text = `${name(att)} touche ${name(def)} ${dice} : −${dmg} PV.`;
+    } else text = `${name(att)} hits ${name(def)} ${dice}: −${dmg} HP.`;
     if (treachery) drama += 30;
     this.roomEvent(ap, floorN, roomId, crit ? 'drole' : 'combat', text, drama, actors, { kind: crit ? 'crit' : 'hit', src: ek(att), dst: ek(def) });
 
@@ -709,7 +709,7 @@ export class Game {
       const stolen = Math.ceil(dp.gold * 0.25);
       dp.gold -= stolen;
       ap.gold += stolen;
-      this.roomEvent(ap, floorN, roomId, 'trahison', `${ap.name} en profite pour piquer ${stolen} po dans la bourse de ${dp.name}.`, 20, actors);
+      this.roomEvent(ap, floorN, roomId, 'trahison', `${ap.name} takes the chance to swipe ${stolen} gold from ${dp.name}'s purse.`, 20, actors);
     }
 
     if (def.kind === 'player') this.damagePlayer(def.p, dmg, ap ? ap.name : name(att), att);
@@ -723,7 +723,7 @@ export class Game {
     a.betrayals++;
     this.leaveAlliance(a, false);
     a.traitorUntilTurn = this.state.turn + 10 * this.phases;
-    this.emit({ floor: a.floor, roomId: a.roomId, kind: 'trahison', text: `TRAHISON ! ${a.name} plante une dague dans le dos de son allié ${v.name}. Il est marqué TRAÎTRE pour 10 tours.`, scope: 'global', actors: [a.key, v.key], drama: 100 });
+    this.emit({ floor: a.floor, roomId: a.roomId, kind: 'trahison', text: `BETRAYAL! ${a.name} stabs their ally ${v.name} in the back. Branded a TRAITOR for 10 turns.`, scope: 'global', actors: [a.key, v.key], drama: 100 });
   }
 
   private damagePlayer(p: PlayerState, dmg: number, cause: string, killer: Fighter | null) {
@@ -753,17 +753,17 @@ export class Game {
     p.gold = 0;
     const xpLost = Math.floor(p.xp * this.cfg.deathXpLoss);
     p.xp -= xpLost;
-    const absurd = cause === 'sa propre maladresse' || cause.startsWith('un piège');
+    const absurd = cause === 'their own clumsiness' || cause.startsWith('a trap');
     const base = this.rng.pick(DEATH_TEXTS).replace('{p}', p.name);
     this.emit({
       floor: p.floor, roomId: p.roomId, kind: 'mort', scope: 'global', actors: [p.key], fx: { kind: 'death', dst: `p:${p.name}` },
-      text: `${base} Cause : ${cause}. Son loot (${dropped.length} objet(s), ${goldLost} po) traîne au sol (!ramasse). −${xpLost} XP.`,
+      text: `${base} Cause: ${cause}. Their loot (${dropped.length} item(s), ${goldLost} gold) is lying on the floor (!pickup). −${xpLost} XP.`,
       drama: absurd ? 120 : 80,
     });
     if (killer?.kind === 'player') {
       const k = killer.p;
       k.kills++;
-      if (dropped.length || goldLost) this.say(k, `Le loot de ${p.name} est à tes pieds : !ramasse pour tout prendre.`);
+      if (dropped.length || goldLost) this.say(k, `${p.name}'s loot is at your feet: !pickup to take it all.`);
       const arena = r.type === 'arene' ? 2 : 1;
       this.gainXp(k, 5 * p.level * arena); // tuer un crawler rapporte moins qu'un monstre : son loot est la vraie tentation
     }
@@ -784,21 +784,21 @@ export class Game {
     const sharers = [killer, ...this.alliesOf(killer).map((k) => this.state.players[k]).filter((a) => a && a.alive && a.floor === floorN && a.roomId === killer.roomId)];
     const share = Math.ceil(m.xp / sharers.length);
     for (const s of sharers) this.gainXp(s, share);
-    const shareTxt = sharers.length > 1 ? ` (XP partagée : ${share} chacun)` : ` (+${m.xp} XP)`;
-    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} terrasse ${m.name} et récupère ${m.gold} po${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
+    const shareTxt = sharers.length > 1 ? ` (XP shared: ${share} each)` : ` (+${m.xp} XP)`;
+    this.roomEvent(killer, floorN, m.roomId, 'combat', `${killer.name} slays ${m.name} and grabs ${m.gold} gold${shareTxt}.`, m.boss ? 80 : 5, [], { kind: 'kill', src: `p:${killer.name}`, dst: `m:${m.id}` });
     const wait = m.boss ? this.stairsInMs(f) : 0;
-    const sealed = wait !== 0 ? ` Mais l'escalier est encore scellé${wait ? ` (ouverture dans ${fmtWait(wait)})` : ''}.` : '';
+    const sealed = wait !== 0 ? ` But the stairs are still sealed${wait ? ` (opening in ${fmtWait(wait)})` : ''}.` : '';
     if (m.boss && floorN >= this.cfg.finalFloor) {
       // Dernier étage : le gardien se relève au bout de 6 tours (la sortie n'est ouverte qu'à ceux qui viennent de le battre)
       f.bossBackTurn = this.state.turn + 6 * this.phases;
       this.emit({
         floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 100,
         text: sealed
-          ? `${m.name} est vaincu par ${killer.name} !${sealed} Il se relèvera dans 6 tours : il faudra le rebattre une fois la sortie ouverte.`
-          : `${m.name} est vaincu par ${killer.name} ! LA SORTIE EST OUVERTE pendant 6 tours : !descendre dans la salle du boss pour entrer dans la Légende.`,
+          ? `${m.name} is defeated by ${killer.name}!${sealed} It will rise again in 6 turns: you'll have to beat it again once the exit opens.`
+          : `${m.name} is defeated by ${killer.name}! THE EXIT IS OPEN for 6 turns: !descend in the boss room to become a Legend.`,
       });
     } else if (m.boss) {
-      this.emit({ floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 80, text: `${m.name} est vaincu par ${killer.name} !${sealed || ` L'escalier de l'étage ${floorN} est libre : !descendre dans la salle du boss.`}` });
+      this.emit({ floor: floorN, kind: 'systeme', scope: 'global', actors: [killer.key], drama: 80, text: `${m.name} is defeated by ${killer.name}!${sealed || ` The stairs of floor ${floorN} are free: !descend in the boss room.`}` });
     }
   }
 
@@ -811,7 +811,7 @@ export class Game {
       const gain = CLASSES[p.cls].hpPerLevel;
       p.maxHp += gain;
       p.hp = Math.min(p.maxHp, p.hp + gain);
-      this.emit({ floor: p.floor, kind: 'niveau', text: `${p.name} passe niveau ${p.level} ! (+${gain} PV max, 1 point de stat à dépenser avec !monte)`, scope: 'etage', actors: [p.key], drama: 15, fx: { kind: 'levelup', dst: `p:${p.name}` } });
+      this.emit({ floor: p.floor, kind: 'niveau', text: `${p.name} reaches level ${p.level}! (+${gain} max HP, 1 stat point to spend with !levelup)`, scope: 'etage', actors: [p.key], drama: 15, fx: { kind: 'levelup', dst: `p:${p.name}` } });
     }
   }
 
@@ -827,22 +827,22 @@ export class Game {
   private giveItem(p: PlayerState, item: Item) {
     if (p.items.length >= INVENTORY_MAX) {
       this.room(p).ground.push(item);
-      this.say(p, `Inventaire plein : ${item.name} reste au sol.`);
+      this.say(p, `Inventory full: ${item.name} stays on the floor.`);
     } else p.items.push(item);
   }
 
   private doUse(p: PlayerState, arg: string, equipOnly: boolean) {
     const item = this.findItem(p.items, arg);
-    if (!item) return this.say(p, `Tu n'as pas d'objet « ${arg} ».`);
+    if (!item) return this.say(p, `You don't have any "${arg}".`);
     if (item.kind === 'arme' || item.kind === 'armure') {
       p.items = p.items.filter((i) => i !== item);
       const slot = item.kind === 'arme' ? 'weapon' : 'armor';
       const old = p[slot];
       p[slot] = item;
       if (old) p.items.push(old);
-      return this.say(p, `Tu équipes ${item.name}.`);
+      return this.say(p, `You equip ${item.name}.`);
     }
-    if (equipOnly) return this.say(p, `${item.name} ne s'équipe pas. Essaie !utilise.`);
+    if (equipOnly) return this.say(p, `${item.name} can't be equipped. Try !use.`);
     const fx = itemEffect(item);
     const r = this.room(p);
     p.items = p.items.filter((i) => i !== item);
@@ -851,23 +851,23 @@ export class Game {
       case 'heal_big': {
         const heal = fx === 'heal_small' ? this.rng.die(6) + this.rng.die(6) + 2 : this.rng.die(6) * 4 + 4;
         p.hp = Math.min(p.maxHp, p.hp + heal);
-        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} boit ${item.name} et récupère ${heal} PV.`, 0, [], { kind: 'heal', dst: `p:${p.name}` });
+        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} drinks ${item.name} and recovers ${heal} HP.`, 0, [], { kind: 'heal', dst: `p:${p.name}` });
       }
       case 'smoke':
         p.buffs.smoke = true;
-        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} allume une bombe fumigène. Sa prochaine fuite est garantie.`);
+        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} lights a smoke bomb. Their next escape is guaranteed.`);
       case 'teleport': {
         const f = this.state.floors[p.floor];
         p.roomId = f.spawnRoom;
         this.discover(p);
-        return this.roomEvent(p, p.floor, r.id, 'info', `${p.name} lit un parchemin et disparaît dans un « pouf » sonore.`, 10);
+        return this.roomEvent(p, p.floor, r.id, 'info', `${p.name} reads a scroll and vanishes with a loud "poof".`, 10);
       }
       case 'chicken':
         for (const m of this.monstersIn(p.floor, p.roomId)) m.distracted = 1;
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} lance un poulet. Tous les monstres de la salle le regardent, fascinés.`, 40);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} throws a chicken. Every monster in the room stares at it, mesmerized.`, 40);
       case 'coupon':
         p.buffs.coupon = true;
-        return this.say(p, 'Coupon activé : ta prochaine mort sera moins longue. Quel luxe.');
+        return this.say(p, 'Coupon activated: your next death will be shorter. Such luxury.');
       case 'cheese': {
         const f = this.state.floors[p.floor];
         let n = 0;
@@ -879,22 +879,22 @@ export class Game {
             n++;
           }
         }
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} sort un fromage qui pue. ${n ? `${n} monstre(s) errant(s) s'enfuient en pleurant.` : 'Seuls les humains souffrent.'}`, 20);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} pulls out a stinky cheese. ${n ? `${n} wandering monster(s) flee in tears.` : 'Only the humans suffer.'}`, 20);
       }
       case 'cloak':
         p.buffs.cloakTurns = 3;
-        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} enfile une cape d'invisibilité trouée. On voit surtout les trous.`);
+        return this.roomEvent(p, p.floor, p.roomId, 'info', `${p.name} puts on a holey invisibility cloak. Mostly, you see the holes.`);
       case 'mirror':
         p.buffs.mirror = true;
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} se regarde dans un miroir de poche. Confiance au maximum (+3 au prochain jet).`, 10);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} admires themself in a pocket mirror. Confidence maxed out (+3 to the next roll).`, 10);
       case 'duck':
         if (r.trapArmed) r.trapRevealed = true;
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} pose un crapaud siffleur par terre. ${r.trapArmed ? 'Il siffle à s\'en décrocher la mâchoire : un piège se dévoile !' : 'Il bâille. Aucun piège ici.'}`, 10);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} sets a whistling toad on the floor. ${r.trapArmed ? 'It whistles its head off: a trap is revealed!' : 'It yawns. No trap here.'}`, 10);
       case 'crown':
         this.gainXp(p, xpNext(p.level) - p.xp);
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} coiffe la couronne du Roi Gobelin. Le donjon reconnaît son autorité.`, 30);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} puts on the Goblin King's crown. The dungeon acknowledges their authority.`, 30);
       default:
-        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} utilise ${item.name}. Il ne se passe absolument rien.`, 15);
+        return this.roomEvent(p, p.floor, p.roomId, 'drole', `${p.name} uses ${item.name}. Absolutely nothing happens.`, 15);
     }
   }
 
@@ -911,26 +911,26 @@ export class Game {
   }
 
   private forgeText(p: PlayerState): SubmitResult {
-    if (!this.room(p).forge) return { ok: false, text: 'Il n\'y a pas de forge ici. Elle est quelque part à mi-chemin du boss : cherche l\'enclume.' };
+    if (!this.room(p).forge) return { ok: false, text: 'There is no forge here. It is somewhere halfway to the boss: look for the anvil.' };
     const o = this.forgeOffer(p);
-    const line = (label: string, x: ForgeOffer['weapon']) => (x ? `${label} ${x.name} → +${x.plus + 1} pour ${x.cost} po` : `${label} : rien à améliorer`);
-    return { ok: true, text: `Forgeron : ${line('!forge arme :', o.weapon)} | ${line('!forge armure :', o.armor)} (max +${FORGE_MAX})` };
+    const line = (label: string, x: ForgeOffer['weapon']) => (x ? `${label} ${x.name} → +${x.plus + 1} for ${x.cost} gold` : `${label}: nothing to upgrade`);
+    return { ok: true, text: `Blacksmith: ${line('!forge weapon:', o.weapon)} | ${line('!forge armor:', o.armor)} (max +${FORGE_MAX})` };
   }
 
   private forgeSays(floor: number, roomId: number, line: string) {
-    this.emit({ floor, roomId, kind: 'info', text: `Le forgeron : « ${line} »`, scope: 'salle', drama: 0, npc: 'marchand' });
+    this.emit({ floor, roomId, kind: 'info', text: `The blacksmith: "${line}"`, scope: 'salle', drama: 0, npc: 'marchand' });
   }
 
   private doForge(p: PlayerState, arg: string) {
     const r = this.room(p);
-    if (!r.forge) return this.say(p, 'Il n\'y a pas de forge ici. Elle est à mi-chemin du boss : cherche l\'enclume.');
+    if (!r.forge) return this.say(p, 'There is no forge here. It is halfway to the boss: look for the anvil.');
     const armor = /^armu|^armor|^def/i.test(arg.trim());
     const it = armor ? p.armor : p.weapon;
-    if (!it) return this.say(p, armor ? 'Tu n\'as pas d\'armure équipée.' : 'Tu n\'as pas d\'arme équipée.');
+    if (!it) return this.say(p, armor ? 'You have no armor equipped.' : 'You have no weapon equipped.');
     const plus = it.plus ?? 0;
-    if (plus >= FORGE_MAX) return this.forgeSays(p.floor, r.id, `${it.name} ? On ne peut pas faire mieux. Même moi.`);
+    if (plus >= FORGE_MAX) return this.forgeSays(p.floor, r.id, `${it.name}? It can't get any better. Not even by me.`);
     const cost = this.forgeCost(it, p.floor);
-    if (p.gold < cost) return this.say(p, `Il te manque ${cost - p.gold} po. Le forgeron ne bat pas le fer à crédit.`);
+    if (p.gold < cost) return this.say(p, `You are ${cost - p.gold} gold short. The blacksmith doesn't work on credit.`);
     p.gold -= cost;
     it.plus = plus + 1;
     if (armor) it.def = (it.def ?? 0) + 1;
@@ -940,51 +940,51 @@ export class Game {
     }
     it.name = `${it.name.replace(/ \+\d+$/, '')} +${it.plus}`;
     it.value += Math.round(cost / 2);
-    const bonus = armor ? '+1 défense' : '+1 au jet, dégâts d' + it.dmg;
-    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} fait reforger son équipement : ${it.name} (${bonus}) pour ${cost} po.`, 25, [], { kind: 'forge', src: `p:${p.name}`, dst: `p:${p.name}`, label: `${armor ? 'Armure' : 'Arme'} +${it.plus}` });
+    const bonus = armor ? '+1 defense' : '+1 to hit, damage d' + it.dmg;
+    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} has their gear reforged: ${it.name} (${bonus}) for ${cost} gold.`, 25, [], { kind: 'forge', src: `p:${p.name}`, dst: `p:${p.name}`, label: `${armor ? 'Armor' : 'Weapon'} +${it.plus}` });
     this.forgeSays(p.floor, r.id, this.rng.pick(FORGE_LINES));
   }
 
   private doBuy(p: PlayerState, arg: string) {
     const r = this.room(p);
-    if (r.forge) return this.say(p, 'Ici, c\'est la forge : !forge arme ou !forge armure. Le marchand est dans l\'autre safe room.');
-    if (r.type !== 'safe') return this.say(p, 'Pas de marchand ici.');
+    if (r.forge) return this.say(p, 'This is the forge: !forge weapon or !forge armor. The merchant is in the other safe room.');
+    if (r.type !== 'safe') return this.say(p, 'No merchant here.');
     const item = this.findItem(r.merchant, arg);
-    if (!item) return this.say(p, 'Le marchand n\'a pas ça. Tape !marchand pour voir son stock.');
+    if (!item) return this.say(p, 'The merchant doesn\'t have that. Type !shop to see the stock.');
     const price = this.price(item);
-    if (p.gold < price) return this.say(p, `Il te manque ${price - p.gold} po. Le marchand ne fait pas crédit.`);
-    if (p.items.length >= INVENTORY_MAX) return this.say(p, 'Inventaire plein.');
+    if (p.gold < price) return this.say(p, `You are ${price - p.gold} gold short. The merchant doesn't do credit.`);
+    if (p.items.length >= INVENTORY_MAX) return this.say(p, 'Inventory full.');
     p.gold -= price;
     r.merchant = r.merchant.filter((i) => i !== item);
     p.items.push(item);
-    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} achète ${item.name} pour ${price} po.`);
+    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} buys ${item.name} for ${price} gold.`);
   }
 
   private doSell(p: PlayerState, arg: string) {
     const r = this.room(p);
-    if (r.type !== 'safe') return this.say(p, 'Pas de marchand ici.');
+    if (r.type !== 'safe') return this.say(p, 'No merchant here.');
     const item = this.findItem(p.items, arg);
-    if (!item) return this.say(p, `Tu n'as pas d'objet « ${arg} ».`);
+    if (!item) return this.say(p, `You don't have any "${arg}".`);
     const price = Math.max(1, Math.ceil(item.value / 2));
     p.items = p.items.filter((i) => i !== item);
     p.gold += price;
     r.merchant.push(item);
-    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} vend ${item.name} pour ${price} po.`);
+    this.roomEvent(p, p.floor, p.roomId, 'loot', `${p.name} sells ${item.name} for ${price} gold.`);
   }
 
   private doRest(p: PlayerState) {
-    if (this.room(p).type !== 'safe') return this.say(p, 'Te reposer ici ? Les monstres adoreraient. Va dans une safe room.');
+    if (this.room(p).type !== 'safe') return this.say(p, 'Rest here? The monsters would love that. Go to a safe room.');
     const heal = Math.max(3, Math.round(p.maxHp * 0.25));
     p.hp = Math.min(p.maxHp, p.hp + heal);
-    this.say(p, `Tu te reposes et récupères ${heal} PV.`);
+    this.say(p, `You rest and recover ${heal} HP.`);
   }
 
   private doPickup(p: PlayerState, arg: string) {
     const r = this.room(p);
-    if (!r.ground.length && !r.groundGold) return this.say(p, 'Il n\'y a rien à ramasser ici.');
+    if (!r.ground.length && !r.groundGold) return this.say(p, 'There is nothing to pick up here.');
     const got: string[] = [];
     if (r.groundGold) {
-      got.push(`${r.groundGold} po`);
+      got.push(`${r.groundGold} gold`);
       p.gold += r.groundGold;
       r.groundGold = 0;
     }
@@ -996,7 +996,7 @@ export class Game {
       p.items.push(it);
       got.push(it.name);
     }
-    this.roomEvent(p, p.floor, p.roomId, 'loot', got.length ? `${p.name} ramasse : ${got.join(', ')}.` : `${p.name} a les poches pleines.`, got.length > 2 ? 10 : 0);
+    this.roomEvent(p, p.floor, p.roomId, 'loot', got.length ? `${p.name} picks up: ${got.join(', ')}.` : `${p.name}'s pockets are full.`, got.length > 2 ? 10 : 0);
   }
 
   private check(p: PlayerState, stat: StatId, dc: number): { ok: boolean; total: number } {
@@ -1019,7 +1019,7 @@ export class Game {
         const m = spawnMimic(f.n, r.id, this.rng, this.nextId);
         m.aggro = p.key;
         f.monsters.push(m);
-        return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} ouvre le coffre… qui ouvre la bouche. C'ÉTAIT UNE MIMIQUE !`, 70);
+        return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} opens the chest… which opens its mouth. IT WAS A MIMIC!`, 70);
       }
       const gold = this.rng.int(10, 30) * f.n;
       p.gold += gold;
@@ -1027,26 +1027,26 @@ export class Game {
       if (this.rng.chance(0.4)) loot.push(randomLoot(this.rng, this.nextId, f.n));
       for (const it of loot) this.giveItem(p, it);
       const best = loot.some((i) => i.rarity === 'epique' || i.rarity === 'legendaire');
-      return this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} ouvre le coffre : ${gold} po, ${loot.map((i) => `${i.name} (${RARITY_LABEL[i.rarity]})`).join(', ')} !`, best ? 50 : 15);
+      return this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} opens the chest: ${gold} gold, ${loot.map((i) => `${i.name} (${RARITY_LABEL[i.rarity]})`).join(', ')}!`, best ? 50 : 15);
     }
     if (r.type === 'piege' && r.trapArmed) {
       const c = this.check(p, 'int', 12 + f.n);
       if (c.ok) {
         r.trapArmed = false;
         this.gainXp(p, 15);
-        return this.roomEvent(p, p.floor, r.id, 'piege', `${p.name} désarme le piège de la salle (${c.total}). +15 XP.`, 5);
+        return this.roomEvent(p, p.floor, r.id, 'piege', `${p.name} disarms the room's trap (${c.total}). +15 XP.`, 5);
       }
-      this.roomEvent(p, p.floor, r.id, 'piege', `${p.name} tente de désarmer le piège (${c.total})… et le déclenche.`, 20);
+      this.roomEvent(p, p.floor, r.id, 'piege', `${p.name} tries to disarm the trap (${c.total})… and sets it off.`, 20);
       return this.springTrap(p, f);
     }
-    if (r.searchedBy) return this.say(p, `Cette salle a déjà été fouillée par ${this.state.players[r.searchedBy]?.name ?? 'quelqu\'un'}.`);
+    if (r.searchedBy) return this.say(p, `This room has already been searched by ${this.state.players[r.searchedBy]?.name ?? 'someone'}.`);
     r.searchedBy = p.key;
     const c = this.check(p, 'int', 10);
     if (!c.ok) return this.roomEvent(p, p.floor, r.id, 'drole', this.rng.pick(SEARCH_FAIL_TEXTS).replace('{p}', p.name));
     if (this.rng.chance(0.6)) {
       const gold = this.rng.die(6) * f.n + 3;
       p.gold += gold;
-      return this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} trouve ${gold} po sous une dalle.`);
+      return this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} finds ${gold} gold under a flagstone.`);
     }
     const it = randomLoot(this.rng, this.nextId, f.n);
     this.giveItem(p, it);
@@ -1058,18 +1058,18 @@ export class Game {
     const dmg = f.n === 1 ? this.rng.die(3) : f.n === 2 ? this.rng.die(5) : this.rng.die(6) + half(f.n);
     const r = this.room(p);
     if (this.rng.chance(0.5)) r.trapArmed = false; // un piège sur deux ne se réarme pas
-    const text = this.rng.pick(TRAP_TEXTS).replace('{p}', p.name) + ` (−${dmg} PV)`;
+    const text = this.rng.pick(TRAP_TEXTS).replace('{p}', p.name) + ` (−${dmg} HP)`;
     this.roomEvent(p, p.floor, p.roomId, 'piege', text, 30, [], { kind: 'trap', dst: `p:${p.name}` });
-    this.damagePlayer(p, dmg, 'un piège', null);
+    this.damagePlayer(p, dmg, 'a trap', null);
   }
 
   private doMove(p: PlayerState, dir: Dir) {
     const f = this.state.floors[p.floor];
     const r = f.rooms[p.roomId];
     const target = r.doors[dir];
-    if (target === undefined) return this.say(p, `Il n'y a pas de porte au ${DIR_LABEL[dir]}. Juste un mur, très convaincant.`);
+    if (target === undefined) return this.say(p, `There is no door to the ${DIR_LABEL[dir]}. Just a very convincing wall.`);
     if ((this.state.turn < this.state.floodUntil || f.theme === 'inondé') && r.type !== 'safe' && this.rng.chance(1 / 3)) {
-      return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} glisse dans l'eau en voulant aller au ${DIR_LABEL[dir]} et fait un plat magnifique.`, 15);
+      return this.roomEvent(p, p.floor, r.id, 'drole', `${p.name} slips in the water heading ${DIR_LABEL[dir]} and lands a magnificent belly flop.`, 15);
     }
     const hostiles = this.monstersIn(p.floor, p.roomId).filter((m) => m.distracted <= 0);
     if (hostiles.length && r.type !== 'safe') {
@@ -1079,7 +1079,7 @@ export class Game {
         const c = this.check(p, 'agi', dc);
         if (!c.ok) {
           const m = this.rng.pick(hostiles);
-          return this.roomEvent(p, p.floor, r.id, 'combat', `${p.name} tente de fuir vers le ${DIR_LABEL[dir]} mais ${m.name} le retient par la cape (${c.total} contre ${dc}).`, 10);
+          return this.roomEvent(p, p.floor, r.id, 'combat', `${p.name} tries to flee ${DIR_LABEL[dir]} but ${m.name} grabs them by the cape (${c.total} vs ${dc}).`, 10);
         }
       }
     }
@@ -1087,11 +1087,11 @@ export class Game {
     this.discover(p);
     const nr = f.rooms[target];
     if (nr.type === 'boss' && f.monsters.some((m) => m.boss && m.roomId === nr.id)) {
-      this.emit({ floor: f.n, roomId: nr.id, kind: 'combat', text: `${p.name} entre dans la salle du boss. Courage. Ou inconscience.`, scope: 'etage', actors: [p.key], drama: 30 });
+      this.emit({ floor: f.n, roomId: nr.id, kind: 'combat', text: `${p.name} walks into the boss room. Brave. Or reckless.`, scope: 'etage', actors: [p.key], drama: 30 });
     }
     if (nr.type === 'piege' && nr.trapArmed && !nr.trapRevealed) {
       const c = this.check(p, 'agi', 11 + f.n);
-      if (c.ok) this.roomEvent(p, f.n, nr.id, 'piege', `${p.name} évite de justesse un piège en entrant (${c.total}).`, 10);
+      if (c.ok) this.roomEvent(p, f.n, nr.id, 'piege', `${p.name} narrowly dodges a trap on the way in (${c.total}).`, 10);
       else this.springTrap(p, f);
     }
   }
@@ -1099,13 +1099,13 @@ export class Game {
   private doDescend(p: PlayerState) {
     const f = this.state.floors[p.floor];
     const r = f.rooms[p.roomId];
-    if (!r.stairs) return this.say(p, 'Il n\'y a pas d\'escalier ici. Il est dans la salle du boss.');
-    if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'Le boss bloque l\'escalier. Il faut d\'abord le vaincre.');
+    if (!r.stairs) return this.say(p, 'There are no stairs here. They are in the boss room.');
+    if (f.monsters.some((m) => m.boss && m.hp > 0)) return this.say(p, 'The boss is blocking the stairs. Beat it first.');
     const wait = this.stairsInMs(f);
     if (wait !== 0) {
       return this.say(p, wait === null
-        ? 'L\'escalier est scellé : il s\'ouvrira quand la saison commencera.'
-        : `L'escalier est encore scellé : il s'ouvre dans ${fmtWait(wait)}. En attendant, explore, pille et prends des niveaux : plus bas, ça ne pardonne pas.`);
+        ? 'The stairs are sealed: they will open when the season starts.'
+        : `The stairs are still sealed: they open in ${fmtWait(wait)}. Meanwhile, explore, loot and level up: further down, it gets unforgiving.`);
     }
     if (f.n >= this.cfg.finalFloor) return this.finish(p);
     const next = this.freshFloor(f.n + 1);
@@ -1115,7 +1115,7 @@ export class Game {
     p.deepest = Math.max(p.deepest, next.n);
     this.discover(p);
     this.gainXp(p, 30);
-    this.emit({ floor: next.n, kind: 'systeme', text: `${p.name} descend à l'étage ${next.n} (+30 XP de survie).`, scope: 'global', actors: [p.key], drama: 25 });
+    this.emit({ floor: next.n, kind: 'systeme', text: `${p.name} goes down to floor ${next.n} (+30 survival XP).`, scope: 'global', actors: [p.key], drama: 25 });
   }
 
   // ------------------------------------------------------------ fin de tour
@@ -1132,11 +1132,11 @@ export class Game {
       const flags = f;
       if (left <= 5 * 60_000 && left > 60_000 && !flags.warned5) {
         flags.warned5 = true;
-        this.emit({ floor: f.n, kind: 'systeme', text: `L'étage ${f.n} tremble : effondrement dans 5 minutes. Trouvez l'escalier !`, scope: 'etage', drama: 20 });
+        this.emit({ floor: f.n, kind: 'systeme', text: `Floor ${f.n} is shaking: collapse in 5 minutes. Find the stairs!`, scope: 'etage', drama: 20 });
       }
       if (left <= 60_000 && left > 0 && !flags.warned1) {
         flags.warned1 = true;
-        this.emit({ floor: f.n, kind: 'systeme', text: `Plus qu'une minute avant l'effondrement de l'étage ${f.n} !`, scope: 'etage', drama: 40 });
+        this.emit({ floor: f.n, kind: 'systeme', text: `One minute left before floor ${f.n} collapses!`, scope: 'etage', drama: 40 });
       }
       if (!f.stairsOpened && left > 0 && this.stairsOpen(f)) {
         f.stairsOpened = true;
@@ -1145,7 +1145,7 @@ export class Game {
         const last = f.n >= this.cfg.finalFloor;
         this.emit({
           floor: f.n, kind: 'systeme', scope: 'global', drama: 45,
-          text: `${last ? 'LA SORTIE DU DONJON' : `L'escalier de l'étage ${f.n}`} SE DESCELLE ! ${boss ? 'Il ne reste qu\'à battre le boss qui le garde.' : 'Le boss est déjà tombé : foncez !'} ${Math.round(left / 60_000)} min avant l'effondrement.`,
+          text: `${last ? 'THE DUNGEON EXIT' : `The stairs of floor ${f.n}`} ${last ? 'IS' : 'ARE'} UNSEALED! ${boss ? 'All that\'s left is to beat the boss guarding them.' : 'The boss is already down: go go go!'} ${Math.round(left / 60_000)} min before the collapse.`,
         });
       }
       if (left <= 0) this.collapse(f);
@@ -1174,7 +1174,7 @@ export class Game {
       p.immuneUntil = this.now + this.cfg.immunitySeconds * 1000;
       if (!p.weapon) p.weapon = makeItem(CLASSES[p.cls].startWeapon, this.nextId);
       this.discover(p);
-      this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} réapparaît dans la safe room de l'étage ${f.n}, l'air vexé. Immunisé ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
+      this.emit({ floor: f.n, roomId: p.roomId, kind: 'systeme', text: `${p.name} respawns in the safe room of floor ${f.n}, looking offended. Protected for ${Math.round(this.cfg.immunitySeconds / 60)} min.`, scope: 'etage', actors: [p.key], drama: 5 });
       this.merchantSays(f.n, p.roomId, this.rng.pick(MERCHANT_RESPAWN), p.key);
     }
     this.themeEffects(players.filter((p) => this.state.players[p.key]));
@@ -1187,7 +1187,7 @@ export class Game {
       const pool = BOSSES.filter((b) => b.minFloor <= f.n && b.minFloor >= Math.max(1, f.n - 2));
       const boss = spawnMonster(this.rng.pick(pool.length ? pool : BOSSES), f.n, f.bossRoom, this.rng, this.nextId);
       f.monsters.push(boss);
-      this.emit({ floor: f.n, roomId: f.bossRoom, kind: 'systeme', text: `${boss.name} se relève et garde à nouveau la sortie. Il faudra le mériter.`, scope: 'global', drama: 60 });
+      this.emit({ floor: f.n, roomId: f.bossRoom, kind: 'systeme', text: `${boss.name} gets back up and guards the exit again. You'll have to earn it.`, scope: 'global', drama: 60 });
     }
     // Le marchand rappelle une règle toutes les 4 tours, s'il a du public
     if (this.state.turn % (4 * this.phases) === 0) {
@@ -1208,8 +1208,8 @@ export class Game {
       if (f.theme === 'en feu') {
         for (const p of here) {
           if (f.rooms[p.roomId].type === 'safe' || !this.rng.chance(0.12)) continue;
-          this.roomEvent(p, f.n, p.roomId, 'piege', `Une braise jaillit du sol et ${p.name} se brûle les orteils. (−2 PV)`, 15, [], { kind: 'trap', dst: `p:${p.name}` });
-          this.damagePlayer(p, 2, 'les flammes de l\'étage', null);
+          this.roomEvent(p, f.n, p.roomId, 'piege', `An ember bursts from the floor and ${p.name} burns their toes. (−2 HP)`, 15, [], { kind: 'trap', dst: `p:${p.name}` });
+          this.damagePlayer(p, 2, 'the floor\'s flames', null);
         }
       } else if (f.theme === 'moisi') {
         for (const m of f.monsters) if (m.hp > 0 && m.hp < m.maxHp) m.hp++;
@@ -1221,7 +1221,7 @@ export class Game {
           p.gold -= n;
           const hide = this.rng.pick(f.rooms.filter((r) => r.type !== 'safe'));
           hide.groundGold += n;
-          this.roomEvent(p, f.n, p.roomId, 'drole', `Un fantôme chapardeur subtilise ${n} po à ${p.name} et file les cacher dans une autre salle. Bouh.`, 25);
+          this.roomEvent(p, f.n, p.roomId, 'drole', `A thieving ghost snatches ${n} gold from ${p.name} and hides it in another room. Boo.`, 25);
         }
       }
     }
@@ -1245,7 +1245,7 @@ export class Game {
     if (st.flashBet?.kind === 'sortie' && st.flashBet.floor === f.n) this.settleFlash(humansLost ? 'non' : 'oui');
     if (f.n === 2 && st.grandBet.open) {
       st.grandBet.open = false;
-      if (Object.keys(st.grandBet.stakes).length) this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 30, text: `Le GRAND PARI est fermé : ${this.grandPot()} points en jeu sur le premier à sortir du Donjon.` });
+      if (Object.keys(st.grandBet.stakes).length) this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 30, text: `The BIG BET is closed: ${this.grandPot()} points riding on the first one out of the Dungeon.` });
     }
     if (!st.graveyard.length) return;
     if (st.vote) {
@@ -1255,24 +1255,24 @@ export class Game {
     const floorTo = f.n + 1;
     if (st.resurrection) st.resurrection.floorTo = Math.max(st.resurrection.floorTo, floorTo);
     else st.resurrection = { endTurn: st.turn + 3 * this.phases, floorTo, votes: {} };
-    const list = [...st.graveyard].sort((a, b) => b.snap.level - a.snap.level).slice(0, 8).map((g) => `n°${g.no} ${g.name} (niv ${g.snap.level})`);
+    const list = [...st.graveyard].sort((a, b) => b.snap.level - a.snap.level).slice(0, 8).map((g) => `#${g.no} ${g.name} (lvl ${g.snap.level})`);
     this.emit({
       floor: 0, kind: 'systeme', scope: 'global', drama: 85,
-      text: `⚰️ VOTE DE RÉSURRECTION (1 min) : qui mérite une seconde chance ? ${list.join(' · ')}${st.graveyard.length > 8 ? ' …' : ''}. Tapez !vote <n°> (une seule voix par pseudo).`,
+      text: `RESURRECTION VOTE (1 min): who deserves a second chance? ${list.join(' · ')}${st.graveyard.length > 8 ? ' …' : ''}. Type !vote <#> (one vote per name).`,
     });
   }
 
   private voteResurrection(name: string, arg: string): SubmitResult {
     const r = this.state.resurrection!;
     const key = playerKey(name);
-    if (this.state.players[key]?.bot) return { ok: false, text: 'Les PNJ ne votent pas pour les morts.' };
+    if (this.state.players[key]?.bot) return { ok: false, text: 'NPCs don\'t vote for the dead.' };
     const prev = r.votes[key];
-    if (prev) return { ok: false, text: `Tu as déjà voté (n°${prev.no}). Un seul vote par pseudo.` };
+    if (prev) return { ok: false, text: `You already voted (#${prev.no}). One vote per name.` };
     const no = Number(arg.trim().split(/\s+/)[0]);
     const g = this.state.graveyard.find((x) => x.no === no);
-    if (!g) return { ok: false, text: `Vote de résurrection : !vote <n°> parmi ${this.state.graveyard.map((x) => `n°${x.no} ${x.name}`).join(', ')}.` };
+    if (!g) return { ok: false, text: `Resurrection vote: !vote <#> among ${this.state.graveyard.map((x) => `#${x.no} ${x.name}`).join(', ')}.` };
     r.votes[key] = { no, voices: 1 }; // une voix par pseudo, définitive
-    return { ok: true, text: `Ta voix va au n°${no} ${g.name}. Un seul vote par pseudo : c'est fait.` };
+    return { ok: true, text: `Your vote goes to #${no} ${g.name}. One vote per name: done.` };
   }
 
   /** Fin du vote : le plus de voix revient (égalité : jet de d20 entre les ex æquo, relancé tant qu'il y a égalité). */
@@ -1283,7 +1283,7 @@ export class Game {
     const tally = new Map<number, number>();
     for (const v of Object.values(r.votes)) if (st.graveyard.some((g) => g.no === v.no)) tally.set(v.no, (tally.get(v.no) ?? 0) + v.voices);
     if (!tally.size) {
-      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: 'Personne n\'a voté : les morts restent morts. Le chat a le cœur sec.' });
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: 'Nobody voted: the dead stay dead. Chat has a heart of stone.' });
       return;
     }
     const best = Math.max(...tally.values());
@@ -1291,7 +1291,7 @@ export class Game {
     let rolls = '';
     while (tied.length > 1) {
       const r20 = tied.map((no) => [no, this.rng.int(1, 20)] as const);
-      rolls += ` Égalité à ${best} voix ! Jet de d20 : ${r20.map(([no, d]) => `${st.graveyard.find((g) => g.no === no)!.name} ${d}`).join(', ')}.`;
+      rolls += ` Tied at ${best} vote(s)! d20 roll: ${r20.map(([no, d]) => `${st.graveyard.find((g) => g.no === no)!.name} ${d}`).join(', ')}.`;
       const top = Math.max(...r20.map(([, d]) => d));
       tied = r20.filter(([, d]) => d === top).map(([no]) => no);
     }
@@ -1301,7 +1301,7 @@ export class Game {
     const others = [...tally.entries()].filter(([no]) => no !== g.no).sort((a, b) => b[1] - a[1])[0];
     this.emit({
       floor: f.n, roomId: f.spawnRoom, kind: 'niveau', scope: 'global', drama: 110, actors: [g.key], fx: { kind: 'levelup', dst: `p:${g.name}` },
-      text: `RÉSURRECTION !${rolls} Le chat a parlé : ${g.name} (n°${g.no}) revient d'entre les morts à l'étage ${f.n}, tous ses PV, niveau ${g.snap.level} (${best} voix${others ? ` contre ${others[1]}` : ''}).`,
+      text: `RESURRECTION!${rolls} Chat has spoken: ${g.name} (#${g.no}) returns from the dead on floor ${f.n}, full HP, level ${g.snap.level} (${best} vote(s)${others ? ` vs ${others[1]}` : ''}).`,
     });
   }
 
@@ -1344,7 +1344,7 @@ export class Game {
   private favorText(name: string): SubmitResult {
     const w = this.wallet(name);
     const g = this.state.graveyard.find((x) => x.key === playerKey(name));
-    return { ok: true, text: `${w.name} : ${w.pts} points de faveur · paris gagnés ${w.won}/${w.bets}${g ? ` · tu es le n°${g.no} au vote de résurrection` : ''}.` };
+    return { ok: true, text: `${w.name}: ${w.pts} favor points · bets won ${w.won}/${w.bets}${g ? ` · you are #${g.no} in the resurrection vote` : ''}.` };
   }
 
   // ------------------------------------------------------------- sponsors
@@ -1352,32 +1352,33 @@ export class Game {
   private sponsor(name: string, arg: string): SubmitResult {
     const COST = { potion: 40, or: 40, monstre: 80 } as const;
     const parts = arg.trim().split(/\s+/);
-    const what = normalize(parts.pop() ?? '') as keyof typeof COST;
+    const raw = normalize(parts.pop() ?? '');
+    const what = ((({ gold: 'or', monster: 'monstre', potions: 'potion' }) as Record<string, string>)[raw] ?? raw) as keyof typeof COST;
     const t = this.player(parts.join(' '));
-    if (!(what in COST) || !t) return { ok: false, text: `!sponsor <pseudo> potion (${COST.potion}) | or (${COST.or}) | monstre (${COST.monstre}) — avec tes points de faveur (!faveur).` };
-    if (playerKey(name) === t.key) return { ok: false, text: 'Se sponsoriser soi-même ? La production a vu, la production refuse.' };
-    if (!t.alive) return { ok: false, text: `${t.name} est mort pour l'instant.` };
+    if (!(what in COST) || !t) return { ok: false, text: `!sponsor <name> potion (${COST.potion}) | gold (${COST.or}) | monster (${COST.monstre}) — paid with your favor points (!favor).` };
+    if (playerKey(name) === t.key) return { ok: false, text: 'Sponsoring yourself? Production saw that, and production says no.' };
+    if (!t.alive) return { ok: false, text: `${t.name} is dead for now.` };
     const w = this.wallet(name);
-    if (this.now - w.lastSponsor < 120_000) return { ok: false, text: `Un sponsor toutes les 2 minutes : encore ${Math.ceil((120_000 - (this.now - w.lastSponsor)) / 1000)} s.` };
-    if (w.pts < COST[what]) return { ok: false, text: `Il te faut ${COST[what]} points de faveur (tu en as ${w.pts}). Gagne des paris !` };
+    if (this.now - w.lastSponsor < 120_000) return { ok: false, text: `One sponsor every 2 minutes: ${Math.ceil((120_000 - (this.now - w.lastSponsor)) / 1000)} s to go.` };
+    if (w.pts < COST[what]) return { ok: false, text: `You need ${COST[what]} favor points (you have ${w.pts}). Win some bets!` };
     const f = this.state.floors[t.floor];
     const r = f?.rooms[t.roomId];
     if (what === 'monstre') {
-      if (!f || !r || r.type === 'safe' || t.immuneUntil > this.now) return { ok: false, text: `${t.name} est à l'abri (safe room ou protection d'arrivée). Le monstre attendra.` };
+      if (!f || !r || r.type === 'safe' || t.immuneUntil > this.now) return { ok: false, text: `${t.name} is safe for now (safe room or arrival protection). The monster will wait.` };
       const pool = MONSTERS.filter((m) => m.minFloor <= f.n && m.minFloor >= f.n - 3);
       const m = spawnMonster(this.rng.pick(pool.length ? pool : MONSTERS), f.n, r.id, this.rng, this.nextId);
       f.monsters.push(m);
-      this.emit({ floor: f.n, roomId: r.id, kind: 'systeme', scope: 'global', drama: 60, actors: [t.key], text: `😈 CADEAU EMPOISONNÉ : ${w.name} sponsorise ${t.name}… avec ${m.name}, livré directement dans sa salle !` });
+      this.emit({ floor: f.n, roomId: r.id, kind: 'systeme', scope: 'global', drama: 60, actors: [t.key], text: `POISONED GIFT: ${w.name} sponsors ${t.name}… with ${m.name}, delivered straight to their room!` });
     } else if (what === 'potion' && t.items.length < INVENTORY_MAX) {
       t.items.push(makeItem('potion', this.nextId));
-      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `🎁 SPONSOR : ${w.name} envoie une potion à ${t.name}. Elle tombe du plafond, intacte. Presque.` });
+      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `SPONSOR: ${w.name} sends ${t.name} a potion. It drops from the ceiling, intact. Mostly.` });
     } else {
       t.gold += 30;
-      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `🎁 SPONSOR : ${w.name} offre 30 po à ${t.name}. Pluie de pièces sur une seule tête.` });
+      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `SPONSOR: ${w.name} gives ${t.name} 30 gold. A shower of coins on a single head.` });
     }
     w.pts -= COST[what];
     w.lastSponsor = this.now;
-    return { ok: true, text: `Sponsor envoyé (−${COST[what]} points, il t'en reste ${w.pts}).` };
+    return { ok: true, text: `Sponsor sent (−${COST[what]} points, ${w.pts} left).` };
   }
 
   // --------------------------------------------------------------- paris
@@ -1388,36 +1389,37 @@ export class Game {
 
   private placeBet(name: string, arg: string): SubmitResult {
     const key = playerKey(name);
-    if (this.state.players[key]?.bot) return { ok: false, text: 'Les PNJ ne parient pas.' };
+    if (this.state.players[key]?.bot) return { ok: false, text: 'NPCs don\'t bet.' };
     const parts = arg.trim().split(/\s+/).filter(Boolean);
     const amount = Math.floor(Number(parts[parts.length - 1]));
     const w = this.wallet(name);
     const fb = this.state.flashBet;
-    const first = normalize(parts[0] ?? '');
+    const said = normalize(parts[0] ?? '');
+    const first = said === 'yes' || said === 'y' ? 'oui' : said === 'no' || said === 'n' ? 'non' : said;
     if (first === 'oui' || first === 'non') {
-      if (!fb) return { ok: false, text: 'Aucun pari éclair en cours. Le grand pari : !parie <pseudo> <mise>.' };
-      if (this.now > fb.closeAt) return { ok: false, text: 'Les mises sont fermées pour ce pari. Résultat bientôt !' };
-      if (!(amount >= 5)) return { ok: false, text: `!parie ${first} <mise> (5 points minimum, tu en as ${w.pts}).` };
-      if (amount > w.pts) return { ok: false, text: `Tu n'as que ${w.pts} points de faveur.` };
+      if (!fb) return { ok: false, text: 'No flash bet right now. The big bet: !bet <name> <amount>.' };
+      if (this.now > fb.closeAt) return { ok: false, text: 'Betting is closed for this one. Result coming soon!' };
+      if (!(amount >= 5)) return { ok: false, text: `!bet ${first === 'oui' ? 'yes' : 'no'} <amount> (5 points minimum, you have ${w.pts}).` };
+      if (amount > w.pts) return { ok: false, text: `You only have ${w.pts} favor points.` };
       const prev = fb.stakes[key];
-      if (prev && prev.opt !== first) return { ok: false, text: `Tu as déjà parié « ${prev.opt} ». On ne retourne pas sa veste en plein pari.` };
+      if (prev && prev.opt !== first) return { ok: false, text: `You already bet "${prev.opt === 'oui' ? 'yes' : 'no'}". No switching sides mid-bet.` };
       w.pts -= amount;
       if (!prev) w.bets++;
       fb.stakes[key] = { opt: first, amount: (prev?.amount ?? 0) + amount, name: w.name };
-      return { ok: true, text: `Pari « ${first} » : ${fb.stakes[key].amount} points sur « ${fb.title} ».` };
+      return { ok: true, text: `Bet "${first === 'oui' ? 'yes' : 'no'}": ${fb.stakes[key].amount} points on "${fb.title}".` };
     }
     // Grand pari : qui sortira en premier ?
     const gb = this.state.grandBet;
-    if (!gb.open) return { ok: false, text: 'Le grand pari est fermé (il ferme à l\'effondrement de l\'étage 2).' + (fb ? ' Pari éclair en cours : !parie oui|non <mise>.' : '') };
+    if (!gb.open) return { ok: false, text: 'The big bet is closed (it closes when floor 2 collapses).' + (fb ? ' Flash bet running: !bet yes|no <amount>.' : '') };
     const t = this.player(parts.slice(0, -1).join(' '));
-    if (!t || !(amount >= 5)) return { ok: false, text: `Grand pari, qui sortira en premier ? !parie <pseudo> <mise> (5 points minimum, tu en as ${w.pts}).` };
-    if (amount > w.pts) return { ok: false, text: `Tu n'as que ${w.pts} points de faveur.` };
+    if (!t || !(amount >= 5)) return { ok: false, text: `Big bet, who gets out first? !bet <name> <amount> (5 points minimum, you have ${w.pts}).` };
+    if (amount > w.pts) return { ok: false, text: `You only have ${w.pts} favor points.` };
     const prev = gb.stakes[key];
-    if (prev && prev.target !== t.key) return { ok: false, text: `Tu as déjà misé sur ${prev.targetName}. On ne change pas de cheval.` };
+    if (prev && prev.target !== t.key) return { ok: false, text: `You already bet on ${prev.targetName}. No changing horses.` };
     w.pts -= amount;
     if (!prev) w.bets++;
     gb.stakes[key] = { target: t.key, targetName: t.name, amount: (prev?.amount ?? 0) + amount };
-    return { ok: true, text: `Grand pari : ${gb.stakes[key].amount} points sur ${t.name}. Cagnotte : ${this.grandPot()} points.` };
+    return { ok: true, text: `Big bet: ${gb.stakes[key].amount} points on ${t.name}. Pot: ${this.grandPot()} points.` };
   }
 
   /** Paris éclair : la production en lance un aux moments chauds (combat de boss, escalier qui s'ouvre). */
@@ -1436,16 +1438,16 @@ export class Game {
       const humans = Object.values(st.players).filter((p) => p.alive && !p.bot && p.floor === f.n);
       if (!humans.length) continue;
       const boss = f.monsters.find((m) => m.boss && m.hp > 0 && m.hp < m.maxHp && humans.some((p) => p.roomId === m.roomId));
-      if (boss) return this.openFlash({ kind: 'boss', floor: f.n, monsterId: boss.id, title: `${boss.name} tombe-t-il dans les 2 minutes ?`, closeAt: this.now + 45_000, deadline: this.now + 120_000 });
+      if (boss) return this.openFlash({ kind: 'boss', floor: f.n, monsterId: boss.id, title: `Does ${boss.name} fall within 2 minutes?`, closeAt: this.now + 45_000, deadline: this.now + 120_000 });
       if (f.stairsOpened && f.collapseAt !== null && f.collapseAt - this.now > 90_000) {
-        return this.openFlash({ kind: 'sortie', floor: f.n, title: `Tous les vrais joueurs de l'étage ${f.n} s'en sortent avant l'effondrement ?`, closeAt: this.now + 60_000, deadline: f.collapseAt });
+        return this.openFlash({ kind: 'sortie', floor: f.n, title: `Do all real players on floor ${f.n} make it out before the collapse?`, closeAt: this.now + 60_000, deadline: f.collapseAt });
       }
     }
   }
 
   private openFlash(b: Omit<FlashBet, 'id' | 'stakes'>) {
     this.state.flashBet = { ...b, id: this.state.nextId, stakes: {} };
-    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 55, text: `💰 PARI ÉCLAIR : ${b.title} !parie oui <mise> ou !parie non <mise> (${Math.round((b.closeAt - this.now) / 1000)} s pour miser, la production ajoute 50 % à la cagnotte).` });
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 55, text: `FLASH BET: ${b.title} !bet yes <amount> or !bet no <amount> (${Math.round((b.closeAt - this.now) / 1000)} s to bet, production adds 50% to the pot).` });
   }
 
   /** Tranche le pari éclair : les gagnants se partagent la cagnotte + 50 % de la production, au prorata de leur mise. */
@@ -1460,7 +1462,7 @@ export class Game {
     const winners = stakes.filter(([, x]) => x.opt === result);
     const total = pot + Math.max(30, Math.round(pot / 2));
     if (!winners.length) {
-      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: `PARI ÉCLAIR : c'est « ${result} » ! Personne n'avait vu juste : la production empoche ${pot} points.` });
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: `FLASH BET: it's "${result === 'oui' ? 'yes' : 'no'}"! Nobody called it: production pockets ${pot} points.` });
       return;
     }
     const winPot = winners.reduce((s, [, x]) => s + x.amount, 0);
@@ -1473,7 +1475,7 @@ export class Game {
       w.gain += gain - x.amount;
       if (gain > best.gain) best = { name: x.name, gain };
     }
-    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 50, text: `PARI ÉCLAIR : c'est « ${result} » ! ${winners.length} parieur${winners.length > 1 ? 's' : ''} se partagent ${total} points (meilleur gain : ${best.name}, +${best.gain}).` });
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 50, text: `FLASH BET: it's "${result === 'oui' ? 'yes' : 'no'}"! ${winners.length} bettor${winners.length > 1 ? 's' : ''} split ${total} points (top win: ${best.name}, +${best.gain}).` });
   }
 
   /** Premier à sortir du Donjon : le grand pari est tranché (cagnotte + 100 points de la production). */
@@ -1486,7 +1488,7 @@ export class Game {
     const pot = stakes.reduce((s, [, x]) => s + x.amount, 0);
     const winners = stakes.filter(([, x]) => x.target === winner.key);
     if (!winners.length) {
-      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `GRAND PARI : personne n'avait misé sur ${winner.name}. La production rafle ${pot} points et ricane.` });
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `BIG BET: nobody bet on ${winner.name}. Production scoops up ${pot} points and snickers.` });
       return;
     }
     const total = pot + 100;
@@ -1499,7 +1501,7 @@ export class Game {
       w.won++;
       w.gain += gain - x.amount;
     }
-    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 90, text: `GRAND PARI GAGNÉ : ${winners.map(([key]) => this.state.wallets[key]?.name ?? key).slice(0, 5).join(', ')} avai${winners.length > 1 ? 'ent' : 't'} misé sur ${winner.name} et se partage${winners.length > 1 ? 'nt' : ''} ${total} points !` });
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 90, text: `BIG BET WON: ${winners.map(([key]) => this.state.wallets[key]?.name ?? key).slice(0, 5).join(', ')} bet on ${winner.name} and ${winners.length > 1 ? 'split' : 'takes'} ${total} points!` });
   }
 
   /** Éliminé : le crawler quitte la partie (il peut refaire !join pour recommencer avec un nouveau perso). */
@@ -1518,7 +1520,7 @@ export class Game {
     const champs = this.state.champions.map((c) => c.name);
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: 200, seasonEnd: true,
-      text: `FIN DE LA SAISON ! L'étage ${f.n} s'effondre et le Donjon se referme.${stuck.length ? ` ${stuck.join(', ')} y restent enfermés pour toujours (ou jusqu'à la prochaine saison).` : ''} ${champs.length ? `Légendes de la saison : ${champs.join(', ')}.` : 'Personne n\'est sorti : le Donjon a gagné.'}`,
+      text: `END OF THE SEASON! Floor ${f.n} collapses and the Dungeon shuts its doors.${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
     });
   }
 
@@ -1532,7 +1534,7 @@ export class Game {
     if (this.state.champions.length === 1) this.settleGrandBet(p);
     this.emit({
       floor: p.floor, roomId: p.roomId, kind: 'niveau', scope: 'global', actors: [p.key], drama: 150, victory: legend, fx: { kind: 'levelup', src: `p:${p.name}` },
-      text: `VICTOIRE ! ${p.name}${p.bot ? ' (PNJ)' : ''} sort du Donjon par la grande porte, niveau ${p.level}, ${p.kills} monstres terrassés. Son nom entre dans la Légende.`,
+      text: `VICTORY! ${p.name}${p.bot ? ' (NPC)' : ''} walks out of the Dungeon through the front door, level ${p.level}, ${p.kills} monsters slain. Their name joins the Legends.`,
     });
     this.leaveAlliance(p, false);
     p.alive = false; // la suite du tour (thèmes, réapparitions) l'ignore
@@ -1555,11 +1557,11 @@ export class Game {
       if (!p.bot) graves.set(p.key, this.bury(p, f.n)); // numéro au vote de résurrection
       this.gameOver(p);
     }
-    const humans = lost.filter((p) => !p.bot).map((p) => `${p.name} (n°${graves.get(p.key)})`);
+    const humans = lost.filter((p) => !p.bot).map((p) => `${p.name} (#${graves.get(p.key)})`);
     const npcs = lost.filter((p) => p.bot).length;
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: lost.length ? 90 : 60,
-      text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${lost.length ? `GAME OVER pour ${[...humans, ...(npcs ? [`${npcs} PNJ`] : [])].join(', ')} : resté${lost.length > 1 ? 's' : ''} à l'intérieur. Tapez !join pour recommencer à l'étage 1.` : 'Personne n\'est resté coincé, bravo.'}`,
+      text: `FLOOR ${f.n} COLLAPSES! ${lost.length ? `GAME OVER for ${[...humans, ...(npcs ? [`${npcs} NPC${npcs > 1 ? 's' : ''}`] : [])].join(', ')}: left inside. Type !join to start over on floor 1.` : 'Nobody got stuck, well done.'}`,
     });
     this.afterCollapse(f, humans.length > 0);
     if (!victims.length) return;
@@ -1580,7 +1582,7 @@ export class Game {
       this.startTimer(next, p);
       this.emit({
         floor: next.n, roomId: p.roomId, kind: 'drole', scope: 'global', actors: [p.key], drama: 60, fx: { kind: 'trap', dst: `p:${p.name}` },
-        text: `${p.name} traverse le plancher dans un nuage de gravats et s'écrase à l'étage ${next.n}. Sonné, mais entier. (−${hpLoss} PV${goldLoss ? `, −${goldLoss} po perdues dans la chute` : ''})`,
+        text: `${p.name} crashes through the floor in a cloud of rubble and lands on floor ${next.n}. Dazed, but in one piece. (−${hpLoss} HP${goldLoss ? `, −${goldLoss} gold lost in the fall` : ''})`,
       });
     }
   }
@@ -1598,14 +1600,14 @@ export class Game {
 
   private castVote(p: PlayerState, arg: string): SubmitResult {
     const v = this.state.vote;
-    if (!v) return { ok: false, text: 'Aucun vote en cours. La production prépare le prochain.' };
+    if (!v) return { ok: false, text: 'No vote running. Production is cooking up the next one.' };
     const a = normalize(arg);
     let key: string | undefined;
     if (/^\d+$/.test(a)) key = v.options[Number(a) - 1];
     else key = v.options.find((k) => normalize(PRODUCTION_BY_KEY[k].label).includes(a) || k.includes(a));
     if (!a || !key) return { ok: false, text: `Vote : ${v.options.map((k, i) => `!vote ${i + 1} = ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}` };
     v.votes[p.key] = key;
-    return { ok: true, text: `Vote enregistré : ${PRODUCTION_BY_KEY[key].label}.` };
+    return { ok: true, text: `Vote recorded: ${PRODUCTION_BY_KEY[key].label}.` };
   }
 
   startVote() {
@@ -1622,7 +1624,7 @@ export class Game {
     this.state.vote = { options, votes: {}, endTurn: this.state.turn + this.cfg.voteTurns * this.phases };
     this.emit({
       floor: 0, kind: 'systeme', scope: 'global', drama: 30,
-      text: `LA PRODUCTION PROPOSE UN VOTE (${this.cfg.voteTurns} tours) : ${options.map((k, i) => `!vote ${i + 1} ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}`,
+      text: `PRODUCTION CALLS A VOTE (${this.cfg.voteTurns} turns): ${options.map((k, i) => `!vote ${i + 1} ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}`,
     });
   }
 
@@ -1633,7 +1635,7 @@ export class Game {
     if (st.resurrection) return; // pas de vote de la production pendant la résurrection
     if (st.bounty && (st.turn > st.bounty.untilTurn || !st.players[st.bounty.target])) {
       const t = st.players[st.bounty.target];
-      if (t) this.emit({ floor: t.floor, kind: 'systeme', scope: 'global', drama: 20, text: `La prime sur ${t.name} expire. Il a survécu, le chat est déçu.` });
+      if (t) this.emit({ floor: t.floor, kind: 'systeme', scope: 'global', drama: 20, text: `The bounty on ${t.name} expires. They survived, chat is disappointed.` });
       st.bounty = null;
     }
     if (st.vote && st.turn >= st.vote.endTurn) {
@@ -1642,7 +1644,7 @@ export class Game {
       const best = Math.max(0, ...tally.values());
       const winners = st.vote.options.filter((k) => (tally.get(k) ?? 0) === best);
       const key = this.rng.pick(winners);
-      const why = best === 0 ? 'personne n\'a voté, la production décide seule' : `${best} vote(s)`;
+      const why = best === 0 ? 'nobody voted, production decides alone' : `${best} vote(s)`;
       st.vote = null;
       st.nextVoteTurn = st.turn + this.voteEvery();
       this.applyProduction(key, why);
@@ -1667,7 +1669,7 @@ export class Game {
           const rooms = f.rooms.filter((r) => r.type !== 'safe');
           for (let i = 0; i < n; i++) this.rng.pick(rooms).groundGold += this.rng.int(5, 20) * f.n;
         }
-        detail = 'Des tas d\'or attendent dans des salles au hasard. Courez !';
+        detail = 'Piles of gold are waiting in random rooms. Run!';
         break;
       case 'lacher_monstres':
         for (const f of occupied) {
@@ -1682,12 +1684,12 @@ export class Game {
             f.monsters.push(m);
           }
         }
-        detail = 'Une fournée de monstres errants est lâchée dans les couloirs.';
+        detail = 'A batch of wandering monsters is released into the corridors.';
         break;
       case 'happy_hour':
         st.happyHourUntil = st.turn + 10 * this.phases;
         for (const f of live) for (const r of f.rooms) if (r.type === 'safe' && !r.forge) for (let i = 0; i < 2; i++) r.merchant.push(randomLoot(this.rng, this.nextId, f.n, true));
-        detail = 'Les marchands bradent tout à −50 % pendant 10 tours (et ont reçu du stock).';
+        detail = 'Merchants sell everything at −50% for 10 turns (and got fresh stock).';
         break;
       case 'resurrection': {
         let n = 0;
@@ -1696,7 +1698,7 @@ export class Game {
           p.deathTurn = undefined;
           n++;
         }
-        detail = `${n} crawler(s) reviennent d'entre les morts au prochain tour.`;
+        detail = `${n} crawler(s) come back from the dead next turn.`;
         break;
       }
       case 'prime': {
@@ -1704,17 +1706,17 @@ export class Game {
         if (target && target.kills > 0) {
           const gold = 50 * target.floor + 20 * target.kills;
           st.bounty = { target: target.key, gold, untilTurn: st.turn + 15 * this.phases };
-          detail = `${gold} po pour qui tuera ${target.name} (${target.kills} kills) dans les 15 prochains tours.`;
-        } else detail = 'Personne ne mérite de prime. Quelle bande de pacifistes.';
+          detail = `${gold} gold for whoever kills ${target.name} (${target.kills} kills) within the next 15 turns.`;
+        } else detail = 'Nobody deserves a bounty. What a bunch of pacifists.';
         break;
       }
       case 'inondation':
         st.floodUntil = st.turn + 5 * this.phases;
-        detail = 'Le donjon est inondé pendant 5 tours : un déplacement sur trois finit en glissade.';
+        detail = 'The dungeon is flooded for 5 turns: one move in three ends in a slip.';
         break;
       case 'festin':
         for (const p of Object.values(st.players)) if (p.alive) p.hp = p.maxHp;
-        detail = 'Buffet à volonté : tous les crawlers vivants sont soignés.';
+        detail = 'All-you-can-eat buffet: every living crawler is healed.';
         break;
       case 'pieges_promo':
         for (const f of live) {
@@ -1727,21 +1729,21 @@ export class Game {
             r.trapArmed = true;
           }
         }
-        detail = 'Tous les pièges sont réarmés, et trois salles de plus sont piégées.';
+        detail = 'Every trap is re-armed, and three more rooms are trapped.';
         break;
       case 'prolongation':
         for (const f of live) if (f.collapseAt !== null) {
           f.collapseAt += 3 * 60_000;
           f.warned5 = f.warned1 = false;
         }
-        detail = 'Les étages tiendront 3 minutes de plus.';
+        detail = 'Floors will hold for 3 more minutes.';
         break;
       case 'acceleration':
         for (const f of live) if (f.collapseAt !== null) f.collapseAt = Math.max(this.now + 30_000, f.collapseAt - 2 * 60_000);
-        detail = 'Les étages s\'effondreront 2 minutes plus tôt. Bon courage.';
+        detail = 'Floors will collapse 2 minutes earlier. Good luck.';
         break;
     }
-    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `LA PRODUCTION A TRANCHÉ (${why}) : ${ev.label.toUpperCase()} ! ${detail}` });
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `PRODUCTION HAS DECIDED (${why}): ${ev.label.toUpperCase()}! ${detail}` });
   }
 
   private onPlayerKilled(p: PlayerState, killer: Fighter | null) {
@@ -1751,8 +1753,8 @@ export class Game {
     if (killer?.kind === 'player' && killer.p.key !== p.key) {
       killer.p.gold += b.gold;
       this.gainXp(killer.p, 50);
-      this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 90, actors: [killer.p.key, p.key], text: `${killer.p.name} encaisse la prime sur ${p.name} : ${b.gold} po !` });
-    } else this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 60, actors: [p.key], text: `${p.name} est mort, mais personne n'encaisse la prime. La production garde l'argent.` });
+      this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 90, actors: [killer.p.key, p.key], text: `${killer.p.name} cashes in the bounty on ${p.name}: ${b.gold} gold!` });
+    } else this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 60, actors: [p.key], text: `${p.name} is dead, but nobody claims the bounty. Production keeps the money.` });
   }
 
   leaderboard(): LeaderRow[] {
@@ -1773,11 +1775,11 @@ export class Game {
       const voices = (no: number) => Object.values(rz.votes).filter((x) => x.no === no).reduce((s, x) => s + x.voices, 0);
       const mine = key ? rz.votes[key]?.no : undefined;
       return {
-        title: 'Qui mérite une seconde chance ?',
+        title: 'Who deserves a second chance?',
         options: [...this.state.graveyard]
           .sort((a, b) => voices(b.no) - voices(a.no) || b.snap.level - a.snap.level)
           .slice(0, 6)
-          .map((g) => ({ n: g.no, key: String(g.no), label: g.name, desc: `niv ${g.snap.level} · éliminé à l'étage ${g.floor}`, votes: voices(g.no) })),
+          .map((g) => ({ n: g.no, key: String(g.no), label: g.name, desc: `lvl ${g.snap.level} · eliminated on floor ${g.floor}`, votes: voices(g.no) })),
         turnsLeft: Math.max(0, Math.ceil((rz.endTurn - this.state.turn) / this.phases)),
         myVote: mine !== undefined ? String(mine) : null,
       };
@@ -1835,7 +1837,7 @@ export class Game {
 
   adminHealAll() {
     for (const p of Object.values(this.state.players)) if (p.alive) p.hp = p.maxHp;
-    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 10, text: 'La régie soigne tout le monde. Profitez-en, ça n\'arrivera pas deux fois.' });
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 10, text: 'The control room heals everyone. Enjoy it, it won\'t happen twice.' });
   }
 
   adminKick(name: string) {
@@ -1844,7 +1846,7 @@ export class Game {
     this.leaveAlliance(p, false);
     delete this.state.players[p.key];
     for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
-    this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 10, text: `${p.name} a été expulsé du donjon par la régie.` });
+    this.emit({ floor: p.floor, kind: 'systeme', scope: 'global', drama: 10, text: `${p.name} has been kicked out of the dungeon by the control room.` });
     return true;
   }
 
@@ -1872,7 +1874,7 @@ export class Game {
     this.leaveAlliance(p, false);
     delete this.state.players[p.key];
     for (const q of Object.values(this.state.players)) q.allyProposals = q.allyProposals.filter((k) => k !== p.key);
-    this.emit({ floor: p.floor, kind: 'systeme', scope: 'etage', drama: 5, text: `${p.name} (PNJ) range son arme et quitte le donjon : place aux vrais aventuriers !` });
+    this.emit({ floor: p.floor, kind: 'systeme', scope: 'etage', drama: 5, text: `${p.name} (NPC) sheathes their weapon and leaves the dungeon: make way for real adventurers!` });
     this.sync();
     return true;
   }

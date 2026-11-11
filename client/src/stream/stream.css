@@ -92,7 +92,7 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 .fi.systeme { border-left-color: var(--or); }
 .fi.niveau, .fi.alliance { border-left-color: var(--green-l); }
 .fi.ia { border-left-color: var(--red-l); font-family: var(--serif); font-style: italic; }
-.fi.ia::before { content: 'IA du donjon'; font: 700 16px var(--serif); color: var(--red-l); margin-right: 7px; font-style: normal; }
+.fi.ia::before { content: 'Dungeon AI'; font: 700 16px var(--serif); color: var(--red-l); margin-right: 7px; font-style: normal; }
 @keyframes slidein { from { transform: translateX(-24px); opacity: 0; } to { transform: none; } }
 
 /* Colonne de droite : classement, commandes, étages, en texte sur le voile */
@@ -123,7 +123,7 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 #chat .m { font-size: 16px; line-height: 1.3; color: var(--light); text-shadow: 0 1px 3px rgba(0,0,0,.95); overflow-wrap: anywhere; animation: chatIn .25s ease-out; }
 #chat .m b { font-weight: 800; }
 #chat .m.pnj { color: #d8d2c4; }
-#chat .m.pnj b::after { content: ' PNJ'; font-size: 11px; font-weight: 500; color: var(--light-mut); }
+#chat .m.pnj b::after { content: ' NPC'; font-size: 11px; font-weight: 500; color: var(--light-mut); }
 #chat .m code { color: var(--or); font-family: inherit; font-weight: 700; }
 #chat .m .v { font-weight: 800; }
 #chat .m.ok .v { color: var(--green-l); }

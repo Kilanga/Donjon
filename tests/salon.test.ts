@@ -23,8 +23,8 @@ describe('salon d\'attente et coup d\'envoi', () => {
     let t = T0;
     let ev: { text: string }[] = [];
     while (t < T0 + 300_000) ev = ev.concat(g.tick((t += 20_000)));
-    expect(ev.some((e) => /UNE MINUTE/.test(e.text))).toBe(true);
-    expect(ev.some((e) => /LA PARTIE COMMENCE ! 2 aventuriers et 1 PNJ/.test(e.text))).toBe(true);
+    expect(ev.some((e) => /ONE MINUTE/.test(e.text))).toBe(true);
+    expect(ev.some((e) => /THE GAME BEGINS! 2 adventurers and 1 NPC enter/.test(e.text))).toBe(true);
     expect(g.state.seasonStart).not.toBeNull();
     const a2 = g.player('ana')!;
     expect(a2.level).toBe(1);

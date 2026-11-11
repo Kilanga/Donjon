@@ -17,14 +17,14 @@ export function connectTwitch(channel: string, onCommand: (user: string, text: s
     try {
       onCommand(user, text);
     } catch (e) {
-      console.error('[twitch] message non traité :', e);
+      console.error('[twitch] unhandled message:', e);
     }
   });
   // Modération de la chaîne : un viewer banni ou mis en timeout n'apparaît plus dans le jeu (bulles, commandes)
-  client.on('ban', (_chan, username) => onModerated?.(username, 'banni du chat', Infinity));
+  client.on('ban', (_chan, username) => onModerated?.(username, 'banned from chat', Infinity));
   client.on('timeout', (_chan, username, _reason, duration) => onModerated?.(username, `timeout ${duration} s`, Number(duration) || 600));
-  client.on('connected', () => console.log(`[twitch] connecté au chat de #${channel}`));
-  client.on('disconnected', (reason) => console.log(`[twitch] déconnecté : ${reason}`));
+  client.on('connected', () => console.log(`[twitch] connected to #${channel} chat`));
+  client.on('disconnected', (reason) => console.log(`[twitch] disconnected: ${reason}`));
   client.connect().catch((e) => console.error('[twitch] connexion impossible :', e));
   return () => void client.disconnect().catch(() => undefined);
 }

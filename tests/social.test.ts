@@ -20,10 +20,10 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     const ev: string[] = [];
     let t = T0;
     while (!g.floor(1)!.collapsed) ev.push(...g.tick((t += 20_000)).map((e) => e.text));
-    expect(ev.some((e) => /GAME OVER pour ana \(n°1\), bob \(n°2\)/.test(e))).toBe(true);
-    expect(ev.some((e) => /VOTE DE RÉSURRECTION/.test(e))).toBe(true);
+    expect(ev.some((e) => /GAME OVER for ana \(#1\), bob \(#2\)/.test(e))).toBe(true);
+    expect(ev.some((e) => /RESURRECTION VOTE/.test(e))).toBe(true);
     expect(g.player('ana')).toBeUndefined();
-    expect(g.voteView(null)?.title).toMatch(/seconde chance/i);
+    expect(g.voteView(null)?.title).toMatch(/second chance/i);
     // le chat vote (même sans perso) : une voix par pseudo, définitive
     expect(g.submit('viewer1', '!vote 2', t).ok).toBe(true);
     expect(g.submit('viewer2', '!vote 2', t).ok).toBe(true);
@@ -31,8 +31,8 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     expect(g.submit('bob', '!vote 1 300', t).ok).toBe(true); // les points n'achètent rien
     expect(g.voteView(null)!.options.find((o) => o.n === 1)!.votes).toBe(1);
     for (let i = 0; i < 4; i++) ev.push(...g.tick((t += 20_000)).map((e) => e.text));
-    const res = ev.find((e) => /RÉSURRECTION !/.test(e))!;
-    expect(res).toMatch(/bob \(n°2\)/);
+    const res = ev.find((e) => /RESURRECTION!/.test(e))!;
+    expect(res).toMatch(/bob \(#2\)/);
     const bob = g.player('bob')!;
     expect(bob.alive).toBe(true);
     expect(bob.hp).toBe(bob.maxHp);
@@ -49,7 +49,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     g.submit('v2', '!vote 2', t);
     const ev: string[] = [];
     for (let i = 0; i < 4; i++) ev.push(...g.tick((t += 20_000)).map((e) => e.text));
-    expect(ev.find((e) => /RÉSURRECTION !/.test(e))).toMatch(/Égalité à 1 voix ! Jet de d20/);
+    expect(ev.find((e) => /RESURRECTION!/.test(e))).toMatch(/Tied at 1 vote\(s\)! d20 roll/);
   });
 
   it('personne ne vote : personne ne revient', () => {
@@ -58,7 +58,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     let t = collapseFloor1(g);
     const ev: string[] = [];
     for (let i = 0; i < 4; i++) ev.push(...g.tick((t += 20_000)).map((e) => e.text));
-    expect(ev.some((e) => /les morts restent morts/.test(e))).toBe(true);
+    expect(ev.some((e) => /the dead stay dead/.test(e))).toBe(true);
     expect(g.player('ana')).toBeUndefined();
   });
 
@@ -76,7 +76,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     const before = g.floor(1)!.monsters.length;
     expect(g.submit('troll', '!sponsor ana monstre', T0 + 2000).ok).toBe(true);
     expect(g.floor(1)!.monsters.length).toBe(before + 1);
-    expect(g.submit('troll', '!faveur', T0).text).toMatch(/20 points/);
+    expect(g.submit('troll', '!faveur', T0).text).toMatch(/20 favor points/);
     expect(g.submit('ana', '!sponsor ana potion', T0 + 999_999).ok).toBe(false); // pas pour soi
   });
 
@@ -97,7 +97,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     boss.hp = 0;
     f.monsters = f.monsters.filter((m) => m !== boss);
     const ev = g.tick(T0 + 40_000).map((e) => e.text);
-    expect(ev.some((e) => /PARI ÉCLAIR : c'est « oui »/.test(e))).toBe(true);
+    expect(ev.some((e) => /FLASH BET: it's "yes"/.test(e))).toBe(true);
     expect(g.state.wallets['v1'].pts).toBe(100 - 50 + 150); // cagnotte 100 + 50 % = 150
     expect(g.state.wallets['v2'].pts).toBe(50);
   });
@@ -114,7 +114,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
     ana.roomId = f.bossRoom;
     g.submit('ana', '!descendre', T0 + 1000);
     const ev = g.tick(T0 + 20_000).map((e) => e.text);
-    expect(ev.some((e) => /GRAND PARI GAGNÉ/.test(e))).toBe(true);
+    expect(ev.some((e) => /BIG BET WON/.test(e))).toBe(true);
     expect(g.state.wallets['v1'].pts).toBe(60 + 200); // 100 de cagnotte + 100 de la production
   });
 });

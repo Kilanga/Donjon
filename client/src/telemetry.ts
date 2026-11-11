@@ -31,14 +31,14 @@ export function initTelemetry(send: Sender, pageName: string) {
     // Erreur de chargement d'image/script : e.message vide, la cible donne la ressource
     const target = e.target as HTMLElement | null;
     if (!e.message && target && target !== (window as unknown as HTMLElement)) {
-      reportError(`ressource introuvable : ${(target as HTMLImageElement).src ?? target.tagName}`, undefined, 'chargement');
+      reportError(`resource not found: ${(target as HTMLImageElement).src ?? target.tagName}`, undefined, 'chargement');
       return;
     }
     reportError(e.message || String(err), err?.stack, `${e.filename ?? ''}:${e.lineno ?? ''}:${e.colno ?? ''}`);
   }, true);
   window.addEventListener('unhandledrejection', (e) => {
     const r = e.reason as Error | undefined;
-    reportError(`promesse rejetée : ${r?.message ?? String(r)}`, r?.stack);
+    reportError(`rejected promise: ${r?.message ?? String(r)}`, r?.stack);
   });
 
   // Images/seconde : mesurées sur 10 s, envoyées toutes les 2 minutes (et 20 s après l'ouverture)

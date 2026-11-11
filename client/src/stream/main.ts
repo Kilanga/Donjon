@@ -5,6 +5,7 @@ import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../sr
 import { Assets } from './assets';
 import { World } from './world';
 import { HELP_TEXT } from '../../../src/shared/commands';
+import { THEME_LABEL } from '../../../src/shared/themes';
 import { initTelemetry, telemetryReady } from '../telemetry';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -50,7 +51,7 @@ function connect() {
     try {
       onMessage(JSON.parse(e.data) as ServerMsg);
     } catch (err) {
-      console.error('[stream] message non traité', err);
+      console.error('[stream] unhandled message', err);
     }
   };
   ws.onclose = () => {
@@ -102,7 +103,7 @@ function onMessage(m: ServerMsg) {
     const first = replay;
     replay = false;
     if (first) return;
-    if (win?.victory) showCard('Victoire !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
+    if (win?.victory) showCard('Victory!', `${win.victory.name}${win.victory.bot ? ' (NPC)' : ''} escapes the Dungeon and becomes a Legend`);
   } else if (m.type === 'chat' && !m.cmd) {
     for (const w of worlds) w.bubble(m.from, m.text);
     chatLine(m.from, m.text, undefined, m.src === 'twitch');
@@ -128,7 +129,7 @@ function onMessage(m: ServerMsg) {
     if (/^!(aide|help|commandes|commands|regles|règles)\b/i.test(m.text.trim())) showHelp();
   } else if (m.type === 'feedback' && !m.ok) {
     const lm = document.getElementById('load-msg');
-    if (lm) lm.textContent = m.text + ' Ajoute ?cle=<clé de la régie> à l\'adresse.';
+    if (lm) lm.textContent = m.text + ' Add ?cle=<control-room key> to the address.';
   }
 }
 
@@ -234,7 +235,7 @@ let bellFloor = -1;
 function showCard(n: number | string, sub: string) {
   cue(typeof n === 'number' ? 'whoosh' : 'fanfare', 0.8);
   const card = $('card');
-  card.querySelector('.c1')!.textContent = typeof n === 'number' ? `Étage ${n}` : n;
+  card.querySelector('.c1')!.textContent = typeof n === 'number' ? `Floor ${n}` : n;
   card.querySelector('.c2')!.textContent = sub;
   card.classList.remove('hidden');
   card.style.animation = 'none';
@@ -268,7 +269,7 @@ function pickFloor(s: PlayerViewMsg) {
       visible = best;
       changed = true;
       const f = floors.find((x) => x.n === ranked[0]);
-      if (f) showCard(f.n, [f.humans ? `${f.humans} aventurier${f.humans > 1 ? 's' : ''}` : '', f.bots ? `${f.bots} PNJ` : ''].filter(Boolean).join(' · ') + ` · ${f.theme}`);
+      if (f) showCard(f.n, [f.humans ? `${f.humans} adventurer${f.humans > 1 ? 's' : ''}` : '', f.bots ? `${f.bots} NPC${f.bots > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') + ` · ${THEME_LABEL[f.theme] ?? f.theme}`);
     }
   }
   if (changed || slotFloor[visible] !== wantedFloor) requestFloors();
@@ -290,7 +291,7 @@ function switchTo(i: number) {
   visible = i;
   applyVisible();
   requestFloors();
-  $('shot').textContent = `Étage ${slotFloor[i]}`;
+  $('shot').textContent = `Floor ${slotFloor[i]}`;
 }
 
 function applyVisible() {
@@ -312,33 +313,33 @@ function shown(s: PlayerViewMsg): { floor: PlayerViewMsg['floor']; turnEndsAt: n
 function renderHud(s: PlayerViewMsg) {
   const f = shown(s).floor;
   const alive = s.leaderboard.filter((r) => r.alive).length;
-  $('meta').innerHTML = f ? `Étage <b>${f.n}</b> · ${esc(f.theme)} · <b>${alive}</b> crawlers en vie` : '—';
+  $('meta').innerHTML = f ? `Floor <b>${f.n}</b> · ${esc(THEME_LABEL[f.theme] ?? f.theme)} · <b>${alive}</b> crawlers alive` : '—';
   $('pause').classList.toggle('hidden', !s.paused || !!s.seasonOver);
   // Fin de saison : écran final avec les Légendes de la saison
   if (s.seasonOver) {
     const champs = s.champions ?? [];
     $('season').classList.remove('hidden');
-    $('season-sub').textContent = champs.length ? `${champs.length} légende${champs.length > 1 ? 's' : ''} cette saison` : 'Personne n\'est sorti : le Donjon a gagné.';
-    $('season-list').innerHTML = champs.slice(0, 10).map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(PNJ)</small>' : ''}</b><span>niv ${c.level} · ${c.kills} monstres · ${c.deaths} morts</span></div>`).join('');
+    $('season-sub').textContent = champs.length ? `${champs.length} legend${champs.length > 1 ? 's' : ''} this season` : 'Nobody got out: the Dungeon wins.';
+    $('season-list').innerHTML = champs.slice(0, 10).map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(NPC)</small>' : ''}</b><span>lvl ${c.level} · ${c.kills} monsters · ${c.deaths} deaths</span></div>`).join('');
   } else $('season').classList.add('hidden');
   // Les étages : qui est où, et combien de temps avant l'effondrement
   if (s.floors && s.floors.length > 1) {
     $('floors').classList.remove('hidden');
-    $('floors').innerHTML = '<h3>Les étages</h3>' + s.floors.map((x) => {
-      const who = [x.humans ? `${x.humans} ⚔` : '', x.bots ? `${x.bots} PNJ` : ''].filter(Boolean).join(' · ') || 'vide';
+    $('floors').innerHTML = '<h3>Floors</h3>' + s.floors.map((x) => {
+      const who = [x.humans ? `${x.humans} ⚔` : '', x.bots ? `${x.bots} NPC` : ''].filter(Boolean).join(' · ') || 'empty';
       const t = x.collapseInSec === null ? '—' : `${x.stairsInSec ? '🔒' : '🔓'} ${fmt(x.collapseInSec)}`;
-      return `<div class="f ${x.n === f?.n ? 'on' : ''}"><span class="n">Étage ${x.n}</span><span class="w">${who}</span><span class="t ${x.collapseInSec !== null && x.collapseInSec < 60 ? 'urgent' : ''}">${t}</span></div>`;
+      return `<div class="f ${x.n === f?.n ? 'on' : ''}"><span class="n">Floor ${x.n}</span><span class="w">${who}</span><span class="t ${x.collapseInSec !== null && x.collapseInSec < 60 ? 'urgent' : ''}">${t}</span></div>`;
     }).join('');
   } else $('floors').classList.add('hidden');
   // Classement
-  $('lb').innerHTML = `<h3>Classement</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">PNJ</small>' : ''}${r.bounty ? ' <small style="color:var(--gold)">prime</small>' : ''}${r.traitor ? ' <small style="color:var(--pink)">traître</small>' : ''}</span><span class="s">niv ${r.level} · ét. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
+  $('lb').innerHTML = `<h3>Leaderboard</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">NPC</small>' : ''}${r.bounty ? ' <small style="color:var(--gold)">bounty</small>' : ''}${r.traitor ? ' <small style="color:var(--pink)">traitor</small>' : ''}</span><span class="s">lvl ${r.level} · fl. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
   // Vote
   const v = s.vote;
   const voteKey = v ? `${v.title ?? ''}|${v.options.map((o) => o.key).join(',')}` : '';
   if (voteKey && voteKey !== lastVoteKey) cue('horn', 0.8);
   lastVoteKey = voteKey;
   $('vote').classList.toggle('hidden', !v);
-  if (v) $('vote').innerHTML = `<div class="t">${v.title ? `${esc(v.title)} : !vote &lt;n°&gt;, encore ${v.turnsLeft} tour(s)` : `Votez dans le chat, encore ${v.turnsLeft} tour(s)`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
+  if (v) $('vote').innerHTML = `<div class="t">${v.title ? `${esc(v.title)}: !vote &lt;#&gt;, ${v.turnsLeft} turn(s) left` : `Vote in chat, ${v.turnsLeft} turn(s) left`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
   // Pari éclair, grand pari et meilleurs parieurs
   const b = s.bet;
   const betKey = b ? b.title : '';
@@ -347,22 +348,22 @@ function renderHud(s: PlayerViewMsg) {
   $('bet').classList.toggle('hidden', !b && !s.grandBet?.open);
   if (b) {
     const tot = Math.max(1, b.oui + b.non);
-    $('bet').innerHTML = `<div class="t">Pari éclair ${b.closesInSec ? `: ${b.closesInSec} s pour miser` : ': mises fermées'}</div><div class="q">${esc(b.title)}</div>
-      <div class="bar"><span class="oui" style="width:${(100 * b.oui) / tot}%">oui ${b.oui}</span><span class="non" style="width:${(100 * b.non) / tot}%">non ${b.non}</span></div>
-      <small>!parie oui &lt;mise&gt; · !parie non &lt;mise&gt; · ${b.bettors} parieur(s)</small>`;
+    $('bet').innerHTML = `<div class="t">Flash bet${b.closesInSec ? `: ${b.closesInSec} s to bet` : ': bets closed'}</div><div class="q">${esc(b.title)}</div>
+      <div class="bar"><span class="oui" style="width:${(100 * b.oui) / tot}%">yes ${b.oui}</span><span class="non" style="width:${(100 * b.non) / tot}%">no ${b.non}</span></div>
+      <small>!bet yes &lt;amount&gt; · !bet no &lt;amount&gt; · ${b.bettors} bettor(s)</small>`;
   } else if (s.grandBet?.open) {
-    $('bet').innerHTML = `<div class="t">Grand pari : qui sortira en premier ?</div><div class="q">Cagnotte : ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!parie &lt;pseudo&gt; &lt;mise&gt; · !sponsor &lt;pseudo&gt; potion|or|monstre</small>`;
+    $('bet').innerHTML = `<div class="t">Big bet: who gets out first?</div><div class="q">Pot: ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!bet &lt;name&gt; &lt;amount&gt; · !sponsor &lt;name&gt; potion|gold|monster</small>`;
   }
   // Appel à jouer
   const tips = [
-    'Tape <b>!join</b> dans le chat pour entrer dans le donjon',
-    'Classes : <b>!join barbare</b>, <b>chevalier</b>, <b>voleur</b> ou <b>mage</b>',
-    s.publicUrl ? 'Sur la carte, ton pseudo Twitch + <b>!lien</b> dans le chat : tu contrôles ton perso' : 'Une commande par tour : c\'est la dernière tapée qui compte',
-    s.effects.bounty ? `Prime sur <b>${esc(s.effects.bounty.target)}</b> : ${s.effects.bounty.gold} po` : 'Attaquer un allié = trahison (et tout le monde le saura)',
+    'Type <b>!join</b> in chat to enter the dungeon',
+    'Classes: <b>!join barbarian</b>, <b>knight</b>, <b>rogue</b> or <b>mage</b>',
+    s.publicUrl ? 'On the map page, your Twitch name + <b>!link</b> in chat: you control your character' : 'One command per turn: the last one typed counts',
+    s.effects.bounty ? `Bounty on <b>${esc(s.effects.bounty.target)}</b>: ${s.effects.bounty.gold} gold` : 'Attacking an ally = betrayal (and everyone will know)',
   ];
   const tip = tips[Math.floor(Date.now() / 8000) % tips.length];
   $('cta').innerHTML = s.publicUrl
-    ? `<div class="url">Ta carte perso : <b>${esc(s.publicUrl.replace(/^https:\/\//, ''))}</b> <small>(ton pseudo Twitch)</small></div><div>${tip}</div>`
+    ? `<div class="url">Your own map: <b>${esc(s.publicUrl.replace(/^https:\/\//, ''))}</b> <small>(use your Twitch name)</small></div><div>${tip}</div>`
     : tip;
 }
 
@@ -398,19 +399,19 @@ function tickHud() {
     const now = Date.now() + clockOffset;
     const view = shown(state);
     const left = Math.max(0, (view.turnEndsAt - now) / 1000);
-    $('turn').textContent = `Tour ${state.turn} · ${Math.ceil(left)} s`;
+    $('turn').textContent = `Turn ${state.turn} · ${Math.ceil(left)} s`;
     $('turn-bar').style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = view.floor?.collapseInSec;
     const lobby = state.lobbyInSec;
     if (lobby !== null && lobby !== undefined) {
       const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
-      $('collapse').textContent = `La partie commence dans ${fmt(rest)} : tapez !join`;
+      $('collapse').textContent = `The game starts in ${fmt(rest)}: type !join`;
     } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
       const st = view.floor?.stairsInSec;
       const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
-      $('collapse').textContent = seal > 0 ? `🔒 Escalier scellé ${fmt(seal)} · effondrement ${fmt(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmt(rest)}`;
+      $('collapse').textContent = seal > 0 ? `🔒 Stairs sealed ${fmt(seal)} · collapse ${fmt(rest)}` : `🔓 Stairs open · collapse in ${fmt(rest)}`;
       $('collapse').classList.toggle('urgent', rest < 60);
       // la cloche sonne une fois quand l'étage affiché entre dans sa dernière minute
       const fn = view.floor?.n ?? -1;
@@ -418,14 +419,14 @@ function tickHud() {
         bellFloor = fn;
         cue('bell', 0.9);
       }
-    } else $('collapse').textContent = view.floor ? 'Chrono en attente d\'un aventurier' : '';
+    } else $('collapse').textContent = view.floor ? 'Timer waiting for an adventurer' : '';
   }
 }
 
 // ------------------------------------------------------------------ démarrage
 (async () => {
   if (!key) {
-    $('load-msg').textContent = 'Il manque la clé de la régie : ouvre /stream.html?cle=<clé> (elle s\'affiche au démarrage du serveur).';
+    $('load-msg').textContent = 'The control-room key is missing: open /stream.html?cle=<key> (it is shown when the server starts).';
     return;
   }
   await assets.load((d, t) => {
@@ -466,7 +467,7 @@ function tickHud() {
       world.render(dt, t);
       tickHud();
     } catch (e) {
-      if (++loopErrors <= 5) console.error('[stream] image non rendue', e); // la télémétrie remonte l'erreur au journal
+      if (++loopErrors <= 5) console.error('[stream] frame not rendered', e); // la télémétrie remonte l'erreur au journal
     } finally {
       requestAnimationFrame(loop);
     }

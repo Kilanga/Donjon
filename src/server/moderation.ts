@@ -11,10 +11,14 @@ const HATE = [
   'nazis?', 'hitler', 'heil', 'sieg', 'kkk', 'shoah', 'kys', 'suicides?', 'suicider?', 'pendez?-?toi', 'tue[sz]?-?toi',
   'kill ?yourself', 'pedophiles?', 'pedos?', 'violer', 'violee?s?', 'viol', 'rape', 'porn\\w*', 'sexe', 'bites?', 'nichons?',
   'sale (?:arabe|noir|juif|renoi|bougnoule|musulman|chinois|gay|pd)s?',
+  // English
+  'chinks?', 'spics?', 'kikes?', 'wetbacks?', 'beaners?', 'gooks?', 'coons?', 'ragheads?', 'towelheads?', 'trann(?:y|ies)', 'dykes?',
+  'neck ?yourself', 'go die', 'rapists?', 'sex', 'cocks?', 'pussy', 'pussies', 'tits', 'cum', 'nudes?', 'blowjobs?',
 ];
 const RUDE = [
   'connard', 'connasse', 'encul\\w*', 'salope', 'putes?', 'putain', 'fdp', 'ntm', 'nique', 'niquer', 'batard', 'fuck\\w*', 'shit',
   'bitch', 'cunt', 'merdeux', 'abruti', 'debile', 'mongol', 'trisomique', 'autiste',
+  'asshole', 'bastard', 'dick', 'dickhead', 'motherfuck\\w*', 'wanker', 'twat', 'prick', 'retard(?:ed|s)?', 'sluts?', 'whores?', 'moron',
 ];
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|fr|net|org|io|gg|tv|ly|be|xyz|ru|me)\b\S*/gi;
 

@@ -152,7 +152,7 @@ export class FxLayer {
           this.burst(dst.x, dst.y - 10, big ? 16 : 7, big ? ['#ffe27a', '#fff6c8', '#ff9a3d'] : ['#ff5a5a', '#ffb0b0'], big ? 70 : 45, now + 90);
         }
         if (big && dst) {
-          this.pops.push({ x: dst.x, y: dst.y - 34, text: 'CRITIQUE !', color: '#ffd65a', t0: now, big: true });
+          this.pops.push({ x: dst.x, y: dst.y - 34, text: 'CRIT!', color: '#ffd65a', t0: now, big: true });
           this.screenFlash = 0.35;
           this.shake = Math.max(this.shake, 5);
         }
@@ -160,13 +160,13 @@ export class FxLayer {
       }
       case 'miss':
         if (fx.src) this.lunges.set(fx.src, { dx: d.x * 6, dy: d.y * 6, t0: now, dur: 200 });
-        if (dst) this.pops.push({ x: dst.x + 6, y: dst.y - 26, text: 'RATÉ', color: '#c9c2d8', t0: now + 80, big: false });
+        if (dst) this.pops.push({ x: dst.x + 6, y: dst.y - 26, text: 'MISS', color: '#c9c2d8', t0: now + 80, big: false });
         break;
       case 'gag':
         if (fx.src && src) {
           this.flashes.set(fx.src, { t0: now, color: 'red' });
           this.knocks.set(fx.src, { dx: 0, dy: 4, t0: now, dur: 260 });
-          this.pops.push({ x: src.x, y: src.y - 34, text: 'AÏE !', color: '#ff8a5a', t0: now, big: true });
+          this.pops.push({ x: src.x, y: src.y - 34, text: 'OUCH!', color: '#ff8a5a', t0: now, big: true });
           this.burst(src.x, src.y - 22, 8, ['#ffe27a', '#ffffff'], 30, now, -10);
         }
         break;
@@ -193,14 +193,14 @@ export class FxLayer {
         for (let i = 0; i < 16; i++) {
           this.particles.push({ x: dst.x + (Math.random() - 0.5) * 16, y: dst.y - Math.random() * 20, vx: (Math.random() - 0.5) * 8, vy: -25 - Math.random() * 30, g: 0, t0: now + i * 30, life: 1200, color: i % 2 ? '#ffd65a' : '#fff6c8', size: 1.5 });
         }
-        this.pops.push({ x: dst.x, y: dst.y - 40, text: 'NIVEAU +1', color: '#ffd65a', t0: now, big: true });
+        this.pops.push({ x: dst.x, y: dst.y - 40, text: 'LEVEL UP', color: '#ffd65a', t0: now, big: true });
         break;
       }
       case 'forge': {
         const at = dst ?? src;
         if (!at) break;
         this.burst(at.x, at.y - 12, 18, ['#ffe27a', '#ff9a3d', '#fff6c8'], 60, now, -10);
-        this.pops.push({ x: at.x, y: at.y - 40, text: fx.label ?? 'FORGÉ', color: '#ffb347', t0: now, big: true });
+        this.pops.push({ x: at.x, y: at.y - 40, text: fx.label ?? 'FORGED', color: '#ffb347', t0: now, big: true });
         break;
       }
       case 'trap': {

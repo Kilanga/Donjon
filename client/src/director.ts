@@ -22,7 +22,7 @@ export class Director {
     this.map = map;
     this.bar = document.createElement('div');
     this.bar.id = 'lower-third';
-    this.bar.innerHTML = '<span class="lt-tag">EN DIRECT</span><span class="lt-text"></span>';
+    this.bar.innerHTML = '<span class="lt-tag">LIVE</span><span class="lt-text"></span>';
     host.appendChild(this.bar);
     map.onManual = () => {
       if (!this.auto && !this.followName) return;

@@ -10,27 +10,27 @@ import type { Game } from './game/engine.js';
 import type { PlayerState, RoomState } from './game/state.js';
 
 const NAMES = [
-  'Brunhilde', 'Gorim Barbe-Grise', 'Elwyn', 'Tobias le Pâle', 'Morgane', 'Krag', 'Sire Bertrand', 'Pippa',
-  'Zoltan', 'Ysolde', 'Fennick', 'Agathe la Rouge', 'Hector', 'Lysandra', 'Bodo', 'Ragnhild', 'Corwin', 'Mélisande',
+  'Brunhilde', 'Gorim Greybeard', 'Elwyn', 'Tobias the Pale', 'Morgana', 'Krag', 'Sir Bertrand', 'Pippa',
+  'Zoltan', 'Ysolde', 'Fennick', 'Agatha the Red', 'Hector', 'Lysandra', 'Bodo', 'Ragnhild', 'Corwin', 'Melisande',
 ];
-const CLOSER_NAMES = ['Gaspard le Traînard', 'Mamie Odette', 'Firmin', 'Hubert le Lent', 'Dame Pétronille', 'Toinou', 'Frère Anselme', 'Bertille'];
+const CLOSER_NAMES = ['Gaspard the Laggard', 'Granny Odette', 'Firmin', 'Hubert the Slow', 'Lady Petronella', 'Tobbin', 'Brother Anselm', 'Bertha'];
 const CLASSES = ['barbare', 'chevalier', 'voleur', 'mage'];
 const LINES = {
   idle: [
-    'Quelqu\'un a vu l\'escalier ?', 'J\'ai entendu un bruit…', 'Ça sent le gobelin par ici.', 'Je suis sûr que c\'était par là.',
-    'Mes bottes prennent l\'eau.', 'Qui a laissé traîner ce crâne ?', 'Encore une salle vide. Super.', 'On reste groupés, hein ?',
+    'Anyone seen the stairs?', 'I heard something…', 'Smells like goblin in here.', 'I swear it was this way.',
+    'My boots are leaking.', 'Who left this skull lying around?', 'Another empty room. Great.', 'We stick together, right?',
   ],
-  fight: ['Pour la gloire !', 'Viens là, sac à PV !', 'Aïe. Bon. Ça va.', 'À moi, à moi !', 'Tu vas voir ce que tu vas voir !'],
-  hurt: ['Je ne me sens pas très bien…', 'Quelqu\'un a une potion ?', 'Je saigne, c\'est normal ?'],
-  loot: ['De l\'or ! Enfin !', 'Ça, c\'est à moi.', 'Joli butin.'],
-  safe: ['Ah, un peu de repos.', 'Marchand, tes prix sont une honte.', 'On respire un peu.'],
-  welcome: ['Bienvenue, l\'aventurier !', 'Enfin du renfort !', 'Fais attention aux pièges.'],
+  fight: ['For glory!', 'Come here, you bag of HP!', 'Ouch. Okay. I\'m fine.', 'To me, to me!', 'You\'re gonna regret this!'],
+  hurt: ['I don\'t feel so good…', 'Anyone got a potion?', 'I\'m bleeding, is that normal?'],
+  loot: ['Gold! Finally!', 'That\'s mine now.', 'Nice loot.'],
+  safe: ['Ah, some rest.', 'Merchant, your prices are a disgrace.', 'Let\'s catch our breath.'],
+  welcome: ['Welcome, adventurer!', 'Reinforcements, at last!', 'Watch out for the traps.'],
   closer: [
-    'Attendez-moi !', 'Dernier sorti, on éteint la lumière.', 'On n\'est pas pressés, nous.', 'Quelqu\'un a vu mes lunettes ?',
-    'Ça tremble un peu, non ?', 'L\'escalier ? Jamais. On fait la fermeture.', 'Je range et j\'arrive.', 'Encore un étage à fermer…',
+    'Wait for me!', 'Last one out turns off the lights.', 'We\'re in no hurry, us.', 'Has anyone seen my glasses?',
+    'Is it shaking a bit, or is it just me?', 'The stairs? Never. We\'re closing up.', 'Just tidying up, coming!', 'Another floor to close down…',
   ],
 };
-const DIR_CMD: Record<Dir, string> = { n: '!nord', s: '!sud', e: '!est', o: '!ouest' };
+const DIR_CMD: Record<Dir, string> = { n: '!north', s: '!south', e: '!east', o: '!west' };
 
 export interface BotHooks {
   /** Exécute une commande pour un PNJ (journal, distribution des évènements). */
@@ -92,7 +92,7 @@ export class BotManager {
       this.visited.delete(pick.key);
     } else if (bots.length < want) {
       const used = new Set(Object.values(this.game.state.players).map((p) => p.name));
-      const name = (closer ? CLOSER_NAMES : NAMES).find((n) => !used.has(n)) ?? `${closer ? 'Traînard' : 'Mercenaire'} ${Math.floor(Math.random() * 900 + 100)}`;
+      const name = (closer ? CLOSER_NAMES : NAMES).find((n) => !used.has(n)) ?? `${closer ? 'Laggard' : 'Mercenary'} ${Math.floor(Math.random() * 900 + 100)}`;
       const cls = CLASSES[Math.floor(Math.random() * CLASSES.length)];
       if (this.game.joinBot(name, cls, closer)) {
         const p = this.game.player(name)!;
@@ -144,15 +144,15 @@ export class BotManager {
 
     // Proposition d'alliance d'un joueur : acceptée si le PNJ ne lui en veut pas (et souvent si c'est un ami)
     const offer = p.allyProposals.map((k) => g.state.players[k]).find((o) => o && !o.bot && (this.hooks.mood?.(p.name, o.key) ?? 0) >= 0);
-    if (offer && !p.allianceId) return `!alliance ${offer.name}`;
-    if (p.statPoints > 0) return `!monte ${p.cls === 'mage' ? 'int' : p.cls === 'voleur' ? 'agi' : 'for'}`;
+    if (offer && !p.allianceId) return `!ally ${offer.name}`;
+    if (p.statPoints > 0) return `!levelup ${p.cls === 'mage' ? 'int' : p.cls === 'voleur' ? 'dex' : 'str'}`;
     const potion = p.items.find((i) => i.tpl === 'potion' || i.tpl === 'grande_potion');
     if (p.hp <= p.maxHp * 0.35 && potion) {
       this.talk(p, 'hurt', 0.5);
-      return `!utilise ${potion.name}`;
+      return `!use ${potion.name}`;
     }
     if (r.type === 'safe') {
-      if (p.hp < p.maxHp) return '!repos';
+      if (p.hp < p.maxHp) return '!rest';
       this.talk(p, 'safe', 0.08);
     }
     if (monsters.length) {
@@ -167,16 +167,16 @@ export class BotManager {
         const dir = this.stepToward(p, f.spawnRoom);
         if (dir) return DIR_CMD[dir];
       }
-      return '!attaque';
+      return '!attack';
     }
     if (r.ground.length || r.groundGold) {
       this.talk(p, 'loot', 0.3);
-      return '!ramasse';
+      return '!pickup';
     }
-    if (r.type === 'tresor' && r.chest === 'ferme') return '!fouille';
+    if (r.type === 'tresor' && r.chest === 'ferme') return '!search';
     const open = g.stairsOpen(f);
-    if (r.stairs && open && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
-    if (r.type !== 'safe' && !r.searchedBy && !r.trapArmed && Math.random() < 0.5) return '!fouille';
+    if (r.stairs && open && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descend';
+    if (r.type !== 'safe' && !r.searchedBy && !r.trapArmed && Math.random() < 0.5) return '!search';
     if (g.state.vote && !g.state.resurrection && !g.state.vote.votes[p.key] && Math.random() < 0.3) return `!vote ${1 + Math.floor(Math.random() * g.state.vote.options.length)}`;
 
     // Déplacement : vers l'escalier si l'étage presse, sinon vers une salle encore inconnue
@@ -198,7 +198,7 @@ export class BotManager {
       }
     }
     if (dest === null) dest = f.rooms[Math.floor(Math.random() * f.rooms.length)].id;
-    if (dest === r.id) return Math.random() < 0.3 ? '!fouille' : null;
+    if (dest === r.id) return Math.random() < 0.3 ? '!search' : null;
     this.talk(p, p.closer ? 'closer' : 'idle', p.closer ? 0.05 : 0.06);
     const dir = this.stepToward(p, dest);
     return dir ? DIR_CMD[dir] : null;

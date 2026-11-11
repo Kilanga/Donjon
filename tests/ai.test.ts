@@ -124,7 +124,7 @@ describe('Narrateur', () => {
     const r = n.talk('a', 'salut');
     expect(r.ok).toBe(true);
     expect(delivered).toHaveLength(1);
-    expect(delivered[0].text).toContain('marchand');
+    expect(delivered[0].text).toContain('merchant');
     const p = game.player('a')!;
     p.roomId = game.floor(1)!.rooms.find((x) => x.type === 'normale')!.id;
     expect(n.talk('a', 'salut').ok).toBe(false);

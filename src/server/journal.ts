@@ -66,7 +66,7 @@ export class Journal {
     try {
       line = JSON.stringify({ t: new Date().toISOString(), k, turn: this.turn(), ...data });
     } catch {
-      line = JSON.stringify({ t: new Date().toISOString(), k, turn: this.turn(), note: 'données non sérialisables' });
+      line = JSON.stringify({ t: new Date().toISOString(), k, turn: this.turn(), note: 'unserializable data' });
     }
     for (const sec of this.secrets) if (sec && sec.length >= 4) line = line.split(sec).join('***');
     // Garde-fou : au-delà de 200 Mo, on n'écrit plus que l'essentiel
@@ -84,7 +84,7 @@ export class Journal {
       fs.appendFileSync(this.file, chunk);
     } catch (e) {
       this.broken = true;
-      process.stderr.write(`[journal] écriture impossible dans ${this.file} : ${String(e)}\n`);
+      process.stderr.write(`[journal] cannot write to ${this.file}: ${String(e)}\n`);
     }
   }
 

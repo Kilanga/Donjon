@@ -7,16 +7,16 @@ export interface ProductionEvent {
 }
 
 export const PRODUCTION_EVENTS: ProductionEvent[] = [
-  { key: 'pluie_or', label: 'Pluie d\'or', desc: 'Des tas d\'or tombent du plafond dans des salles au hasard.' },
-  { key: 'lacher_monstres', label: 'Lâcher de monstres', desc: 'La production libère une fournée de monstres errants.' },
-  { key: 'happy_hour', label: 'Foire aux marchands', desc: 'Marchands à −50 % et réapprovisionnés pendant 10 tours.' },
-  { key: 'resurrection', label: 'Résurrection générale', desc: 'Tous les morts reviennent immédiatement.' },
-  { key: 'prime', label: 'Prime sur le meilleur tueur', desc: 'Une prime en or sur la tête du crawler qui a le plus de kills.' },
-  { key: 'inondation', label: 'Inondation', desc: 'Pendant 5 tours, on glisse : 1 déplacement sur 3 échoue.' },
-  { key: 'festin', label: 'Festin', desc: 'Tous les crawlers vivants récupèrent leurs PV.' },
-  { key: 'pieges_promo', label: 'Pièges à foison', desc: 'Tous les pièges se réarment, et de nouveaux apparaissent.' },
-  { key: 'prolongation', label: 'Prolongation', desc: 'Les étages tiennent 3 minutes de plus.' },
-  { key: 'acceleration', label: 'Accélération', desc: 'Les étages s\'effondrent 2 minutes plus tôt. Pour le spectacle.' },
+  { key: 'pluie_or', label: 'Gold rain', desc: 'Piles of gold fall from the ceiling into random rooms.' },
+  { key: 'lacher_monstres', label: 'Monster release', desc: 'Production lets loose a batch of wandering monsters.' },
+  { key: 'happy_hour', label: 'Merchant fair', desc: 'Merchants at −50% and restocked for 10 turns.' },
+  { key: 'resurrection', label: 'Mass resurrection', desc: 'Every dead crawler comes back right away.' },
+  { key: 'prime', label: 'Bounty on the top killer', desc: 'A gold bounty on the head of the crawler with the most kills.' },
+  { key: 'inondation', label: 'Flood', desc: 'For 5 turns, everyone slips: 1 move in 3 fails.' },
+  { key: 'festin', label: 'Feast', desc: 'Every living crawler gets their HP back.' },
+  { key: 'pieges_promo', label: 'Traps galore', desc: 'Every trap re-arms, and new ones appear.' },
+  { key: 'prolongation', label: 'Overtime', desc: 'Floors hold for 3 more minutes.' },
+  { key: 'acceleration', label: 'Speed-up', desc: 'Floors collapse 2 minutes earlier. For the show.' },
 ];
 
 export const PRODUCTION_BY_KEY: Record<string, ProductionEvent> = Object.fromEntries(PRODUCTION_EVENTS.map((e) => [e.key, e]));

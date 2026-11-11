@@ -67,7 +67,7 @@ describe('loot des morts', () => {
       ev = g.tick((t += 20_000));
     }
     expect(b.alive).toBe(false);
-    expect(ev.some((e) => e.to === 'a' && e.text.includes('!ramasse'))).toBe(true);
+    expect(ev.some((e) => e.to === 'a' && e.text.includes('!pickup'))).toBe(true);
     const goldBefore = a.gold;
     const items = a.items.length;
     g.submit('a', '!fouille', t + 1);

@@ -90,7 +90,7 @@ describe('joueurs', () => {
     a.roomId = b.roomId = normal.id;
     g.submit('a', '!attaque b', T0);
     const ev = g.tick(T0 + 20_000);
-    expect(ev.some((e) => e.to === 'a' && e.text.includes('immunisé'))).toBe(true);
+    expect(ev.some((e) => e.to === 'a' && e.text.includes('protected'))).toBe(true);
   });
 });
 
@@ -132,7 +132,7 @@ describe('alliances et trahisons', () => {
     const g = setup({ immunitySeconds: 0 });
     g.submit('a', '!join voleur', T0);
     g.submit('b', '!join barbare', T0);
-    expect(g.submit('a', '!alliance b', T0).text).toContain('Proposition');
+    expect(g.submit('a', '!alliance b', T0).text).toContain('Offer sent');
     g.submit('b', '!alliance a', T0);
     const a = g.player('a')!;
     const b = g.player('b')!;
@@ -151,9 +151,9 @@ describe('alliances et trahisons', () => {
     for (let i = 0; i < 10 && !hit; i++) {
       g.submit('a', '!attaque b', t);
       const ev = g.tick((t += 20_000));
-      if (ev.some((e) => e.kind === 'trahison' && e.text.includes('po'))) hit = true;
+      if (ev.some((e) => e.kind === 'trahison' && e.text.includes('gold'))) hit = true;
       if (i === 0) {
-        expect(ev.some((e) => e.text.startsWith('TRAHISON'))).toBe(true);
+        expect(ev.some((e) => e.text.startsWith('BETRAYAL'))).toBe(true);
         expect(a.allianceId).toBeNull();
         expect(a.traitorUntilTurn).toBeGreaterThan(0);
       }
@@ -185,7 +185,7 @@ describe('étages', () => {
     g.submit('a', '!join', T0);
     const oldUid = g.floor(1)!.uid;
     const ev = g.tick(T0 + 61_000);
-    expect(ev.some((e) => /EFFONDRE/.test(e.text) && /GAME OVER pour a/.test(e.text))).toBe(true);
+    expect(ev.some((e) => /COLLAPSES/.test(e.text) && /GAME OVER for a/.test(e.text))).toBe(true);
     expect(g.player('a')).toBeUndefined(); // éliminé
     // Il recommence (et un nouveau joueur aussi) à l'étage 1, recreusé à neuf
     expect(g.submit('a', '!join', T0 + 82_000).ok).toBe(true);
@@ -203,7 +203,7 @@ describe('étages', () => {
     p.gold = 50;
     const weapon = p.weapon;
     const ev = g.tick(T0 + 61_000);
-    expect(ev.some((e) => e.text.includes('traverse le plancher'))).toBe(true);
+    expect(ev.some((e) => e.text.includes('crashes through the floor'))).toBe(true);
     expect(p.alive).toBe(true);
     expect(p.floor).toBe(2);
     expect(p.gold).toBe(30); // 40 % perdus
@@ -232,7 +232,7 @@ describe('étages', () => {
     // Il se descelle à mi-parcours (floorMinutes − stairsOpenMinutes), avec une annonce
     const open = T0 + (DEFAULT_CONFIG.floorMinutes - DEFAULT_CONFIG.stairsOpenMinutes) * 60_000;
     const ev = g.tick(open + 1000);
-    expect(ev.some((e) => /SE DESCELLE/.test(e.text))).toBe(true);
+    expect(ev.some((e) => /UNSEALED/.test(e.text))).toBe(true);
     p.alive = true;
     p.hp = p.maxHp;
     p.roomId = f.bossRoom;

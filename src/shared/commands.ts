@@ -1,4 +1,4 @@
-// Analyse des commandes du chat (français + alias anglais).
+// Chat command parsing (English commands, French aliases kept).
 
 export type CommandName =
   | 'join'
@@ -30,32 +30,33 @@ export interface ParsedCommand {
   raw: string;
 }
 
+// English first (shown everywhere), French kept as silent aliases for French-speaking viewers.
 const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   join: { name: 'join' }, rejoindre: { name: 'join' },
-  nord: { name: 'move', arg: 'n' }, north: { name: 'move', arg: 'n' }, n: { name: 'move', arg: 'n' },
-  sud: { name: 'move', arg: 's' }, south: { name: 'move', arg: 's' }, s: { name: 'move', arg: 's' },
-  est: { name: 'move', arg: 'e' }, east: { name: 'move', arg: 'e' }, e: { name: 'move', arg: 'e' },
-  ouest: { name: 'move', arg: 'o' }, west: { name: 'move', arg: 'o' }, o: { name: 'move', arg: 'o' }, w: { name: 'move', arg: 'o' },
-  descendre: { name: 'descend' }, descend: { name: 'descend' }, down: { name: 'descend' },
-  attaque: { name: 'attack' }, attaquer: { name: 'attack' }, attack: { name: 'attack' }, atk: { name: 'attack' },
-  trahis: { name: 'attack' }, betray: { name: 'attack' },
-  fouille: { name: 'search' }, fouiller: { name: 'search' }, search: { name: 'search' },
-  ramasse: { name: 'pickup' }, ramasser: { name: 'pickup' }, pickup: { name: 'pickup' }, take: { name: 'pickup' },
-  utilise: { name: 'use' }, utiliser: { name: 'use' }, use: { name: 'use' }, bois: { name: 'use' }, drink: { name: 'use' },
-  equipe: { name: 'equip' }, equiper: { name: 'equip' }, equip: { name: 'equip' },
-  achete: { name: 'buy' }, acheter: { name: 'buy' }, buy: { name: 'buy' },
-  parie: { name: 'bet' }, parier: { name: 'bet' }, pari: { name: 'bet' }, bet: { name: 'bet' }, mise: { name: 'bet' },
-  sponsor: { name: 'sponsor' }, sponsorise: { name: 'sponsor' }, offre: { name: 'sponsor' }, cadeau: { name: 'sponsor' },
-  faveur: { name: 'favor' }, points: { name: 'favor' }, favor: { name: 'favor' },
-  forge: { name: 'forge' }, forger: { name: 'forge' }, ameliore: { name: 'forge' }, ameliorer: { name: 'forge' }, upgrade: { name: 'forge' },
-  vends: { name: 'sell' }, vendre: { name: 'sell' }, sell: { name: 'sell' },
-  marchand: { name: 'shop' }, shop: { name: 'shop' },
-  repos: { name: 'rest' }, rest: { name: 'rest' },
-  alliance: { name: 'ally' }, allie: { name: 'ally' }, ally: { name: 'ally' },
-  quitte: { name: 'leave' }, quitter: { name: 'leave' }, leave: { name: 'leave' },
-  monte: { name: 'levelup' }, levelup: { name: 'levelup' }, up: { name: 'levelup' },
-  statut: { name: 'status' }, status: { name: 'status' }, stats: { name: 'status' },
-  aide: { name: 'help' }, help: { name: 'help' }, commandes: { name: 'help' }, commands: { name: 'help' }, regles: { name: 'help' },
+  north: { name: 'move', arg: 'n' }, n: { name: 'move', arg: 'n' }, nord: { name: 'move', arg: 'n' },
+  south: { name: 'move', arg: 's' }, s: { name: 'move', arg: 's' }, sud: { name: 'move', arg: 's' },
+  east: { name: 'move', arg: 'e' }, e: { name: 'move', arg: 'e' }, est: { name: 'move', arg: 'e' },
+  west: { name: 'move', arg: 'o' }, w: { name: 'move', arg: 'o' }, ouest: { name: 'move', arg: 'o' }, o: { name: 'move', arg: 'o' },
+  descend: { name: 'descend' }, down: { name: 'descend' }, stairs: { name: 'descend' }, descendre: { name: 'descend' },
+  attack: { name: 'attack' }, atk: { name: 'attack' }, hit: { name: 'attack' }, betray: { name: 'attack' },
+  attaque: { name: 'attack' }, attaquer: { name: 'attack' }, trahis: { name: 'attack' },
+  search: { name: 'search' }, loot: { name: 'search' }, fouille: { name: 'search' }, fouiller: { name: 'search' },
+  pickup: { name: 'pickup' }, take: { name: 'pickup' }, grab: { name: 'pickup' }, ramasse: { name: 'pickup' }, ramasser: { name: 'pickup' },
+  use: { name: 'use' }, drink: { name: 'use' }, utilise: { name: 'use' }, utiliser: { name: 'use' }, bois: { name: 'use' },
+  equip: { name: 'equip' }, wear: { name: 'equip' }, equipe: { name: 'equip' }, equiper: { name: 'equip' },
+  buy: { name: 'buy' }, achete: { name: 'buy' }, acheter: { name: 'buy' },
+  bet: { name: 'bet' }, wager: { name: 'bet' }, parie: { name: 'bet' }, parier: { name: 'bet' }, pari: { name: 'bet' }, mise: { name: 'bet' },
+  sponsor: { name: 'sponsor' }, gift: { name: 'sponsor' }, sponsorise: { name: 'sponsor' }, offre: { name: 'sponsor' }, cadeau: { name: 'sponsor' },
+  favor: { name: 'favor' }, favour: { name: 'favor' }, points: { name: 'favor' }, faveur: { name: 'favor' },
+  forge: { name: 'forge' }, upgrade: { name: 'forge' }, forger: { name: 'forge' }, ameliore: { name: 'forge' }, ameliorer: { name: 'forge' },
+  sell: { name: 'sell' }, vends: { name: 'sell' }, vendre: { name: 'sell' },
+  shop: { name: 'shop' }, merchant: { name: 'shop' }, marchand: { name: 'shop' },
+  rest: { name: 'rest' }, repos: { name: 'rest' },
+  ally: { name: 'ally' }, alliance: { name: 'ally' }, allie: { name: 'ally' },
+  leave: { name: 'leave' }, quitte: { name: 'leave' }, quitter: { name: 'leave' },
+  levelup: { name: 'levelup' }, up: { name: 'levelup' }, train: { name: 'levelup' }, monte: { name: 'levelup' },
+  status: { name: 'status' }, stats: { name: 'status' }, statut: { name: 'status' },
+  help: { name: 'help' }, commands: { name: 'help' }, rules: { name: 'help' }, aide: { name: 'help' }, commandes: { name: 'help' }, regles: { name: 'help' },
   vote: { name: 'vote' }, voter: { name: 'vote' },
 };
 
@@ -91,7 +92,7 @@ function distance(a: string, b: string): number {
   return d[a.length][b.length];
 }
 
-/** Pour une commande inconnue, la commande la plus proche (« !attque Kilak » → « !attaque Kilak »), sinon null. */
+/** For an unknown command, the closest one ("!atack Kilak" → "!attack Kilak"), else null. */
 export function suggestCommand(raw: string): string | null {
   const text = raw.trim();
   if (!text.startsWith('!')) return null;
@@ -114,22 +115,22 @@ export function suggestCommand(raw: string): string | null {
 }
 
 export const HELP_TEXT = [
-  '!join [barbare|chevalier|voleur|mage] — entrer dans le donjon',
-  '!nord !sud !est !ouest — changer de salle',
-  '!attaque [cible] — attaquer un monstre ou un joueur',
-  '!fouille — fouiller la salle, ouvrir un coffre, désarmer un piège',
-  '!ramasse [objet] — ramasser ce qui traîne au sol',
-  '!utilise <objet> / !equipe <objet> — utiliser ou équiper',
-  '!marchand, !achete <n°>, !vends <objet> — commerce (safe room)',
-  '!repos — se soigner (safe room)',
-  '!forge arme / !forge armure — améliorer son équipement chez le forgeron (+1, jusqu\'à +3, contre de l\'or)',
-  '!parle <message> — discuter avec le marchand (safe room)',
-  '!alliance <joueur> / !quitte — former ou quitter une alliance',
-  '!monte <for|agi|int|cha> — dépenser un point de stat',
-  '!descendre — prendre l\'escalier (boss vaincu, et escalier descellé : dernière moitié du chrono)',
-  '!vote <n°> — voter pour l\'événement proposé par la production (ou pour ressusciter un mort après un effondrement : une seule voix par pseudo)',
-  '!parie <pseudo> <mise> — grand pari : qui sortira en premier ? · !parie oui|non <mise> — pari éclair en cours',
-  '!sponsor <pseudo> potion|or|monstre — offrir un cadeau (ou un sale tour) avec tes points de faveur · !faveur — tes points',
-  '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',
-  '!commandes ou !aide — afficher cette liste',
+  '!join [barbarian|knight|rogue|mage] — enter the dungeon',
+  '!north !south !east !west — move to another room',
+  '!attack [target] — attack a monster or a player',
+  '!search — search the room, open a chest, disarm a trap',
+  '!pickup [item] — pick up what is lying on the floor',
+  '!use <item> / !equip <item> — use or equip',
+  '!shop, !buy <#>, !sell <item> — trade (safe room)',
+  '!rest — heal up (safe room)',
+  '!forge weapon / !forge armor — upgrade your gear at the blacksmith (+1, up to +3, for gold)',
+  '!talk <message> — chat with the merchant (safe room)',
+  '!ally <player> / !leave — form or leave an alliance',
+  '!levelup <str|dex|int|cha> — spend a stat point',
+  '!descend — take the stairs (boss dead and stairs unsealed: second half of the timer)',
+  '!vote <#> — vote for the production\'s event (or to bring back a dead player after a collapse: one vote per name)',
+  '!bet <name> <amount> — big bet: who gets out first? · !bet yes|no <amount> — current flash bet',
+  '!sponsor <name> potion|gold|monster — send a gift (or a dirty trick) with your favor points · !favor — your points',
+  '!bug <description> / !feedback <message> — report a problem or share your opinion',
+  '!commands or !help — show this list',
 ];

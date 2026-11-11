@@ -851,7 +851,7 @@ export class World {
         if (fx2) for (let i = 0; i < 3; i++) this.strike(fx2, true, i * 650);
         if (src) {
           setTimeout(() => this.play(src, 'Cheer', true), 1900);
-          src.badge = { text: fx.label ?? 'Équipement amélioré', until: now + Math.max(4000, this.turnLen - 400) };
+          src.badge = { text: fx.label ?? 'Gear upgraded', until: now + Math.max(4000, this.turnLen - 400) };
         }
         break;
       }
@@ -997,7 +997,7 @@ export class World {
       this.onShot?.(r ? roomLabel(r) : '');
     } else if (this.shot.roomId !== null && curScore < 8 && (elapsed > 6000 || curDead)) {
       this.shot = { roomId: null, since: now };
-      this.onShot?.('Plan large');
+      this.onShot?.('Wide shot');
     }
     const room = this.shot.roomId !== null ? f.rooms.find((x) => x.id === this.shot.roomId) : undefined;
     this.wide = !room;
@@ -1242,7 +1242,7 @@ export class World {
 
 export function roomLabel(r: RoomView): string {
   if (r.forge) return 'Forge';
-  return { normale: 'Salle', safe: 'Safe room', piege: 'Salle piégée', tresor: 'Salle du trésor', arene: 'Arène', boss: 'Salle du boss' }[r.type] + ` ${r.id}`;
+  return { normale: 'Room', safe: 'Safe room', piege: 'Trapped room', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' }[r.type] + ` ${r.id}`;
 }
 
 function escapeHtml(s: string) {

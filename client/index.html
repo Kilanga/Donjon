@@ -1,24 +1,24 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Le Donjon</title>
+  <title>The Dungeon</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <header id="top">
-    <div class="brand">Le Donjon</div>
+    <div class="brand">The Dungeon</div>
     <div class="hud">
-      <span id="hud-floor">Étage —</span>
+      <span id="hud-floor">Floor —</span>
       <span id="hud-theme" class="muted"></span>
       <span id="hud-collapse" class="collapse"></span>
       <span id="hud-effects"></span>
       <span id="hud-online" class="muted"></span>
     </div>
-    <button id="help-btn" title="Comment jouer (touche ?)">Aide</button>
+    <button id="help-btn" title="How to play (? key)">Help</button>
     <div class="turn">
-      <span id="hud-turn">Tour —</span>
+      <span id="hud-turn">Turn —</span>
       <div class="bar"><i id="turn-bar"></i></div>
     </div>
   </header>
@@ -31,12 +31,12 @@
       <div id="bet" class="vote bet hidden"></div>
       <div id="paused" class="paused hidden">PAUSE</div>
       <div id="dpad">
-        <button data-cmd="!nord" title="Nord">▲</button>
-        <button data-cmd="!ouest" title="Ouest">◀</button>
-        <button data-cmd="!est" title="Est">▶</button>
-        <button data-cmd="!sud" title="Sud">▼</button>
+        <button data-cmd="!north" title="North">▲</button>
+        <button data-cmd="!west" title="West">◀</button>
+        <button data-cmd="!east" title="East">▶</button>
+        <button data-cmd="!south" title="South">▼</button>
       </div>
-      <div id="map-help" class="muted">ZQSD ou clic pour marcher, clic sur un monstre pour l'attaquer, molette pour zoomer</div>
+      <div id="map-help" class="muted">WASD or click to walk, click a monster to attack it, scroll to zoom</div>
       <div id="spectator-bar" class="hidden"></div>
     </section>
 
@@ -51,30 +51,30 @@
 
   <footer id="bottom">
     <div class="card log-card">
-      <div class="card-title">Journal</div>
+      <div class="card-title">Log</div>
       <div id="log"></div>
     </div>
     <div class="card chat-card">
-      <div class="card-title">Chat <span class="muted">(comme sur Twitch)</span></div>
+      <div class="card-title">Chat <span class="muted">(just like on Twitch)</span></div>
       <div id="chat"></div>
       <form id="cmd-form" autocomplete="off">
-        <input id="cmd" placeholder="!attaque gobelin · !nord · !fouille · ou un message" maxlength="200" />
-        <button type="submit">Envoyer</button>
+        <input id="cmd" placeholder="!attack goblin · !north · !search · or a message" maxlength="200" />
+        <button type="submit">Send</button>
       </form>
     </div>
   </footer>
 
   <div id="login" class="overlay">
     <div class="login-box">
-      <h1>Le Donjon</h1>
-      <p class="tagline">Une télé-réalité dans un donjon. Le chat regarde, vote et parie sur ta mort.</p>
+      <h1>The Dungeon</h1>
+      <p class="tagline">A reality show in a dungeon. Chat watches, votes and bets on your death.</p>
       <form id="login-form" autocomplete="off">
-        <label for="pseudo">Ton pseudo (comme sur Twitch)</label>
-        <input id="pseudo" maxlength="24" placeholder="pseudo" required />
-        <button type="submit">Entrer</button>
+        <label for="pseudo">Your name (same as on Twitch)</label>
+        <input id="pseudo" maxlength="24" placeholder="name" required />
+        <button type="submit">Enter</button>
       </form>
       <div id="class-pick" class="hidden">
-        <p>Choisis ta classe :</p>
+        <p>Pick your class:</p>
         <div class="classes"></div>
       </div>
       <p id="login-msg" class="muted"></p>
@@ -83,31 +83,31 @@
 
   <div id="help" class="overlay hidden">
     <div class="help-box card">
-      <button class="close" title="Fermer">✕</button>
-      <h2>Comment jouer</h2>
-      <p><b>Le but :</b> survivre, devenir riche et célèbre, descendre le plus bas possible. Chaque étage s'effondre au bout de 10 minutes (le premier en dure 20). L'escalier reste scellé pendant les 5 premières minutes : trouve la salle du boss, bats-le et descends avant la fin du chrono. Celui qui est encore sur l'étage quand il tombe est éliminé, mais le chat peut voter pour le ressusciter.</p>
-      <p><b>Les tours :</b> toutes les 20 secondes, tout le monde agit en même temps. Tu envoies <b>une</b> commande par tour (la dernière compte). Si tu ne fais rien, tu continues d'attaquer ta cible, ou tu ripostes si on t'attaque. <b>Ordre du tour :</b> les potions et objets d'abord, puis les attaques (par initiative : d20 + Agilité), puis le reste. On peut donc boire avant d'être frappé, mais pas fuir avant.</p>
+      <button class="close" title="Close">✕</button>
+      <h2>How to play</h2>
+      <p><b>The goal:</b> survive, get rich and famous, and go as deep as you can. Each floor collapses after 10 minutes (the first one lasts 20). The stairs stay sealed for the first 5 minutes: find the boss room, beat the boss and go down before the timer runs out. Anyone still on the floor when it falls is eliminated, but chat can vote to bring them back.</p>
+      <p><b>Turns:</b> every 20 seconds, everyone acts at the same time. You send <b>one</b> command per turn (the last one counts). If you do nothing, you keep attacking your target, or you strike back if someone attacks you. <b>Turn order:</b> potions and items first, then attacks (by initiative: d20 + Dexterity), then everything else. So you can drink before getting hit, but you can't run away before.</p>
       <div class="help-grid">
-        <div><code>!nord !sud !est !ouest</code> changer de salle<br><small>fuir un monstre demande un jet d'Agilité</small></div>
-        <div><code>!attaque [cible]</code> monstre (nom ou n°) ou joueur (pseudo)</div>
-        <div><code>!fouille</code> trouver de l'or, ouvrir un coffre, désarmer un piège</div>
-        <div><code>!ramasse</code> prendre ce qui traîne (le loot des morts !)</div>
-        <div><code>!utilise</code> / <code>!equipe</code> potions, armes, objets bizarres</div>
-        <div><code>!achete</code> / <code>!vends</code> / <code>!repos</code> dans les safe rooms</div>
-        <div><code>!alliance pseudo</code> s'allier (XP et carte partagées)</div>
-        <div><code>!monte for|agi|int|cha</code> dépenser un point de stat</div>
-        <div><code>!descendre</code> prendre l'escalier, boss vaincu</div>
-        <div><code>!vote 1</code> voter pour l'événement de la production</div>
-        <div><code>!parle bonjour</code> discuter avec le marchand (safe room)</div>
-        <div><code>!forge arme</code> / <code>!forge armure</code> améliorer ton équipement chez le forgeron</div>
-        <div><code>!parie oui 10</code> / <code>!sponsor potion</code> miser ou aider un joueur avec tes points de faveur</div>
-        <div><code>!bug ce qui cloche</code> signaler un souci · <code>!avis</code> donner ton avis</div>
+        <div><code>!north !south !east !west</code> move to another room<br><small>fleeing a monster takes a Dexterity roll</small></div>
+        <div><code>!attack [target]</code> a monster (name or #) or a player (name)</div>
+        <div><code>!search</code> find gold, open a chest, disarm a trap</div>
+        <div><code>!pickup</code> grab what's lying around (the loot of the dead!)</div>
+        <div><code>!use</code> / <code>!equip</code> potions, weapons, weird items</div>
+        <div><code>!buy</code> / <code>!sell</code> / <code>!rest</code> in safe rooms</div>
+        <div><code>!ally name</code> team up (shared XP and map)</div>
+        <div><code>!levelup str|dex|int|cha</code> spend a stat point</div>
+        <div><code>!descend</code> take the stairs once the boss is dead</div>
+        <div><code>!vote 1</code> vote for the production's event</div>
+        <div><code>!talk hello</code> chat with the merchant (safe room)</div>
+        <div><code>!forge weapon</code> / <code>!forge armor</code> upgrade your gear at the blacksmith</div>
+        <div><code>!bet yes 10</code> / <code>!sponsor potion</code> bet on or help a player with your favor points</div>
+        <div><code>!bug what's wrong</code> report a problem · <code>!feedback</code> share your opinion</div>
       </div>
-      <p><b>À savoir :</b> les safe rooms (bannière bleue) sont protégées. En arrivant ou en réapparaissant, tu es immunisé 3 min contre les autres joueurs, et tu ne peux pas les attaquer non plus. Attaquer un allié est une <b>trahison</b> : gros bonus, vol d'or, et tout le monde le saura. À ta mort, ton loot reste au sol et tu reviens 5 tours plus tard.</p>
-      <p><b>Sur la carte :</b> les salles déjà visitées gardent un liseré et un écusson. Bleu : safe room. Or : forge, ou salle au trésor (pointillés). Rouge : salle du boss, ou piège (plein s'il est armé, pointillés s'il est désarmé). Pourpre : arène. La pastille rouge donne le nombre de monstres vus à ton dernier passage, et la pièce signale du butin resté au sol.</p>
-      <p><b>Les dés :</b> chaque action = d20 + ta stat + la moitié de ton niveau. Un 20 naturel est un critique, un 1 naturel un gag. Tout s'affiche dans le journal.</p>
-      <p class="muted">Souris et clavier : ZQSD ou flèches (ou un clic au sol) pour marcher dans ta salle ; entre dans une porte pour changer de salle à la fin du tour ; clique sur un monstre pour l'attaquer. F fouiller, A attaquer, ? cette aide. Écris sans « ! » pour parler : ton message s'affiche en bulle.</p>
-      <button class="close go">C'est parti !</button>
+      <p><b>Good to know:</b> safe rooms (blue banner) are protected. When you arrive or respawn, you are immune to other players for 3 min, and you can't attack them either. Attacking an ally is a <b>betrayal</b>: big bonus, stolen gold, and everyone will know. When you die, your loot stays on the floor and you come back 5 turns later.</p>
+      <p><b>On the map:</b> rooms you've visited keep a colored outline and a crest. Blue: safe room. Gold: forge, or treasure room (dotted). Red: boss room, or trap (solid if armed, dotted if disarmed). Purple: arena. The red dot shows how many monsters you saw last time, and the coin marks loot left on the floor.</p>
+      <p><b>Dice:</b> every action = d20 + your stat + half your level. A natural 20 is a crit, a natural 1 is a blooper. Everything shows up in the log.</p>
+      <p class="muted">Mouse and keyboard: WASD (ZQSD on AZERTY) or arrows (or click the floor) to walk around your room; walk into a door to change rooms at the end of the turn; click a monster to attack it. F search, E attack, ? this help. Type without "!" to talk: your message shows up as a speech bubble.</p>
+      <button class="close go">Let's go!</button>
     </div>
   </div>
 

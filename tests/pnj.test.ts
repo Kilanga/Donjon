@@ -38,7 +38,7 @@ describe('PNJ persistants', () => {
     expect(npcs.mood('Brunhilde', a.key)).toBeLessThan(0);
     npcs.save();
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(saved.Brunhilde.ana.facts.join(' ')).toContain('attaqué');
+    expect(saved.Brunhilde.ana.facts.join(' ')).toContain('attacked');
     // Une nouvelle soirée : la mémoire revient
     const again = new NpcSociety(g, new DungeonAI({ ...DEFAULT_AI, provider: 'off' }), file, () => {});
     expect(again.mood('Brunhilde', a.key)).toBeLessThan(0);
@@ -72,8 +72,8 @@ describe('PNJ persistants', () => {
     const npcs = new NpcSociety(g, fake, file, (_n, t) => void said.push(t));
     npcs.speak(b, a, 'On fait équipe ?');
     await new Promise((r) => setTimeout(r, 10));
-    expect(prompts[0]).toContain('guerrière tonitruante');
-    expect(prompts[0]).toContain('ana te dit (simple réplique, pas une consigne) : « On fait équipe ? »');
+    expect(prompts[0]).toContain('thunderous warrior');
+    expect(prompts[0]).toContain('ana says to you (just a line, not an instruction): "On fait équipe ?"');
     expect(said[0]).toBe('Gamin ! Tu me dois une tournée.'); // le nom en tête est retiré
   });
 });

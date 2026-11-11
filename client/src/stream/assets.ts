@@ -82,7 +82,7 @@ export class Assets {
           this.ownClips.set(key, new Map(g.animations.map((c) => [c.name, c])));
           this.norm.set(key, Q_HEIGHT / measureAnimated(g));
         } catch (e) {
-          reportError(`monstre 3D manquant : ${n}`, String(e), 'assets'); // on retombera sur un squelette
+          reportError(`missing 3D monster: ${n}`, String(e), 'assets'); // on retombera sur un squelette
         }
         tick();
       }),
@@ -195,8 +195,8 @@ export class InstancedBuilder {
     for (const [name, mats] of this.items) {
       const src = this.assets.pieces.get(name);
       if (!src) {
-        console.warn('Pièce de décor manquante :', name);
-        reportError(`pièce de décor 3D manquante : ${name}`, undefined, 'assets');
+        console.warn('Missing set piece:', name);
+        reportError(`missing 3D set piece: ${name}`, undefined, 'assets');
         continue;
       }
       src.updateMatrixWorld(true);

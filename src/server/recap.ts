@@ -20,15 +20,15 @@ export function recapHtml(game: Game, turnSeconds: number, legends: Legend[] = [
   const deaths = st.events.filter((e) => e.kind === 'mort');
   const causes = new Map<string, number>();
   for (const d of deaths) {
-    const c = d.text.split('Cause : ')[1]?.split('.')[0]?.trim() ?? 'inconnue';
+    const c = d.text.split('Cause: ')[1]?.split('.')[0]?.trim() ?? 'unknown';
     causes.set(c, (causes.get(c) ?? 0) + 1);
   }
   const topCauses = [...causes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const minutes = Math.round((st.turn * turnSeconds) / 60);
   const deepest = Math.max(1, ...rows.map((r) => r.deepest));
 
-  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Le Donjon — bilan de la soirée</title>
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Dungeon — tonight's recap</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@800&family=Alegreya:ital,wght@0,700;1,400&family=Alegreya+Sans:wght@400;700&display=swap">
 <style>
 body{margin:0;background:#e2ded3;color:#231d19;font:16px/1.5 'Alegreya Sans',system-ui,sans-serif;font-variant-numeric:lining-nums tabular-nums;padding:32px 20px}
@@ -50,18 +50,18 @@ tr:nth-child(2) td{color:#a3161b;font-weight:700}
 .causes{display:flex;flex-wrap:wrap;gap:8px}
 .causes span{background:#fbefec;border:1px solid #c99a94;color:#7a1014;border-radius:2px;padding:2px 9px;font-size:14px}
 </style></head><body><main>
-<h1>Le Donjon</h1>
-<div class="sub">Bilan de la soirée · ${st.turn} tours (~${minutes} min) · ${rows.length} crawlers · étage le plus profond : ${deepest} · ${deaths.length} morts</div>
+<h1>The Dungeon</h1>
+<div class="sub">Tonight's recap · ${st.turn} turns (~${minutes} min) · ${rows.length} crawlers · deepest floor: ${deepest} · ${deaths.length} deaths</div>
 <div class="titles">
-${top('deepest', 'Le plus profond', 'étages')}${top('level', 'Le plus fort', 'niveaux')}${top('kills', 'Boucher', 'kills')}
-${top('deaths', 'Abonné à la mort', 'morts')}${top('betrayals', 'Traître en chef', 'trahisons')}${top('gold', 'Le plus riche', 'po')}
+${top('deepest', 'Deepest', 'floors')}${top('level', 'Strongest', 'levels')}${top('kills', 'Butcher', 'kills')}
+${top('deaths', 'Death subscriber', 'deaths')}${top('betrayals', 'Traitor-in-chief', 'betrayals')}${top('gold', 'Richest', 'gold')}
 </div>
-${legends.length ? `<h2>Légendes du Donjon</h2><table><tr><th>Date</th><th>Crawler</th><th>Classe</th><th>Niv.</th><th>Kills</th><th>Morts</th><th>Étage</th></tr>${[...legends].reverse().map((l) => `<tr><td>${new Date(l.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(l.name)}${l.bot ? ' <small>(PNJ)</small>' : ''}</td><td>${CLASSES[l.cls].label}</td><td>${l.level}</td><td>${l.kills}</td><td>${l.deaths}</td><td>${l.floor}</td></tr>`).join('')}</table>` : ''}
-<h2>Classement</h2>
-<table><tr><th>#</th><th>Crawler</th><th>Classe</th><th>Niv.</th><th>Étage max</th><th>Kills</th><th>Morts</th><th>Trahisons</th><th>Or</th></tr>
+${legends.length ? `<h2>Dungeon legends</h2><table><tr><th>Date</th><th>Crawler</th><th>Class</th><th>Lvl</th><th>Kills</th><th>Deaths</th><th>Floor</th></tr>${[...legends].reverse().map((l) => `<tr><td>${new Date(l.date).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(l.name)}${l.bot ? ' <small>(NPC)</small>' : ''}</td><td>${CLASSES[l.cls].label}</td><td>${l.level}</td><td>${l.kills}</td><td>${l.deaths}</td><td>${l.floor}</td></tr>`).join('')}</table>` : ''}
+<h2>Leaderboard</h2>
+<table><tr><th>#</th><th>Crawler</th><th>Class</th><th>Lvl</th><th>Deepest</th><th>Kills</th><th>Deaths</th><th>Betrayals</th><th>Gold</th></tr>
 ${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${CLASSES[r.cls].label}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td><td>${r.betrayals}</td><td>${r.gold}</td></tr>`).join('')}
 </table>
-${moments.length ? `<h2>Moments forts</h2>${moments.map((e) => `<div class="m"><small>Tour ${e.turn}</small>${esc(e.text)}</div>`).join('')}` : ''}
-${topCauses.length ? `<h2>Causes de décès</h2><div class="causes">${topCauses.map(([c, n]) => `<span>${esc(c)} · ${n}</span>`).join('')}</div>` : ''}
+${moments.length ? `<h2>Highlights</h2>${moments.map((e) => `<div class="m"><small>Turn ${e.turn}</small>${esc(e.text)}</div>`).join('')}` : ''}
+${topCauses.length ? `<h2>Causes of death</h2><div class="causes">${topCauses.map(([c, n]) => `<span>${esc(c)} · ${n}</span>`).join('')}</div>` : ''}
 </main></body></html>`;
 }

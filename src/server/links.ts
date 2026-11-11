@@ -83,7 +83,7 @@ export class Links<T> {
       writeAtomic(this.file, JSON.stringify(this.data));
       this.dirty = false;
     } catch (e) {
-      console.error('[liens] non enregistrés :', (e as Error).message);
+      console.error('[links] not saved:', (e as Error).message);
     }
   }
 }

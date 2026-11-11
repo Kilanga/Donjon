@@ -31,7 +31,7 @@ describe('forgeron', () => {
     const w = ana.weapon!;
     const hit0 = w.hit ?? 0;
     const dmg0 = w.dmg!;
-    expect(g.submit('ana', '!forge', T0).text).toMatch(/Forgeron/);
+    expect(g.submit('ana', '!forge', T0).text).toMatch(/Blacksmith/);
     let t = T0;
     for (let i = 0; i < 4; i++) {
       g.submit('ana', '!forge arme', t);

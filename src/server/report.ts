@@ -156,8 +156,8 @@ export function buildReport(lines: JournalLine[], files: string[] = []): string 
   const deaths = events.filter((e) => (e.fx as { kind?: string } | undefined)?.kind === 'death');
   const causes = count(deaths, (e) => {
     const m = s(e.text).match(/Cause ?: ([^.]+)/);
-    if (!m) return 'inconnue';
-    return /effondrement/.test(m[1]) ? "effondrement de l'étage" : /piège|trap/i.test(m[1]) ? 'piège' : m[1].trim().replace(/\d+/g, '#');
+    if (!m) return 'unknown';
+    return /effondrement|collapse/i.test(m[1]) ? 'floor collapse' : /piège|trap/i.test(m[1]) ? 'trap' : m[1].trim().replace(/\d+/g, '#');
   });
   out.push(`- Morts de joueurs : ${deaths.length}${causes.length ? ' · causes : ' + causes.slice(0, 10).map(([c, n]) => `${c} (${n})`).join(', ') : ''}`);
   out.push(`- Trahisons : ${events.filter((e) => e.kind === 'trahison').length} · alliances : ${events.filter((e) => e.kind === 'alliance').length} · montées de niveau : ${events.filter((e) => e.kind === 'niveau').length}`);

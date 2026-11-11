@@ -8,7 +8,7 @@ import type { FloorState, MonsterState, RoomState } from './state.js';
 export const DIRS: Dir[] = ['n', 's', 'e', 'o'];
 export const DELTA: Record<Dir, [number, number]> = { n: [0, -1], s: [0, 1], e: [1, 0], o: [-1, 0] };
 export const OPPOSITE: Record<Dir, Dir> = { n: 's', s: 'n', e: 'o', o: 'e' };
-export const DIR_LABEL: Record<Dir, string> = { n: 'nord', s: 'sud', e: 'est', o: 'ouest' };
+export const DIR_LABEL: Record<Dir, string> = { n: 'north', s: 'south', e: 'east', o: 'west' };
 
 export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: () => string): FloorState {
   const count = Math.max(4, roomCount);

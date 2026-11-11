@@ -21,7 +21,7 @@ describe('votes de la production', () => {
     expect(g.voteView('a')!.myVote).toBe(v.options[0].key);
     const label = v.options[0].label.toUpperCase();
     let applied = false;
-    for (let i = 0; i < 3 && !applied; i++) applied = g.tick((t += 20_000)).some((e) => e.text.includes('A TRANCHÉ') && e.text.includes(label));
+    for (let i = 0; i < 3 && !applied; i++) applied = g.tick((t += 20_000)).some((e) => e.text.includes('HAS DECIDED') && e.text.includes(label));
     expect(applied).toBe(true);
     expect(g.state.vote).toBeNull();
   });

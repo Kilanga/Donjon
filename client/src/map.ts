@@ -697,7 +697,7 @@ export class MapRenderer {
   private drawStairsSign(x: number, y: number, w: number, h: number, t: number, seal: number, bossAlive: boolean) {
     const { ctx } = this;
     const dpr = devicePixelRatio;
-    const status = seal < 0 ? '🔒 scellé (saison pas commencée)' : seal > 0 ? `🔒 s'ouvre dans ${Math.floor(seal / 60)}:${String(Math.floor(seal % 60)).padStart(2, '0')}` : bossAlive ? '⚔ battez le boss pour passer' : '🔓 OUVERT : !descendre';
+    const status = seal < 0 ? '🔒 sealed (season not started)' : seal > 0 ? `🔒 opens in ${Math.floor(seal / 60)}:${String(Math.floor(seal % 60)).padStart(2, '0')}` : bossAlive ? '⚔ beat the boss to get through' : '🔓 OPEN: !descend';
     const open = seal === 0 && !bossAlive;
     const color = open ? '#ffd65a' : '#c9a8ff';
     const m = 40 * dpr;
@@ -731,10 +731,10 @@ export class MapRenderer {
       const lx = Math.min(w - 50 * dpr, Math.max(50 * dpr, ax - Math.cos(a) * 30 * dpr));
       const ly = Math.min(h - 12 * dpr, Math.max(20 * dpr, ay - Math.sin(a) * 24 * dpr));
       ctx.fillStyle = 'rgba(8,6,14,0.8)';
-      const tw = ctx.measureText('ESCALIER').width + 10 * dpr;
+      const tw = ctx.measureText('STAIRS').width + 10 * dpr;
       ctx.fillRect(lx - tw / 2, ly - 13 * dpr, tw, 17 * dpr);
       ctx.fillStyle = color;
-      ctx.fillText('ESCALIER', lx, ly);
+      ctx.fillText('STAIRS', lx, ly);
       return;
     }
     const bob = Math.sin(t * 4) * 3 * dpr;
@@ -742,7 +742,7 @@ export class MapRenderer {
     const small = Math.round(11 * dpr);
     ctx.textAlign = 'center';
     ctx.font = `800 ${big}px 'Alegreya Sans', system-ui, sans-serif`;
-    const title = '▼ ESCALIER ▼';
+    const title = '▼ STAIRS ▼';
     const tw = Math.max(ctx.measureText(title).width, (ctx.font = `600 ${small}px 'Alegreya Sans', system-ui, sans-serif`, ctx.measureText(status).width)) + 16 * dpr;
     const top = y - 40 * dpr + bob;
     ctx.fillStyle = 'rgba(12,8,20,0.88)';

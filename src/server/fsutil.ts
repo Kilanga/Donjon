@@ -22,7 +22,7 @@ export function readJsonSafe<T>(file: string, label: string): T | undefined {
     } catch {
       /* tant pis, on ne l'écrasera pas plus tard non plus : l'appelant repart de zéro */
     }
-    console.error(`[${label}] fichier illisible, mis de côté dans ${path.basename(aside)} :`, (e as Error).message);
+    console.error(`[${label}] unreadable file, moved aside to ${path.basename(aside)}:`, (e as Error).message);
     return undefined;
   }
 }

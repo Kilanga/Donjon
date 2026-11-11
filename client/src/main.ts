@@ -2,7 +2,7 @@
 import type { ClientMsg, GameEvent, Item, PlayerViewMsg, RoomView, ServerMsg } from '../../src/shared/types';
 import { MapRenderer } from './map';
 import { PRODUCTION_EVENTS } from '../../src/server/game/production';
-import { THEME_EFFECTS } from '../../src/shared/themes';
+import { THEME_EFFECTS, THEME_LABEL } from '../../src/shared/themes';
 import { Stage } from './stage';
 import { CLASS_SPRITE, Tiles } from './tiles';
 import { initTelemetry, telemetryReady } from './telemetry';
@@ -11,12 +11,13 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 const CLASS_INFO: Record<string, { label: string; desc: string }> = {
-  barbare: { label: 'Barbare', desc: 'Force +3, 14 PV. Frappe d\'abord, réfléchit jamais.' },
-  chevalier: { label: 'Chevalier', desc: 'Force +2, Charisme +1, 12 PV, tunique. Solide et poli.' },
-  voleur: { label: 'Voleur', desc: 'Agilité +3, 10 PV. Esquive, fuit, trahit.' },
-  mage: { label: 'Mage', desc: 'Intelligence +3, 8 PV. Puissant, fragile, fier.' },
+  barbare: { label: 'Barbarian', desc: 'Strength +3, 14 HP. Hits first, never thinks.' },
+  chevalier: { label: 'Knight', desc: 'Strength +2, Charisma +1, 12 HP, tunic. Sturdy and polite.' },
+  voleur: { label: 'Rogue', desc: 'Dexterity +3, 10 HP. Dodges, flees, betrays.' },
+  mage: { label: 'Mage', desc: 'Intelligence +3, 8 HP. Powerful, fragile, proud.' },
 };
-const ROOM_LABEL: Record<string, string> = { normale: 'Salle', safe: 'Safe room', piege: 'Salle (pièges ?)', tresor: 'Salle du trésor', arene: 'Arène', boss: 'Salle du boss' };
+const STAT_SHORT = { for: 'str', agi: 'dex', int: 'int', cha: 'cha' } as const;
+const ROOM_LABEL: Record<string, string> = { normale: 'Room', safe: 'Safe room', piege: 'Room (traps?)', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' };
 
 const params = new URLSearchParams(location.search);
 const spectatorKey = params.get('spectateur');
@@ -24,18 +25,18 @@ const tiles = new Tiles();
 const map = new MapRenderer($('map') as HTMLCanvasElement, tiles);
 const stage = new Stage(map, $('map-wrap'), spectatorKey !== null);
 // Déplacement libre dans la salle (page joueur) : ZQSD/flèches ou clic ; une porte franchie = changement de salle
-const DIR_CMD: Record<string, string> = { n: '!nord', s: '!sud', e: '!est', o: '!ouest' };
-const DIR_LABEL: Record<string, string> = { n: 'au nord', s: 'au sud', e: 'à l\'est', o: 'à l\'ouest' };
-if (spectatorKey !== null) $('map-help').textContent = 'Molette : zoom · glisser : déplacer · double-clic : recentrer';
+const DIR_CMD: Record<string, string> = { n: '!north', s: '!south', e: '!east', o: '!west' };
+const DIR_LABEL: Record<string, string> = { n: 'north', s: 'south', e: 'east', o: 'west' };
+if (spectatorKey !== null) $('map-help').textContent = 'Scroll: zoom · drag: pan · double-click: recenter';
 if (spectatorKey === null) {
   map.walkEnabled = true;
   map.onDoor = (dir) => {
     cmd(DIR_CMD[dir]);
-    logLine(`Tu te places devant la porte ${DIR_LABEL[dir]} : tu changeras de salle à la fin du tour.`, 'k-prive');
+    logLine(`You stand at the ${DIR_LABEL[dir]} door: you'll change rooms at the end of the turn.`, 'k-prive');
   };
   map.onAttackMonster = (i, name) => {
-    cmd(`!attaque ${i}`);
-    logLine(`Tu vises ${name}.`, 'k-prive');
+    cmd(`!attack ${i}`);
+    logLine(`You target ${name}.`, 'k-prive');
   };
   map.onWalk = (x, y) => send({ type: 'pos', x, y });
 }
@@ -55,7 +56,7 @@ function connect() {
   };
   ws.onmessage = (e) => onMessage(JSON.parse(e.data) as ServerMsg);
   ws.onclose = () => {
-    logLine('Connexion perdue, nouvelle tentative…', 'k-feedback-ko');
+    logLine('Connection lost, retrying…', 'k-feedback-ko');
     setTimeout(connect, 2000);
   };
 }
@@ -64,7 +65,7 @@ function send(m: ClientMsg): boolean {
   ws.send(JSON.stringify(m));
   return true;
 }
-initTelemetry(send, spectatorKey !== null ? 'régie' : 'joueur');
+initTelemetry(send, spectatorKey !== null ? 'control' : 'player');
 function cmd(text: string) {
   send({ type: 'cmd', text });
 }
@@ -88,11 +89,11 @@ function onMessage(m: ServerMsg) {
     // Pseudo d'un compte Twitch : la preuve se fait dans le chat
     $('login').classList.remove('hidden');
     $('login-form').classList.remove('hidden');
-    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.<br>Attention : ne tape jamais un code !lien que quelqu'un d'autre te donne : il prendrait ton perso.</small>`;
+    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> is already playing from Twitch chat. If that's you, type this in Twitch chat:<div class="link-code">!link ${esc(m.code)}</div><small>The code is valid for 10 minutes. After that, this page stays linked to your character.<br>Careful: never type a !link code someone else gives you: they would take your character.</small>`;
   } else if (m.type === 'linked') {
     localStorage.setItem('donjon-jeton', m.token);
     $('login-msg').textContent = '';
-    logLine(`Page reliée à ton compte Twitch : tu contrôles ${m.name} ici comme dans le chat.`, 'k-prive');
+    logLine(`Page linked to your Twitch account: you control ${m.name} here just like in chat.`, 'k-prive');
   }
 }
 
@@ -121,7 +122,7 @@ function logEvent(e: GameEvent) {
   if (seen.has(e.id)) return;
   seen.add(e.id);
   logLine(e.text, e.npc ? 'k-npc' : e.narrator ? 'k-ia' : e.scope === 'prive' ? 'k-prive' : `k-${e.kind}`, e.turn);
-  if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, (e.text.match(/«\s*([\s\S]+?)\s*»/)?.[1] ?? e.text).trim());
+  if (e.npc === 'marchand' && e.roomId !== undefined && e.floor === state?.floor?.n) map.npcBubble(e.roomId, (e.text.match(/^[^"]*?:\s*"([\s\S]+)"\s*$/)?.[1] ?? e.text).trim());
   stage.onEvent(e);
 }
 function chatLine(from: string, text: string, isCmd = false) {
@@ -139,7 +140,7 @@ const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60
 const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 
 function itemLine(it: Item) {
-  const stats = it.dmg ? `d${it.dmg}${it.hit ? ` · +${it.hit} au jet` : ''}` : it.def ? `+${it.def} défense` : '';
+  const stats = it.dmg ? `d${it.dmg}${it.hit ? ` · +${it.hit} to hit` : ''}` : it.def ? `+${it.def} defense` : '';
   return `<span class="rar-${it.rarity}">${esc(it.name)}</span>${stats ? ` <span class="item-sub">${stats}</span>` : ''}<div class="item-sub">${esc(it.desc)}</div>`;
 }
 
@@ -151,7 +152,7 @@ function render() {
   if (s.seasonOver && !banner) {
     banner = document.createElement('div');
     banner.id = 'season-banner';
-    banner.textContent = 'FIN DE LA SAISON : le dernier étage s\'est effondré. Merci d\'avoir joué ! Les Légendes sont dans le journal.';
+    banner.textContent = 'END OF THE SEASON: the last floor has collapsed. Thanks for playing! The Legends are in the log.';
     document.body.prepend(banner);
   } else if (!s.seasonOver && banner) banner.remove();
   const me = s.me;
@@ -172,10 +173,10 @@ function render() {
     $('class-pick').classList.remove('hidden');
   }
 
-  $('hud-floor').textContent = f ? `Étage ${f.n}` : 'Étage —';
-  $('hud-theme').textContent = f ? `thème : ${f.theme}${THEME_EFFECTS[f.theme] ? ' ⚠' : ''}` : '';
+  $('hud-floor').textContent = f ? `Floor ${f.n}` : 'Floor —';
+  $('hud-theme').textContent = f ? `theme: ${THEME_LABEL[f.theme] ?? f.theme}${THEME_EFFECTS[f.theme] ? ' ⚠' : ''}` : '';
   $('hud-theme').title = f ? THEME_EFFECTS[f.theme] ?? '' : '';
-  $('hud-online').textContent = `${s.online} connecté(s)`;
+  $('hud-online').textContent = `${s.online} online`;
   map.setFloor(f);
   renderShared(s);
   stage.onState(s);
@@ -185,35 +186,35 @@ function render() {
   const room = f.rooms.find((r) => r.current) ?? null;
 
   // Fiche personnage
-  const im = me.immuneSeconds > 0 ? `<span class="badge immune">Immunisé ${fmtTime(me.immuneSeconds)}</span>` : '';
-  const tr = me.traitorTurns > 0 ? `<span class="badge traitor">TRAÎTRE (${me.traitorTurns} tours)</span>` : '';
-  const al = me.alliance.length ? `<span class="badge ally">Alliés : ${me.alliance.map(esc).join(', ')}</span>` : '';
-  const invites = me.pendingAllianceFrom.map((n) => `<div class="row"><span class="grow">${esc(n)} propose une alliance</span><button data-cmd="!alliance ${esc(n)}">Accepter</button></div>`).join('');
-  const stats = (['for', 'agi', 'int', 'cha'] as const).map((k) => `<div class="stat"><small>${k}</small><b>${sign(me.stats[k])}</b>${me.statPoints ? `<button data-cmd="!monte ${k}">+</button>` : ''}</div>`).join('');
+  const im = me.immuneSeconds > 0 ? `<span class="badge immune">Immune ${fmtTime(me.immuneSeconds)}</span>` : '';
+  const tr = me.traitorTurns > 0 ? `<span class="badge traitor">TRAITOR (${me.traitorTurns} turns)</span>` : '';
+  const al = me.alliance.length ? `<span class="badge ally">Allies: ${me.alliance.map(esc).join(', ')}</span>` : '';
+  const invites = me.pendingAllianceFrom.map((n) => `<div class="row"><span class="grow">${esc(n)} offers an alliance</span><button data-cmd="!ally ${esc(n)}">Accept</button></div>`).join('');
+  const stats = (['for', 'agi', 'int', 'cha'] as const).map((k) => `<div class="stat"><small>${STAT_SHORT[k]}</small><b>${sign(me.stats[k])}</b>${me.statPoints ? `<button data-cmd="!levelup ${STAT_SHORT[k]}">+</button>` : ''}</div>`).join('');
   $('me-card').innerHTML = `
-    <div class="card-title">${esc(me.name)} <span class="muted">${CLASS_INFO[me.cls].label} niv. ${me.level}</span></div>
+    <div class="card-title">${esc(me.name)} <span class="muted">level ${me.level} ${CLASS_INFO[me.cls].label}</span></div>
     <div class="row">
       <img class="portrait" src="${tiles.icon(CLASS_SPRITE[me.cls], 3)}" alt="">
       <div class="grow">
-        <div class="meter-label"><span>PV</span><span>${me.hp}/${me.maxHp}</span></div>
+        <div class="meter-label"><span>HP</span><span>${me.hp}/${me.maxHp}</span></div>
         <div class="meter hp"><i style="width:${(100 * me.hp) / me.maxHp}%"></i></div>
         <div class="meter-label" style="margin-top:6px"><span>XP</span><span>${me.xp}/${me.xpNext}</span></div>
         <div class="meter xp"><i style="width:${(100 * me.xp) / me.xpNext}%"></i></div>
-        <div class="badges"><span class="badge gold">${me.gold} po</span><span class="badge">${me.kills} kills · ${me.deaths} morts</span>${im}${tr}${al}</div>
+        <div class="badges"><span class="badge gold">${me.gold} gold</span><span class="badge">${me.kills} kills · ${me.deaths} deaths</span>${im}${tr}${al}</div>
       </div>
     </div>
     <div class="stats">${stats}</div>
-    ${me.statPoints ? `<div class="item-sub" style="color:var(--gold)">${me.statPoints} point(s) de stat à dépenser</div>` : ''}
+    ${me.statPoints ? `<div class="item-sub" style="color:var(--gold)">${me.statPoints} stat point(s) to spend</div>` : ''}
     ${invites}`;
 
   // Action en attente / mort
   const pend = $('pending');
   if (!me.alive) {
     pend.className = 'pending dead';
-    pend.textContent = `Tu es mort. Réapparition dans ${me.respawnInTurns} tour(s).`;
+    pend.textContent = `You are dead. Respawn in ${me.respawnInTurns} turn(s).`;
   } else if (me.pending) {
     pend.className = 'pending';
-    pend.textContent = `Action prévue : ${me.pending}`;
+    pend.textContent = `Planned action: ${me.pending}`;
   } else {
     pend.className = 'pending hidden';
   }
@@ -222,19 +223,19 @@ function render() {
   if (room) renderRoom(room, s);
   // Inventaire
   const inSafe = room?.type === 'safe';
-  const eq = (label: string, it: Item | null) => `<div class="entity">${it ? `<img src="${tiles.icon(it.sprite)}" alt="">` : '<span style="width:32px"></span>'}<div class="grow"><div class="section-label" style="margin:0">${label}</div>${it ? itemLine(it) : '<span class="muted">rien</span>'}</div></div>`;
+  const eq = (label: string, it: Item | null) => `<div class="entity">${it ? `<img src="${tiles.icon(it.sprite)}" alt="">` : '<span style="width:32px"></span>'}<div class="grow"><div class="section-label" style="margin:0">${label}</div>${it ? itemLine(it) : '<span class="muted">nothing</span>'}</div></div>`;
   const items = me.items.map((it, i) => {
-    const use = it.kind === 'arme' || it.kind === 'armure' ? `<button data-cmd="!equipe ${i + 1}">Équiper</button>` : `<button data-cmd="!utilise ${i + 1}">Utiliser</button>`;
-    const sell = inSafe ? `<button data-cmd="!vends ${i + 1}">Vendre ${Math.max(1, Math.ceil(it.value / 2))} po</button>` : '';
+    const use = it.kind === 'arme' || it.kind === 'armure' ? `<button data-cmd="!equip ${i + 1}">Equip</button>` : `<button data-cmd="!use ${i + 1}">Use</button>`;
+    const sell = inSafe ? `<button data-cmd="!sell ${i + 1}">Sell ${Math.max(1, Math.ceil(it.value / 2))} gold</button>` : '';
     return `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><div style="display:flex;flex-direction:column;gap:3px">${use}${sell}</div></div>`;
   }).join('');
-  $('inv-card').innerHTML = `<div class="card-title">Équipement <span class="muted">${me.items.length}/8 objets</span></div>
-    ${eq('Arme', me.weapon)}${eq('Armure', me.armor)}
-    <div class="section-label">Sac</div>${items || '<span class="muted">Sac vide.</span>'}`;
+  $('inv-card').innerHTML = `<div class="card-title">Gear <span class="muted">${me.items.length}/8 items</span></div>
+    ${eq('Weapon', me.weapon)}${eq('Armor', me.armor)}
+    <div class="section-label">Bag</div>${items || '<span class="muted">Empty bag.</span>'}`;
 
   // Croix directionnelle
   for (const b of $('dpad').querySelectorAll('button')) {
-    const d = { '!nord': 'n', '!sud': 's', '!est': 'e', '!ouest': 'o' }[b.dataset.cmd!] as 'n';
+    const d = { '!north': 'n', '!south': 's', '!east': 'e', '!west': 'o' }[b.dataset.cmd!] as 'n';
     (b as HTMLButtonElement).disabled = !room || room.doors[d] === undefined || !me.alive;
   }
 }
@@ -244,39 +245,39 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   const ms = room.monsters ?? [];
   const others = (room.players ?? []).filter((p) => !p.me);
   const canPvp = room.type !== 'safe' && me.immuneSeconds === 0;
-  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : 'var(--red)'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attaque ${i + 1}">Attaquer</button></div>`).join('');
+  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : 'var(--red)'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attack ${i + 1}">Attack</button></div>`).join('');
   const players = others.map((p) => {
-    const tags = [p.bot ? '<span class="badge pnj">PNJ</span>' : '', p.ally ? '<span class="badge ally">allié</span>' : '', p.traitor ? '<span class="badge traitor">traître</span>' : '', p.immune ? '<span class="badge immune">immunisé</span>' : '', !p.alive ? '<span class="badge">mort</span>' : ''].join('');
-    const atk = p.alive && canPvp && !p.immune ? `<button class="danger" data-cmd="!attaque ${esc(p.name)}">${p.ally ? 'Trahir' : 'Attaquer'}</button>` : '';
-    const ally = p.alive && !p.ally ? `<button data-cmd="!alliance ${esc(p.name)}">Alliance</button>` : '';
-    return `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level}</span> ${tags}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div><div style="display:flex;flex-direction:column;gap:3px">${atk}${ally}</div></div>`;
+    const tags = [p.bot ? '<span class="badge pnj">NPC</span>' : '', p.ally ? '<span class="badge ally">ally</span>' : '', p.traitor ? '<span class="badge traitor">traitor</span>' : '', p.immune ? '<span class="badge immune">immune</span>' : '', !p.alive ? '<span class="badge">dead</span>' : ''].join('');
+    const atk = p.alive && canPvp && !p.immune ? `<button class="danger" data-cmd="!attack ${esc(p.name)}">${p.ally ? 'Betray' : 'Attack'}</button>` : '';
+    const ally = p.alive && !p.ally ? `<button data-cmd="!ally ${esc(p.name)}">Ally</button>` : '';
+    return `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">lvl ${p.level}</span> ${tags}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div><div style="display:flex;flex-direction:column;gap:3px">${atk}${ally}</div></div>`;
   }).join('');
-  const ground = (room.ground ?? []).map((it) => `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><button data-cmd="!ramasse ${esc(it.name)}">Prendre</button></div>`).join('');
-  const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(o.item.sprite)}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!achete ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} po</button></div>`).join('');
+  const ground = (room.ground ?? []).map((it) => `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><button data-cmd="!pickup ${esc(it.name)}">Take</button></div>`).join('');
+  const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(o.item.sprite)}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!buy ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} gold</button></div>`).join('');
 
   const acts: string[] = [];
-  if (room.chest === 'ferme') acts.push('<button data-cmd="!fouille">Ouvrir le coffre</button>');
-  else if (!room.searched && room.type !== 'safe') acts.push('<button data-cmd="!fouille">Fouiller</button>');
-  if (room.type === 'piege') acts.push('<button data-cmd="!fouille">Chercher un piège</button>');
-  if ((room.groundGold ?? 0) > 0 || (room.ground ?? []).length) acts.push(`<button data-cmd="!ramasse">Tout ramasser${room.groundGold ? ` (${room.groundGold} po)` : ''}</button>`);
-  if (room.type === 'safe') acts.push('<button data-cmd="!repos">Se reposer</button>');
+  if (room.chest === 'ferme') acts.push('<button data-cmd="!search">Open the chest</button>');
+  else if (!room.searched && room.type !== 'safe') acts.push('<button data-cmd="!search">Search</button>');
+  if (room.type === 'piege') acts.push('<button data-cmd="!search">Look for traps</button>');
+  if ((room.groundGold ?? 0) > 0 || (room.ground ?? []).length) acts.push(`<button data-cmd="!pickup">Pick up all${room.groundGold ? ` (${room.groundGold} gold)` : ''}</button>`);
+  if (room.type === 'safe') acts.push('<button data-cmd="!rest">Rest</button>');
   if (room.forge) {
     // Le forgeron : améliorer son arme ou son armure (+1, jusqu'à +3)
     const fo = s.forge;
     const up = (cmd: string, label: string, x: { name: string; plus: number; cost: number } | null | undefined) =>
-      x ? `<button data-cmd="${cmd}" ${x.cost > me.gold ? 'disabled' : ''} title="${esc(x.name)} → +${x.plus + 1}">${label} +${x.plus + 1} · ${x.cost} po</button>` : `<button disabled>${label} : au maximum</button>`;
-    acts.push(up('!forge arme', '⚒ Arme', fo?.weapon), up('!forge armure', '⚒ Armure', fo?.armor));
+      x ? `<button data-cmd="${cmd}" ${x.cost > me.gold ? 'disabled' : ''} title="${esc(x.name)} → +${x.plus + 1}">${label} +${x.plus + 1} · ${x.cost} gold</button>` : `<button disabled>${label}: maxed out</button>`;
+    acts.push(up('!forge weapon', '⚒ Weapon', fo?.weapon), up('!forge armor', '⚒ Armor', fo?.armor));
   }
-  if (room.stairs) acts.push(`<button data-cmd="!descendre" ${room.bossAlive ? 'disabled title="Le boss bloque l\'escalier"' : ''}>Descendre</button>`);
+  if (room.stairs) acts.push(`<button data-cmd="!descend" ${room.bossAlive ? 'disabled title="The boss blocks the stairs"' : ''}>Descend</button>`);
 
   $('room-card').innerHTML = `
-    <div class="card-title">${room.forge ? 'Forge' : ROOM_LABEL[room.type]} <span class="muted">salle ${room.id}</span></div>
+    <div class="card-title">${room.forge ? 'Forge' : ROOM_LABEL[room.type]} <span class="muted">room ${room.id}</span></div>
     ${room.desc ? `<div class="desc">${esc(room.desc)}</div>` : ''}
     <div class="actions">${acts.join('')}</div>
-    ${monsters ? `<div class="section-label">Monstres</div>${monsters}` : ''}
+    ${monsters ? `<div class="section-label">Monsters</div>${monsters}` : ''}
     ${players ? `<div class="section-label">Crawlers</div>${players}` : ''}
-    ${ground ? `<div class="section-label">Au sol</div>${ground}` : ''}
-    ${shop ? `<div class="section-label">Marchand</div>${shop}` : ''}`;
+    ${ground ? `<div class="section-label">On the floor</div>${ground}` : ''}
+    ${shop ? `<div class="section-label">Merchant</div>${shop}` : ''}`;
 }
 
 /** Éléments communs aux joueurs et à la régie : vote, effets, classement, régie. */
@@ -284,12 +285,12 @@ function renderShared(s: PlayerViewMsg) {
   // Effets en cours
   const fx = s.effects;
   const chips: string[] = [];
-  if (fx.happyHourTurns) chips.push(`<span class="chip hh">Foire aux marchands ${fx.happyHourTurns} tours</span>`);
-  if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
-  if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
-  if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
-  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris (!parie) et sponsors (!sponsor)">${s.myFavor} pts de faveur</span>`);
-  if (s.myGrave) chips.push(`<span class="chip urgent">Tombe n°${s.myGrave} : fais campagne dans le chat pour être ressuscité</span>`);
+  if (fx.happyHourTurns) chips.push(`<span class="chip hh">Merchant fair ${fx.happyHourTurns} turns</span>`);
+  if (fx.floodTurns) chips.push(`<span class="chip flood">Flood ${fx.floodTurns} turns</span>`);
+  if (fx.bounty) chips.push(`<span class="chip bounty">Bounty on ${esc(fx.bounty.target)}: ${fx.bounty.gold} gold</span>`);
+  if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote in ${fx.nextVoteInTurns} turns</span>`);
+  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Favor points: bets (!bet) and sponsors (!sponsor)">${s.myFavor} favor pts</span>`);
+  if (s.myGrave) chips.push(`<span class="chip urgent">Grave #${s.myGrave}: campaign in chat to get resurrected</span>`);
   $('hud-effects').innerHTML = chips.join('');
   $('paused').classList.toggle('hidden', !s.paused);
 
@@ -305,8 +306,8 @@ function renderShared(s: PlayerViewMsg) {
       return `<${tag} ${attr} title="${esc(o.desc)}"><span class="n">${o.votes}</span><b>${o.n}. ${esc(o.label)}</b><small>${esc(o.desc)}</small></${tag}>`;
     }).join('');
     box.innerHTML = v.title
-      ? `<div class="vote-title">${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; · une seule voix par pseudo</span></div><div class="vote-options">${opts}</div>`
-      : `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
+      ? `<div class="vote-title">${esc(v.title)} — ${v.turnsLeft} turn(s) left · <span class="muted">!vote &lt;#&gt; · one vote per name</span></div><div class="vote-options">${opts}</div>`
+      : `<div class="vote-title">The production suggests — ${v.turnsLeft} turn(s) left · <span class="muted">!vote 1, 2 or 3</span></div><div class="vote-options">${opts}</div>`;
   } else box.classList.add('hidden');
 
   // Pari éclair
@@ -315,9 +316,9 @@ function renderShared(s: PlayerViewMsg) {
   bx.classList.toggle('hidden', !b);
   if (b) {
     const can = !s.spectator && b.closesInSec > 0 && !b.mine;
-    const btn = (opt: string, amt: number) => `<button class="vote-opt" data-cmd="!parie ${opt} ${amt}">${opt} · ${amt}</button>`;
-    bx.innerHTML = `<div class="vote-title">Pari éclair : ${esc(b.title)} ${b.closesInSec ? `— ${b.closesInSec} s pour miser` : '— mises fermées'}</div>
-      <div class="muted">Oui : ${b.oui} pts · Non : ${b.non} pts · ${b.bettors} parieur(s)${b.mine ? ` · ta mise : ${b.mine.amount} sur « ${b.mine.opt} »` : ''}</div>
+    const btn = (opt: string, amt: number) => `<button class="vote-opt" data-cmd="!bet ${opt === 'oui' ? 'yes' : 'no'} ${amt}">${opt === 'oui' ? 'yes' : 'no'} · ${amt}</button>`;
+    bx.innerHTML = `<div class="vote-title">Flash bet: ${esc(b.title)} ${b.closesInSec ? `— ${b.closesInSec} s to bet` : '— bets closed'}</div>
+      <div class="muted">Yes: ${b.oui} pts · No: ${b.non} pts · ${b.bettors} bettor(s)${b.mine ? ` · your bet: ${b.mine.amount} on "${b.mine.opt === 'oui' ? 'yes' : 'no'}"` : ''}</div>
       ${can ? `<div class="vote-options">${btn('oui', 10)}${btn('oui', 50)}${btn('non', 10)}${btn('non', 50)}</div>` : ''}`;
   }
 
@@ -328,12 +329,12 @@ function renderShared(s: PlayerViewMsg) {
     const r = [...rows].sort((a, b) => b[k] - a[k])[0];
     return r && r[k] > 0 ? `<b>${esc(r.name)}</b> (${r[k]})` : '—';
   };
-  $('rank-card').innerHTML = `<div class="card-title">Classement <span class="muted">${rows.length} crawlers</span></div>
-    <div class="titles">Boucher : ${top('kills')} · Traître en chef : ${top('betrayals')} · Abonné à la mort : ${top('deaths')} · Riche : ${top('gold')}</div>
-    <table class="rank"><tr><th>#</th><th>Crawler</th><th>Niv</th><th>Étage</th><th>Kills</th><th>Morts</th></tr>
-    ${rows.slice(0, 12).map((r, i) => `<tr class="${r.name === me ? 'me' : ''} ${r.alive ? '' : 'dead'}"><td>${i + 1}</td><td><img src="${tiles.icon(CLASS_SPRITE[r.cls], 1)}" alt=""> ${esc(r.name)}${r.bot ? ' <span class="badge pnj">PNJ</span>' : ''}${r.traitor ? ' <span class="badge traitor">traître</span>' : ''}${r.bounty ? ' <span class="badge gold">prime</span>' : ''}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('')}
+  $('rank-card').innerHTML = `<div class="card-title">Leaderboard <span class="muted">${rows.length} crawlers</span></div>
+    <div class="titles">Butcher: ${top('kills')} · Traitor-in-chief: ${top('betrayals')} · Death subscriber: ${top('deaths')} · Richest: ${top('gold')}</div>
+    <table class="rank"><tr><th>#</th><th>Crawler</th><th>Lvl</th><th>Floor</th><th>Kills</th><th>Deaths</th></tr>
+    ${rows.slice(0, 12).map((r, i) => `<tr class="${r.name === me ? 'me' : ''} ${r.alive ? '' : 'dead'}"><td>${i + 1}</td><td><img src="${tiles.icon(CLASS_SPRITE[r.cls], 1)}" alt=""> ${esc(r.name)}${r.bot ? ' <span class="badge pnj">NPC</span>' : ''}${r.traitor ? ' <span class="badge traitor">traitor</span>' : ''}${r.bounty ? ' <span class="badge gold">bounty</span>' : ''}</td><td>${r.level}</td><td>${r.deepest}</td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('')}
     </table>
-    ${s.obituary.length ? `<div class="section-label">Nécrologie</div>${s.obituary.slice(0, 5).map((o) => `<div class="obit">T${o.turn} · ${esc(o.text.split(' Cause')[0])}${o.text.includes('Cause :') ? ` — ${esc(o.text.split('Cause : ')[1].split('.')[0])}` : ''}</div>`).join('')}` : ''}`;
+    ${s.obituary.length ? `<div class="section-label">Obituary</div>${s.obituary.slice(0, 5).map((o) => `<div class="obit">T${o.turn} · ${esc(o.text.split(' Cause')[0])}${o.text.includes('Cause: ') ? ` — ${esc(o.text.split('Cause: ')[1].split('.')[0])}` : ''}</div>`).join('')}` : ''}`;
 
   // Panneau régie (vue spectateur avec la clé)
   const adm = $('admin-card');
@@ -342,21 +343,21 @@ function renderShared(s: PlayerViewMsg) {
   if (adm.dataset.ready && adm.dataset.paused === String(s.paused)) return; // ne pas réécrire pendant la saisie
   adm.dataset.ready = '1';
   adm.dataset.paused = String(s.paused);
-  adm.innerHTML = `<div class="card-title">Régie <span class="muted">maître du jeu</span></div>
+  adm.innerHTML = `<div class="card-title">Control room <span class="muted">game master</span></div>
     <div class="admin-grid">
-      <button data-admin="${s.paused ? 'resume' : 'pause'}">${s.paused ? 'Reprendre' : 'Pause'}</button>
-      <button data-admin="next">Tour suivant</button>
-      <button data-admin="vote">Lancer un vote</button>
-      <button data-admin="healAll">Soigner tout le monde</button>
-      <button data-admin="ai">IA du donjon : allumer / éteindre</button>
-      <button data-admin="collapse" class="danger">Effondrer l'étage affiché</button>
-      <button data-admin="reset" class="danger">Nouvelle partie</button>
+      <button data-admin="${s.paused ? 'resume' : 'pause'}">${s.paused ? 'Resume' : 'Pause'}</button>
+      <button data-admin="next">Next turn</button>
+      <button data-admin="vote">Start a vote</button>
+      <button data-admin="healAll">Heal everyone</button>
+      <button data-admin="ai">Dungeon AI: on / off</button>
+      <button data-admin="collapse" class="danger">Collapse the floor shown</button>
+      <button data-admin="reset" class="danger">New game</button>
     </div>
-    <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Déclencher</button></div>
-    <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
-    <div class="admin-row"><input id="adm-bots" type="number" min="0" max="30" placeholder="PNJ figurants (0 à 30, défaut 10)"><button data-admin="bots">OK</button></div>
-    <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>
-    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Journaux pour Claude</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Vue stream 3D</a></div>`;
+    <div class="admin-row"><select id="adm-event">${PRODUCTION_EVENTS.map((e) => `<option value="${e.key}">${esc(e.label)}</option>`).join('')}</select><button data-admin="event">Trigger</button></div>
+    <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Turn length (s), currently ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
+    <div class="admin-row"><input id="adm-bots" type="number" min="0" max="30" placeholder="Extra NPCs (0 to 30, default 10)"><button data-admin="bots">OK</button></div>
+    <div class="admin-row"><input id="adm-kick" placeholder="Name to kick"><button data-admin="kick" class="danger">Kick</button></div>
+    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Tonight's recap</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Logs for Claude</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">3D stream view</a></div>`;
 }
 
 function adminAction(action: string) {
@@ -366,7 +367,7 @@ function adminAction(action: string) {
   if (action === 'kick') arg = ($('adm-kick') as HTMLInputElement).value.trim();
   if (action === 'bots') arg = Number(($('adm-bots') as HTMLInputElement).value);
   if (action === 'collapse') arg = state?.floor?.n;
-  if ((action === 'reset' || action === 'collapse' || action === 'kick') && !confirm('Sûr ? Cette action est irréversible.')) return;
+  if ((action === 'reset' || action === 'collapse' || action === 'kick') && !confirm('Sure? This cannot be undone.')) return;
   send({ type: 'admin', action: action as never, arg });
 }
 
@@ -378,13 +379,13 @@ function renderSpectator() {
   $('inv-card').classList.add('hidden');
   const bar = $('spectator-bar');
   bar.classList.remove('hidden');
-  if (!bar.querySelector('#spec-floor')) bar.innerHTML = '<b>Vue spectateur</b> <span id="spec-floor"></span> <span id="spec-tools"></span>';
-  if (f) $('spec-floor').innerHTML = `<button data-floor="${f.n - 1}">◀</button> étage ${f.n} <button data-floor="${f.n + 1}">▶</button>`;
+  if (!bar.querySelector('#spec-floor')) bar.innerHTML = '<b>Spectator view</b> <span id="spec-floor"></span> <span id="spec-tools"></span>';
+  if (f) $('spec-floor').innerHTML = `<button data-floor="${f.n - 1}">◀</button> floor ${f.n} <button data-floor="${f.n + 1}">▶</button>`;
   if (!f) return;
   const all = f.rooms.flatMap((r) => (r.players ?? []).map((p) => ({ ...p, room: r.id })));
-  $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Suivre ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.bot ? ' <span class="badge pnj">PNJ</span>' : ''}${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
+  $('me-card').innerHTML = `<div class="card-title">Crawlers on this floor <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Follow ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">lvl ${p.level} · room ${p.room}</span>${p.bot ? ' <span class="badge pnj">NPC</span>' : ''}${p.traitor ? ' <span class="badge traitor">traitor</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
   const mons = f.rooms.flatMap((r) => r.monsters ?? []);
-  $('room-card').innerHTML = `<div class="card-title">Étage ${f.n}</div><div class="desc">${f.rooms.length} salles · ${mons.length} monstres · boss : ${esc(mons.find((m) => m.boss)?.name ?? 'vaincu')}</div>`;
+  $('room-card').innerHTML = `<div class="card-title">Floor ${f.n}</div><div class="desc">${f.rooms.length} rooms · ${mons.length} monsters · boss: ${esc(mons.find((m) => m.boss)?.name ?? 'defeated')}</div>`;
   $('pending').className = 'pending hidden';
 }
 
@@ -392,7 +393,7 @@ function tickHud() {
   if (state) {
     const now = Date.now() + clockOffset;
     const left = Math.max(0, (state.turnEndsAt - now) / 1000);
-    $('hud-turn').textContent = `Tour ${state.turn} · ${Math.ceil(left)} s`;
+    $('hud-turn').textContent = `Turn ${state.turn} · ${Math.ceil(left)} s`;
     stage.onTick(left);
     ($('turn-bar') as HTMLElement).style.width = `${100 - (100 * left) / state.turnSeconds}%`;
     const c = state.floor?.collapseInSec;
@@ -401,16 +402,16 @@ function tickHud() {
     if (lobby !== null && lobby !== undefined) {
       // Salon d'attente : décompte avant le coup d'envoi
       const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
-      el.textContent = `La partie commence dans ${fmtTime(rest)} : !join pour en être (échauffement en attendant)`;
+      el.textContent = `The game starts in ${fmtTime(rest)}: !join to be part of it (warm-up until then)`;
       el.classList.toggle('urgent', rest < 60);
     } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
       const st = state.floor?.stairsInSec;
       const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
-      el.textContent = seal > 0 ? `🔒 Escalier scellé encore ${fmtTime(seal)} · effondrement dans ${fmtTime(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmtTime(rest)}`;
+      el.textContent = seal > 0 ? `🔒 Stairs sealed for ${fmtTime(seal)} · collapse in ${fmtTime(rest)}` : `🔓 Stairs open · collapse in ${fmtTime(rest)}`;
       el.classList.toggle('urgent', rest < 60);
-    } else el.textContent = state.floor ? 'Chrono : en attente d\'un aventurier' : '';
+    } else el.textContent = state.floor ? 'Timer: waiting for an adventurer' : '';
   }
   requestAnimationFrame(tickHud);
 }
@@ -422,7 +423,7 @@ document.addEventListener('click', (e) => {
   if (b.dataset.cmd) cmd(b.dataset.cmd);
   if (b.dataset.floor) send({ type: 'floor', n: Number(b.dataset.floor) });
   if (b.dataset.admin) adminAction(b.dataset.admin);
-  if (b.dataset.class) cmd(`!join ${b.dataset.class}`);
+  if (b.dataset.class) cmd(`!join ${CLASS_INFO[b.dataset.class]?.label.toLowerCase() ?? b.dataset.class}`);
 });
 $('cmd-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -472,10 +473,10 @@ document.addEventListener('keydown', (e) => {
     map.setKey(walk, true);
     return;
   }
-  const k: Record<string, string> = { f: '!fouille', a: '!attaque' };
-  if (k[e.key] && !e.repeat) {
+  const k: Record<string, string> = { KeyF: '!search', KeyE: '!attack' };
+  if (k[e.code] && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
-    cmd(k[e.key]);
+    cmd(k[e.code]);
   }
 });
 document.addEventListener('keyup', (e) => {
@@ -483,11 +484,10 @@ document.addEventListener('keyup', (e) => {
   if (walk) map.setKey(walk, false);
 });
 addEventListener('blur', () => map.clearKeys());
-/** ZQSD (AZERTY), WASD sans le A (pris par l'attaque) et les flèches : marcher dans la salle. */
+/** WASD by physical position (ZQSD on AZERTY) and the arrows: walk around the room. */
 function walkDir(e: KeyboardEvent): 'n' | 's' | 'e' | 'o' | null {
   if ((e.target as HTMLElement).tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return null;
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  return ({ z: 'n', w: 'n', ArrowUp: 'n', s: 's', ArrowDown: 's', q: 'o', ArrowLeft: 'o', d: 'e', ArrowRight: 'e' } as const)[key as 'z'] ?? null;
+  return ({ KeyW: 'n', ArrowUp: 'n', KeyS: 's', ArrowDown: 's', KeyA: 'o', ArrowLeft: 'o', KeyD: 'e', ArrowRight: 'e' } as const)[e.code as 'KeyW'] ?? null;
 }
 
 // ---------------------------------------------------------------- démarrage
