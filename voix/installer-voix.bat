@@ -37,7 +37,7 @@ echo [2/4] PyTorch pour carte NVIDIA ^(gros telechargement, plusieurs minutes^).
 "%PY%" -m pip install "torch==2.11.0" "torchaudio==2.11.0" --index-url https://download.pytorch.org/whl/cu126 || ( pause & exit /b 1 )
 
 echo [3/4] Qwen3-TTS...
-"%PY%" -m pip install "qwen-tts==0.1.1" soundfile huggingface_hub || ( pause & exit /b 1 )
+"%PY%" -m pip install "qwen-tts==0.1.1" soundfile scipy huggingface_hub || ( pause & exit /b 1 )
 
 echo [4/4] Modele de voix ^(environ 4,5 Go^)...
 "%PY%" -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-TTS-12Hz-1.7B-Base', local_dir=r'%BASE%\models\Qwen3-TTS-12Hz-1.7B-Base')" || ( pause & exit /b 1 )

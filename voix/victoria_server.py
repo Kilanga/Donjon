@@ -6,7 +6,8 @@ une réplique, il renvoie un fichier WAV avec la voix de Victoria (clonée une f
   GET  /health  -> {"ok": true, "ready": bool}
   POST /tts     {"text": "..."}  -> audio/wav (mono)
 
-Variables d'environnement : VOIX_PORT (3791), VOIX_MODELE (dossier du modèle Base 1.7B), VOIX_DEVICE (cuda:0).
+Variables d'environnement : VOIX_PORT (3791), VOIX_MODELE (dossier du modèle Base 1.7B), VOIX_DEVICE (cuda:0),
+VOIX_STUDIO=0 pour couper la passe « studio » (studio.py : micro et pièce réels plutôt qu'un son de synthèse).
 """
 import io
 import json
@@ -21,6 +22,8 @@ import soundfile as sf
 import torch
 from qwen_tts import Qwen3TTSModel
 
+from studio import studio
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('VOIX_PORT', '3791'))
 MODEL = os.environ.get('VOIX_MODELE', 'Qwen/Qwen3-TTS-12Hz-1.7B-Base')
@@ -29,6 +32,7 @@ REF_WAV = os.path.join(HERE, 'victoria_ref.wav')
 with open(os.path.join(HERE, 'victoria_ref.txt'), encoding='utf-8') as fh:
     REF_TEXT = fh.read().strip()
 
+USE_STUDIO = os.environ.get('VOIX_STUDIO', '1') != '0'
 MAX_CHARS = 400  # une réplique fait au plus ~35 mots ; au-delà, c'est une erreur ou un abus
 MAX_TOKENS = 260  # 12 trames par seconde : ~20 s d'audio au maximum, jamais de génération qui s'emballe
 
@@ -52,9 +56,12 @@ def synth(text: str) -> bytes:
         wavs, sr = state['model'].generate_voice_clone(
             text=text, language='English', voice_clone_prompt=state['prompt'], max_new_tokens=MAX_TOKENS)
     audio = np.asarray(wavs[0], dtype=np.float32)
-    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
-    if peak > 0:
-        audio = audio * (0.89 / peak)  # même niveau d'une réplique à l'autre (-1 dBFS)
+    if audio.size and USE_STUDIO:
+        audio = studio(audio, sr)  # micro et pièce réels ; normalisé à -1 dBFS
+    elif audio.size:
+        peak = float(np.max(np.abs(audio)))
+        if peak > 0:
+            audio = audio * (0.89 / peak)  # même niveau d'une réplique à l'autre (-1 dBFS)
     buf = io.BytesIO()
     sf.write(buf, audio, sr, format='WAV', subtype='PCM_16')
     return buf.getvalue()
