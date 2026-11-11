@@ -80,6 +80,11 @@ console.log = (...a: unknown[]) => {
   origLog(...a);
   journal.write('log', { text: util.format(...a).slice(0, 2000) });
 };
+const origWarn = console.warn.bind(console);
+console.warn = (...a: unknown[]) => {
+  origWarn(...a);
+  journal.write('log', { text: util.format(...a).slice(0, 2000) });
+};
 console.error = (...a: unknown[]) => {
   origError(...a);
   const err = a.find((x) => x instanceof Error);
@@ -913,7 +918,7 @@ server.listen(cfg.port, cfg.tunnel ? '127.0.0.1' : undefined, () => {
   console.log(`  Dungeon AI: ${ai.describe()}`);
   voice.start();
   console.log(`  Victoria's voice: ${cfg.voice.enabled ? 'waiting for the voice service (voix\\demarrer-voix.bat); subtitles until then' : 'off'}`);
-  if (ai.provider === 'ollama') void ai.check().then((m) => console.log(`  [ai] ${m}`));
+  if (ai.provider !== 'off') void ai.check().then((m) => console.log(`  [ai] ${m}`));
   console.log(`  Tonight's logs (send them to Claude): http://localhost:${cfg.port}/journaux?cle=${cfg.spectatorKey}\n`);
 });
 

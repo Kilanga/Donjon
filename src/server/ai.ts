@@ -85,6 +85,7 @@ export class DungeonAI {
 
   /** Vérifie au démarrage que l'IA répond (Ollama lancé, modèle installé). Renvoie un message lisible. */
   async check(): Promise<string> {
+    if (this.cfg.provider === 'anthropic') return this.checkAnthropic();
     if (this.cfg.provider !== 'ollama') return this.describe();
     try {
       const ctrl = new AbortController();
@@ -106,6 +107,25 @@ export class DungeonAI {
       return `Ollama ready (${this.cfg.ollamaModel}), loading the model…`;
     } catch {
       return `Ollama is not answering on ${this.cfg.ollamaUrl}: start the Ollama app. The game goes on with its written lines.`;
+    }
+  }
+
+  /** Une toute petite requête de test : la clé et le modèle sont-ils acceptés ? (message clair sinon) */
+  private async checkAnthropic(): Promise<string> {
+    if (!this.apiKey) return this.describe();
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: this.cfg.anthropicModel, max_tokens: 5, messages: [{ role: 'user', content: 'Say OK.' }] }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) return `Claude API ready (${this.cfg.anthropicModel}).`;
+      const err = ((await res.json().catch(() => ({}))) as { error?: { type?: string; message?: string } }).error;
+      const hint = res.status === 401 ? ' The key is refused: check ANTHROPIC_API_KEY.' : res.status === 404 ? ` Unknown model "${this.cfg.anthropicModel}".` : res.status === 400 && /credit/i.test(err?.message ?? '') ? ' No credit left on the API organization.' : '';
+      return `Claude API error HTTP ${res.status} (${err?.type ?? '?'}: ${(err?.message ?? '').slice(0, 160)}).${hint} Victoria uses her written lines meanwhile.`;
+    } catch (e) {
+      return `Claude API unreachable (${(e as Error).message}). Victoria uses her written lines meanwhile.`;
     }
   }
 
@@ -176,7 +196,10 @@ export class DungeonAI {
       body: JSON.stringify({ model: this.cfg.anthropicModel, max_tokens: 120, system, messages: [{ role: 'user', content: prompt }] }),
       signal,
     });
-    if (!res.ok) throw new Error(`Claude API HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = ((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error;
+      throw new Error(`Claude API HTTP ${res.status}${err?.message ? `: ${err.message.slice(0, 120)}` : ''}`);
+    }
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
     return (data.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join(' ');
   }

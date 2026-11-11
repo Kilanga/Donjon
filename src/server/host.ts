@@ -144,7 +144,6 @@ export class Host {
   private deadAir(now: number, lobby: boolean) {
     const quiet = CHATTY[this.narrator.chatty].quietMs;
     if (now - this.narrator.lastSpokeAt < quiet || now - this.lastSegmentAt < quiet || this.narrator.busy(now)) return;
-    if (lobby && !this.game.state.lobbyUntil) return; // personne n'est là, personne ne joue : elle se tait
     const pool = lobby ? LOBBY_SEGMENTS : SEGMENTS;
     for (let tries = 0; tries < pool.length; tries++) {
       const seg = pool[this.segment++ % pool.length];
@@ -192,6 +191,7 @@ export class Host {
       case 'join': {
         if (s.joinsClosed) return ['The gates are sealed for this season. Viewers can still bet with !bet, sponsor a contestant with !sponsor, and vote to bring the dead back.', 'The gates are sealed, but you can still play along: !bet, !sponsor, and your vote when the dead beg to come back.'];
         const f1 = this.game.floor(1);
+        if (s.seasonStart === null && !s.lobbyUntil) return ['A brand-new season is waiting for its first contestant. Viewers type !join in the chat to open the sign-ups.', 'A fresh dungeon, and nobody in it yet. Type !join in the chat, darlings, and let the show begin.'];
         const left = s.lobbyUntil ? s.lobbyUntil - now : f1?.collapseAt ? f1.collapseAt - now : null;
         const until = left && left > 0 ? ` Sign-ups close in ${minutes(left)} minutes.` : '';
         return [`Viewers can still join: type !join in the chat, or open the link at the bottom left of the stream.${until}`, `Want in? Type !join in the chat, or use the link at the bottom left.${until}`];
