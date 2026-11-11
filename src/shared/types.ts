@@ -131,9 +131,10 @@ export interface GameEvent {
 }
 
 export interface GameFx {
-  kind: 'hit' | 'miss' | 'crit' | 'gag' | 'death' | 'kill' | 'loot' | 'levelup' | 'trap' | 'heal';
+  kind: 'hit' | 'miss' | 'crit' | 'gag' | 'death' | 'kill' | 'loot' | 'levelup' | 'trap' | 'heal' | 'forge';
   src?: string;
   dst?: string;
+  label?: string; // forge : ce qui a été amélioré (« Arme +2 »), affiché au-dessus du joueur
 }
 
 export interface LeaderRow {

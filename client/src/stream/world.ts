@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { buildDressing, buildSafeRoom, rng, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
+import { buildDressing, buildForgeShop, buildSafeRoom, smokeSprite, rng, type ForgeSpots, CLASS_COLOR, makeBeam, makeHalo, makeMotes, makeTomb, moodFor, roomColor, type Mood } from './dressing';
 
 /** Pièces de décor coupées quand elles sont entre la caméra et la salle filmée (vue en coupe). */
 const CUT_PIECES = new Set<string>(['wall', 'wall_doorway', 'wall_cracked', 'wall_arched', 'pillar', 'pillar_decorated', 'torch_mounted', 'banner_patternA_red', 'banner_shield_blue']);
@@ -116,12 +116,32 @@ interface Ent {
   bot: boolean;
   ring: THREE.Mesh | null; // anneau de classe au sol
   ringKey?: string;
+  badge: { text: string; until: number } | null; // « Arme +2 » au-dessus de la tête, le temps d'un tour
 }
 
 interface Flame {
   sprite: THREE.Sprite;
   pos: THREE.Vector3;
   seed: number;
+  weight: number; // part de lumière (les flammes du foyer, serrées, n'éclairent pas chacune comme une torche)
+}
+
+interface Keeper {
+  obj: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+  model: CharName;
+  current: THREE.AnimationAction | null;
+  busyUntil: number;
+}
+
+interface ForgeFx {
+  roomId: number;
+  spots: ForgeSpots;
+  smith: Keeper | null;
+  nextEmber: number;
+  nextStrike: number; // le forgeron travaille aussi quand personne ne lui demande rien
+  nextSteam: number;
+  smoke: { s: THREE.Sprite; t: number; life: number }[];
 }
 
 export class World {
@@ -165,7 +185,10 @@ export class World {
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
   private nextDebris = 0;
-  private keepers: { obj: THREE.Object3D; mixer: THREE.AnimationMixer }[] = []; // le marchand derrière son comptoir
+  private keepers: Keeper[] = []; // le marchand derrière son comptoir, le forgeron à son enclume
+  private forges: ForgeFx[] = [];
+  private turnEnd = 0; // fin du tour en cours de l'étage affiché
+  private turnLen = 20_000; // durée d'un tour de cet étage (mesurée)
 
   constructor(canvas: HTMLCanvasElement, labels: HTMLElement, assets: Assets) {
     this.assets = assets;
@@ -255,8 +278,9 @@ export class World {
     }
     for (const fl of this.flames) this.scene.remove(fl.sprite);
     this.flames = [];
-    const forges: THREE.Vector3[] = [];
-    const keepers: THREE.Vector3[] = [];
+    for (const fx of this.forges) for (const sm of fx.smoke) this.scene.remove(sm.s);
+    const forges: ForgeFx[] = [];
+    const keepers: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx }[] = [];
     const extra = new THREE.Group(); // pièces faites à la main (étagères, fioles, plantes…)
     const b = new InstancedBuilder(this.assets);
     const byPos = new Map(f.rooms.map((r) => [`${r.x},${r.y}`, r]));
@@ -303,11 +327,14 @@ export class World {
       switch (r.type) {
         case 'safe': {
           if (r.forge) {
-            // La forge : un foyer rougeoyant contre le mur nord, une enclume, des tonneaux d'eau et des caisses de minerai
-            b.add('banner_patternA_red', c.x + 2, 0, c.z - HALF);
-            b.add('barrel_large', c.x + 4.4, 0, c.z - 4.2, 0, [0.8, 0.8, 0.8]);
+            // La forge : foyer, soufflet, charbon, enclume, bac de trempe, râtelier ; tonneau d'eau et caisses de minerai
+            if (r.doors.n === undefined) b.add('banner_patternA_red', c.x + 1.4, 0, c.z - HALF);
+            b.add('barrel_large', c.x + 4.6, 0, c.z + 2.8, 0.4, [0.75, 0.75, 0.75]);
             b.add('crates_stacked', c.x - 4.4, 0, c.z + 4.2, 0.6, [0.8, 0.8, 0.8]);
-            forges.push(c.clone());
+            const spots = buildForgeShop(extra, c.x, c.z, r.doors);
+            for (const dx of [-0.75, 0, 0.75]) this.addFlame(spots.hearth.clone().add(new THREE.Vector3(dx, 0.25, 0.1)), 0.34, 0.75);
+            forges.push({ roomId: r.id, spots, smith: null, nextEmber: 0, nextStrike: performance.now() + 4000 + Math.random() * 4000, nextSteam: 0, smoke: [] });
+            keepers.push({ pos: spots.smith, model: 'barbare', forge: forges[forges.length - 1] });
             break;
           }
           // La boutique du marchand : tout est rangé. Deux bannières qui encadrent la porte du fond,
@@ -321,7 +348,7 @@ export class World {
           b.add('candle_triple', c.x + 5.1, 0, c.z - 2.3);
           if (r.doors.o === undefined) b.add('keg_decorated', c.x - HALF + 1.3, 0, c.z + 1.6, Math.PI / 2, [0.7, 0.7, 0.7]);
           else b.add('keg_decorated', c.x - 3.6, 0, c.z + HALF - 1.3, 0, [0.7, 0.7, 0.7]);
-          keepers.push(buildSafeRoom(extra, c.x, c.z, r.doors));
+          keepers.push({ pos: buildSafeRoom(extra, c.x, c.z, r.doors), model: 'mage', tint: 0xe8c070 });
           break;
         }
         case 'arene':
@@ -369,6 +396,15 @@ export class World {
     });
     this.static.add(extra);
     this.placeKeepers(keepers);
+    this.forges = forges;
+    for (const fx of forges) {
+      for (let i = 0; i < 6; i++) {
+        const sp = smokeSprite();
+        sp.position.copy(fx.spots.chimney);
+        this.scene.add(sp);
+        fx.smoke.push({ s: sp, t: (i / 6) * 4, life: 4 });
+      }
+    }
     // Vue en coupe : murs, piliers, torches et bannières entre la caméra et la salle filmée sont arasés
     this.static.traverse((o) => {
       const m = o as THREE.InstancedMesh;
@@ -377,7 +413,6 @@ export class World {
       m.customDepthMaterial = CUT_DEPTH;
     });
     this.scene.add(this.static);
-    for (const c of forges) this.buildForge(c);
     // Socle sombre sous l'étage
     const xs = f.rooms.map((r) => r.x);
     const ys = f.rooms.map((r) => r.y);
@@ -390,56 +425,99 @@ export class World {
     this.static.add(base);
   }
 
-  /** Le marchand, derrière le comptoir de chaque safe room (un mage en robe dorée qui attend le client). */
-  private placeKeepers(spots: THREE.Vector3[]) {
+  /** Les PNJ du décor : le marchand derrière son comptoir (mage en robe dorée), le forgeron à son enclume. */
+  private placeKeepers(spots: { pos: THREE.Vector3; model: CharName; tint?: number; forge?: ForgeFx }[]) {
     for (const k of this.keepers) {
       this.scene.remove(k.obj);
       k.mixer.stopAllAction();
       k.obj.traverse((o) => (o as THREE.SkinnedMesh).skeleton?.dispose());
     }
     this.keepers = [];
-    for (const p of spots) {
-      const obj = this.assets.character('mage', 0xe8c070);
-      obj.position.copy(p);
+    for (const sp of spots) {
+      const obj = this.assets.character(sp.model, sp.tint);
+      obj.position.copy(sp.pos);
       this.scene.add(obj);
-      const mixer = new THREE.AnimationMixer(obj);
-      const clip = this.assets.clip('mage', 'Idle');
-      if (clip) mixer.clipAction(clip).play();
-      mixer.update(Math.random() * 2);
-      this.keepers.push({ obj, mixer });
+      const k: Keeper = { obj, mixer: new THREE.AnimationMixer(obj), model: sp.model, current: null, busyUntil: 0 };
+      this.keeperPlay(k, 'Idle');
+      k.mixer.update(Math.random() * 2);
+      this.keepers.push(k);
+      if (sp.forge) sp.forge.smith = k;
     }
   }
 
-  /** Foyer et enclume de la forge (formes simples, pas de modèle dans le pack). */
-  private buildForge(c: THREE.Vector3) {
-    const stone = new THREE.MeshStandardMaterial({ color: 0x8a7a80, roughness: 0.95 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.45, metalness: 0.25 });
-    const ember = new THREE.MeshStandardMaterial({ color: 0x401000, emissive: 0xff5a10, emissiveIntensity: 1.6 });
-    const hearth = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 1.8), stone);
-    hearth.position.set(c.x - 2.6, 0.65, c.z - HALF + 1.3);
-    const coals = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 1.1), ember);
-    coals.position.set(c.x - 2.6, 1.35, c.z - HALF + 1.3);
-    const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.6, 2.2, 4), stone);
-    hood.position.set(c.x - 2.6, 3.4, c.z - HALF + 1.2);
-    hood.rotation.y = Math.PI / 4;
-    const anvilBase = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.7), metal);
-    anvilBase.position.set(c.x + 0.6, 0.45, c.z - 1.2);
-    const anvilTop = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.45, 0.8), metal);
-    anvilTop.position.set(c.x + 0.6, 1.1, c.z - 1.2);
-    for (const m of [hearth, coals, hood, anvilBase, anvilTop]) {
-      m.castShadow = true;
-      m.receiveShadow = true;
-      this.static!.add(m);
-    }
-    for (const dx of [-0.8, 0, 0.8]) this.addFlame(new THREE.Vector3(c.x - 2.6 + dx, 1.9, c.z - HALF + 1.3));
+  private keeperPlay(k: Keeper, name: string, once = false) {
+    const clip = this.assets.clip(k.model, name);
+    if (!clip) return;
+    const a = k.mixer.clipAction(clip);
+    a.reset();
+    a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+    if (k.current && k.current !== a) k.current.fadeOut(0.15);
+    a.fadeIn(0.15).play();
+    k.current = a;
+    if (once) k.busyUntil = performance.now() + clip.duration * 1000 - 120;
   }
 
-  private addFlame(pos: THREE.Vector3) {
+  /** Un coup de marteau : le forgeron frappe, l'enclume crache des étincelles. `big` : une vraie commande !forge. */
+  private strike(fx: ForgeFx, big: boolean, delay = 0) {
+    setTimeout(() => {
+      if (fx.smith) this.keeperPlay(fx.smith, '2H_Melee_Attack_Chop', true);
+      setTimeout(() => {
+        this.burst(fx.spots.anvil.clone(), 0xffc860, big ? 45 : 14, big ? 4.5 : 2.6, 10);
+        if (big) this.flashAt(fx.spots.anvil.clone().sub(new THREE.Vector3(0, 2, 0)), 0xff9a40);
+      }, 380);
+    }, delay);
+  }
+
+  /** Vie de la forge : escarbilles, fumée sous le manteau, vapeur du bac, coups de marteau de temps en temps. */
+  private forgeLife(dt: number, now: number) {
+    for (const fx of this.forges) {
+      const near = fx.spots.anvil.distanceToSquared(this.camLook) < 34 * 34;
+      if (near && now > fx.nextEmber) {
+        fx.nextEmber = now + 180 + Math.random() * 260;
+        this.burst(fx.spots.hearth.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.8, 0.2, (Math.random() - 0.5) * 0.6)), 0xff7a20, 2, 1.1, -2.2);
+      }
+      if (near && now > fx.nextStrike) {
+        fx.nextStrike = now + 6000 + Math.random() * 7000;
+        this.strike(fx, false);
+      }
+      if (near && now > fx.nextSteam && Math.random() < 0.01) {
+        fx.nextSteam = now + 5000;
+        this.burst(fx.spots.tub.clone(), 0xd8e0e8, 12, 0.7, -1.4);
+      }
+      for (const sm of fx.smoke) {
+        sm.t += dt;
+        if (sm.t > sm.life) sm.t -= sm.life;
+        const k = sm.t / sm.life;
+        sm.s.position.set(fx.spots.chimney.x + Math.sin(sm.t * 1.3 + k * 4) * 0.4 * k, fx.spots.chimney.y + k * 3.2, fx.spots.chimney.z + k * 0.3);
+        const sc = 0.8 + k * 2.2;
+        sm.s.scale.set(sc, sc, 1);
+        (sm.s.material as THREE.SpriteMaterial).opacity = Math.sin(k * Math.PI) * 0.45;
+        sm.s.visible = sm.s.position.z <= CUT.uCutZ.value;
+      }
+    }
+    for (const k of this.keepers) {
+      k.mixer.update(dt);
+      if (k.busyUntil && now > k.busyUntil) {
+        k.busyUntil = 0;
+        this.keeperPlay(k, 'Idle');
+      }
+    }
+  }
+
+  /** Fin du tour de l'étage affiché, telle que l'annonce le serveur : sert à mesurer la durée d'un tour. */
+  noteTurnEnd(at: number) {
+    if (!at || at === this.turnEnd) return;
+    if (this.turnEnd && at - this.turnEnd > 3000) this.turnLen = at - this.turnEnd;
+    this.turnEnd = at;
+  }
+
+  private addFlame(pos: THREE.Vector3, weight = 1, size = 1) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTex, color: 0xffb070, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
     sprite.position.copy(pos);
-    sprite.scale.set(0.9, 1.25, 1);
+    sprite.scale.set(0.9 * size, 1.25 * size, 1);
+    sprite.userData.size = size;
     this.scene.add(sprite);
-    this.flames.push({ sprite, pos, seed: Math.random() * 100 });
+    this.flames.push({ sprite, pos, seed: Math.random() * 100, weight });
   }
 
   /** Objets qui changent : coffres, piques, loot au sol, escalier. */
@@ -562,7 +640,7 @@ export class World {
         key, name, model, obj, mixer: new THREE.AnimationMixer(obj), current: null, base: m ? 'Idle' : 'Idle', roomId: r.id, path: [], yaw: 0,
         slow: false, wanderAt: performance.now() + 1500 + Math.random() * 4000, freePos: null, freeUntil: 0,
         hp: 0, maxHp: 1, boss: !!m?.boss, player: !!p, label, bubble: null, dyingUntil: 0, busyUntil: 0, color: '#fff',
-        bot: !!p?.bot, ring: null,
+        bot: !!p?.bot, ring: null, badge: null,
       };
       this.ents.set(key, e);
       this.play(e, 'Idle');
@@ -757,6 +835,17 @@ export class World {
           this.burst(src.obj.position.clone().add(new THREE.Vector3(0, 0.8, 0)), 0xffcc33, 40, 2.5);
         }
         break;
+      case 'forge': {
+        // Le forgeron frappe trois fois ; au-dessus du joueur, ce qu'il vient d'améliorer, pendant un tour
+        const room = src ? src.roomId : null;
+        const fx2 = this.forges.find((x) => x.roomId === room) ?? this.forges[0];
+        if (fx2) for (let i = 0; i < 3; i++) this.strike(fx2, true, i * 650);
+        if (src) {
+          setTimeout(() => this.play(src, 'Cheer', true), 1900);
+          src.badge = { text: fx.label ?? 'Équipement amélioré', until: now + Math.max(4000, this.turnLen - 400) };
+        }
+        break;
+      }
       case 'trap':
         if (dst) {
           this.play(dst, 'Hit_A', true);
@@ -960,7 +1049,7 @@ export class World {
     this.sun.target.position.copy(this.camLook);
     this.flash.intensity *= Math.exp(-dt * 5);
 
-    for (const k of this.keepers) k.mixer.update(dt);
+    this.forgeLife(dt, now);
     // Personnages
     for (const e of this.ents.values()) {
       e.mixer.update(dt);
@@ -1004,11 +1093,12 @@ export class World {
       }
       const n = Math.sin(now / 110 + fl.seed) * 0.5 + Math.sin(now / 43 + fl.seed * 2) * 0.3;
       l.position.copy(fl.pos).add(new THREE.Vector3(0, 0, 0.6));
-      l.intensity = 38 * (0.85 + 0.15 * n);
+      l.intensity = 38 * fl.weight * (0.85 + 0.15 * n);
     });
     for (const fl of this.flames) {
       const n = Math.sin(now / 110 + fl.seed);
-      fl.sprite.scale.set(0.85 + 0.08 * n, 1.2 + 0.15 * n, 1);
+      const k = fl.sprite.userData.size ?? 1;
+      fl.sprite.scale.set((0.85 + 0.08 * n) * k, (1.2 + 0.15 * n) * k, 1);
     }
 
     // Particules
@@ -1055,7 +1145,7 @@ export class World {
       l.color.setHex(x.col!);
       l.position.set(c.x, 4.5, c.z + 1);
       const pulse = x.r.type === 'boss' && x.r.bossAlive ? 0.85 + 0.15 * Math.sin(now / 300) : 1;
-      l.intensity = (x.r.type === 'piege' ? 26 : 45) * pulse;
+      l.intensity = (x.r.forge ? 22 : x.r.type === 'piege' ? 26 : 45) * pulse;
     });
     // Poussière : un nuage qui suit la caméra, chaque grain dérive doucement
     const arr = this.motes.geometry.attributes.position.array as Float32Array;
@@ -1120,7 +1210,8 @@ export class World {
       const pct = Math.max(0, Math.min(100, (100 * e.hp) / e.maxHp));
       const hpColor = pct > 50 ? '#5ce65c' : pct > 25 ? '#ffc23d' : '#ff4040';
       const bub = e.bubble && e.bubble.until > now ? `<div class="bub3d">${escapeHtml(e.bubble.text)}</div>` : '';
-      const html = `${bub}<div class="n" style="color:${e.color}">${escapeHtml(e.name)}</div><div class="hp"><i style="width:${pct}%;background:${hpColor}"></i></div>`;
+      const badge = e.badge && e.badge.until > now ? `<div class="badge3d">${escapeHtml(e.badge.text)}</div>` : '';
+      const html = `${bub}${badge}<div class="n" style="color:${e.color}">${escapeHtml(e.name)}</div><div class="hp"><i style="width:${pct}%;background:${hpColor}"></i></div>`;
       if (e.lastHtml !== html) {
         e.lastHtml = html;
         e.label.innerHTML = html;

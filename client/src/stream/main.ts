@@ -81,10 +81,12 @@ function onMessage(m: ServerMsg) {
       if (slotFloor[visible] !== m.floor.n && slotFloor[1 - visible] === m.floor.n) visible = 1 - visible;
       slotFloor[visible] = m.floor.n;
       worlds[visible].setFloor(m.floor);
+      worlds[visible].noteTurnEnd(m.turnEndsAt - clockOffset);
     }
     if (m.standby) {
       slotFloor[1 - visible] = m.standby.n;
       worlds[1 - visible].setFloor(m.standby);
+      worlds[1 - visible].noteTurnEnd((m.standbyTurnEndsAt ?? m.turnEndsAt) - clockOffset);
     }
     applyVisible();
     renderHud(m);

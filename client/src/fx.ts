@@ -196,6 +196,13 @@ export class FxLayer {
         this.pops.push({ x: dst.x, y: dst.y - 40, text: 'NIVEAU +1', color: '#ffd65a', t0: now, big: true });
         break;
       }
+      case 'forge': {
+        const at = dst ?? src;
+        if (!at) break;
+        this.burst(at.x, at.y - 12, 18, ['#ffe27a', '#ff9a3d', '#fff6c8'], 60, now, -10);
+        this.pops.push({ x: at.x, y: at.y - 40, text: fx.label ?? 'FORGÉ', color: '#ffb347', t0: now, big: true });
+        break;
+      }
       case 'trap': {
         if (!dst) break;
         this.sprites.push({ x: dst.x, y: dst.y + 2, name: 'floor_spikes_anim', t0: now, life: 700, rise: 0 });

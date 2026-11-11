@@ -941,7 +941,7 @@ export class Game {
     it.name = `${it.name.replace(/ \+\d+$/, '')} +${it.plus}`;
     it.value += Math.round(cost / 2);
     const bonus = armor ? '+1 défense' : '+1 au jet, dégâts d' + it.dmg;
-    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} fait reforger son équipement : ${it.name} (${bonus}) pour ${cost} po.`, 25, [], { kind: 'levelup', dst: `p:${p.name}` });
+    this.roomEvent(p, p.floor, r.id, 'loot', `${p.name} fait reforger son équipement : ${it.name} (${bonus}) pour ${cost} po.`, 25, [], { kind: 'forge', src: `p:${p.name}`, dst: `p:${p.name}`, label: `${armor ? 'Armure' : 'Arme'} +${it.plus}` });
     this.forgeSays(p.floor, r.id, this.rng.pick(FORGE_LINES));
   }
 

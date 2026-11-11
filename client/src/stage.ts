@@ -6,7 +6,7 @@ import type { MapRenderer } from './map';
 import { sfx, type SoundName } from './sfx';
 
 const FX_SOUND: Record<GameFx['kind'], SoundName> = {
-  hit: 'hit', crit: 'crit', miss: 'miss', gag: 'gag', death: 'death', kill: 'kill', loot: 'coin', levelup: 'levelup', trap: 'trap', heal: 'heal',
+  hit: 'hit', crit: 'crit', miss: 'miss', gag: 'gag', death: 'death', kill: 'kill', loot: 'coin', levelup: 'levelup', trap: 'trap', heal: 'heal', forge: 'forge',
 };
 
 const keyOf = (name: string) => normalize(name).replace(/^@/, '').replace(/[^a-z0-9_]/g, '_').slice(0, 25);

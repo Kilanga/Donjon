@@ -427,3 +427,109 @@ export function buildSafeRoom(g: THREE.Group, cx: number, cz: number, doors: { n
   plant(g, cx + HALF - 0.9, cz - 1.8);
   return new THREE.Vector3(cx + 2.8, 0, cz - 4.95);
 }
+
+// ----------------------------------------------------------------- la forge
+// Un atelier qui sert : foyer et soufflet, tas de charbon, enclume sur billot, bac de trempe, râtelier d'armes.
+
+const F_STONE = new THREE.MeshStandardMaterial({ color: 0x7d7068, roughness: 0.95 });
+const F_SOOT = new THREE.MeshStandardMaterial({ color: 0x3c3330, roughness: 1 });
+const F_METAL = new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.4, metalness: 0.6 });
+const F_STEEL = new THREE.MeshStandardMaterial({ color: 0xb8c0c8, roughness: 0.25, metalness: 0.8 });
+const F_COAL = new THREE.MeshStandardMaterial({ color: 0x1b1716, roughness: 1, flatShading: true });
+const F_EMBER = new THREE.MeshStandardMaterial({ color: 0x3a0c00, emissive: 0xff4a0a, emissiveIntensity: 0.9, roughness: 1 });
+const F_HOT = new THREE.MeshStandardMaterial({ color: 0x601800, emissive: 0xff6a1a, emissiveIntensity: 1.1 });
+const F_WATER = new THREE.MeshStandardMaterial({ color: 0x3a7a96, emissive: 0x0c2a3a, roughness: 0.05, metalness: 0.2 });
+const F_LEATHER = new THREE.MeshStandardMaterial({ color: 0x5a3520, roughness: 0.9 });
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 16);
+const CONE = new THREE.ConeGeometry(1, 1, 12);
+const HOOD_GEO = new THREE.CylinderGeometry(0.6, 1.65, 2.4, 4);
+const COAL_GEO = new THREE.DodecahedronGeometry(1, 0);
+
+export interface ForgeSpots {
+  hearth: THREE.Vector3; // centre du feu
+  chimney: THREE.Vector3; // haut du manteau (fumée)
+  anvil: THREE.Vector3; // dessus de l'enclume (étincelles)
+  smith: THREE.Vector3; // place du forgeron
+  tub: THREE.Vector3; // surface de l'eau (vapeur)
+}
+
+export function buildForgeShop(g: THREE.Group, cx: number, cz: number, doors: { n?: number; s?: number; e?: number; o?: number }): ForgeSpots {
+  const back = cz - HALF + 1.3;
+  const hx = cx - 2.6;
+  // Foyer en pierre, braises, manteau de cheminée noirci
+  g.add(part(BOX, F_STONE, hx, 0.65, back, 3.2, 1.3, 1.8));
+  g.add(part(BOX, F_EMBER, hx, 1.33, back, 2.3, 0.12, 1.05));
+  for (let i = 0; i < 7; i++) g.add(part(COAL_GEO, F_EMBER, hx - 0.9 + i * 0.3, 1.42, back + ((i * 37) % 5) * 0.08 - 0.15, 0.17, 0.12, 0.17));
+  const hood = part(HOOD_GEO, F_SOOT, hx, 3.5, back - 0.1);
+  hood.rotation.y = Math.PI / 4;
+  g.add(hood);
+  // Soufflet de cuir, à gauche du foyer
+  const bel = part(BOX, F_LEATHER, hx - 2.05, 0.75, back + 0.2, 0.9, 0.35, 1.2);
+  bel.rotation.z = 0.25;
+  g.add(bel);
+  g.add(part(CYL, F_METAL, hx - 1.5, 0.95, back + 0.2, 0.08, 0.6, 0.08));
+  // Tas de charbon, à droite du foyer
+  for (let i = 0; i < 14; i++) {
+    const a = (i * 2.4) % (Math.PI * 2);
+    const d = (i % 4) * 0.22;
+    const s = 0.22 + ((i * 13) % 5) * 0.04;
+    g.add(part(COAL_GEO, F_COAL, hx + 2.1 + Math.cos(a) * d, s * 0.7 + (i < 4 ? 0.25 : 0), back + 0.3 + Math.sin(a) * d * 0.8, s, s * 0.8, s));
+  }
+  // Enclume sur son billot, avec une pièce rougeoyante dessus
+  const ax = cx + 0.4;
+  const az = cz - 1.2;
+  g.add(part(CYL, WOOD_DARK, ax, 0.4, az, 0.55, 0.8, 0.55));
+  g.add(part(BOX, F_METAL, ax, 0.95, az, 0.55, 0.3, 0.45)); // taille
+  g.add(part(BOX, F_METAL, ax, 1.22, az, 1.25, 0.26, 0.55)); // table
+  const horn = part(CONE, F_METAL, ax + 0.95, 1.22, az, 0.2, 0.7, 0.2);
+  horn.rotation.z = -Math.PI / 2;
+  g.add(horn);
+  g.add(part(BOX, F_HOT, ax - 0.1, 1.39, az, 0.6, 0.07, 0.14));
+  // Bac de trempe : un demi-tonneau plein d'eau
+  const tx = cx + 2.3;
+  const tz = cz - 0.6;
+  g.add(part(CYL, WOOD, tx, 0.39, tz, 0.75, 0.78, 0.75));
+  g.add(part(CYL, F_SOOT, tx, 0.79, tz, 0.7, 0.01, 0.7));
+  g.add(part(CYL, F_METAL, tx, 0.66, tz, 0.77, 0.08, 0.77));
+  g.add(part(CYL, F_METAL, tx, 0.15, tz, 0.77, 0.08, 0.77));
+  g.add(part(CYL, F_WATER, tx, 0.83, tz, 0.68, 0.02, 0.68));
+  // Râtelier d'armes contre le mur nord (ou est, s'il y a une porte au nord du côté droit : on reste à droite de toute façon)
+  const rx = cx + 4.1;
+  const rz = cz - HALF + 0.7;
+  g.add(part(BOX, WOOD_DARK, rx, 0.9, rz, 2.3, 0.12, 0.3));
+  g.add(part(BOX, WOOD_DARK, rx, 0.25, rz + 0.15, 2.3, 0.12, 0.5));
+  for (const k of [-1, 1]) g.add(part(BOX, WOOD_DARK, rx + k * 1.1, 0.75, rz, 0.12, 1.5, 0.3));
+  for (let i = 0; i < 4; i++) {
+    const x = rx - 0.8 + i * 0.53;
+    g.add(part(BOX, F_STEEL, x, 1.2, rz + 0.18, 0.12, 1.6 - (i % 2) * 0.3, 0.04)); // lame
+    g.add(part(BOX, F_LEATHER, x, 0.35, rz + 0.18, 0.09, 0.4, 0.09)); // poignée
+    g.add(part(BOX, F_METAL, x, 0.58, rz + 0.18, 0.4, 0.06, 0.08)); // garde
+  }
+  // Marteau et tenailles posés au pied de l'enclume
+  const hm = part(BOX, WOOD, ax - 0.6, 0.1, az + 0.75, 0.08, 0.08, 0.8);
+  hm.rotation.y = 0.5;
+  g.add(hm);
+  g.add(part(BOX, F_METAL, ax - 0.78, 0.15, az + 1.1, 0.22, 0.18, 0.16));
+  void doors;
+  return {
+    hearth: new THREE.Vector3(hx, 1.5, back),
+    chimney: new THREE.Vector3(hx, 4.7, back - 0.1),
+    anvil: new THREE.Vector3(ax - 0.1, 1.45, az),
+    smith: new THREE.Vector3(ax - 0.1, 0, az - 1.25),
+    tub: new THREE.Vector3(tx, 0.85, tz),
+  };
+}
+
+/** Fumée : quelques volutes sombres qui montent du manteau (mélange normal, pas additif). */
+let _smokeTex: THREE.Texture | null = null;
+export function smokeSprite(): THREE.Sprite {
+  _smokeTex ??= canvasTex(64, 64, (g) => {
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,0.55)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 64, 64);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: _smokeTex, color: 0x6e6660, transparent: true, depthWrite: false, opacity: 0 }));
+  return s;
+}

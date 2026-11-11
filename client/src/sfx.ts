@@ -1,6 +1,6 @@
 // Sons synthétisés en WebAudio (aucun fichier). Activés après la première interaction.
 
-type SoundName = 'hit' | 'crit' | 'miss' | 'death' | 'kill' | 'levelup' | 'coin' | 'trap' | 'step' | 'tick' | 'alliance' | 'betrayal' | 'heal' | 'gag';
+type SoundName = 'hit' | 'crit' | 'miss' | 'death' | 'kill' | 'levelup' | 'coin' | 'trap' | 'step' | 'tick' | 'alliance' | 'betrayal' | 'heal' | 'gag' | 'forge';
 
 class Sfx {
   private ctx: AudioContext | null = null;
@@ -100,6 +100,14 @@ class Sfx {
         break;
       case 'levelup':
         [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.14, 'square', 0.13 * v, i * 0.09));
+        break;
+      case 'forge':
+        // trois coups de marteau sur l'enclume : un « clang » métallique et son écho
+        [0, 0.28, 0.56].forEach((t, i) => {
+          this.tone(1760 - i * 90, 0.16, 'triangle', 0.16 * v, t);
+          this.tone(2637, 0.08, 'square', 0.05 * v, t);
+          this.noise(0.03, 0.4 * v, t, 6000);
+        });
         break;
       case 'trap':
         this.noise(0.05, 0.8 * v, 0, 3000);
