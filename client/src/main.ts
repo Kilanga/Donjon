@@ -384,7 +384,7 @@ function renderSpectator() {
   const all = f.rooms.flatMap((r) => (r.players ?? []).map((p) => ({ ...p, room: r.id })));
   $('me-card').innerHTML = `<div class="card-title">Crawlers de l'étage <span class="muted">${all.length}</span></div>` + all.map((p) => `<div class="entity focusable" data-focus="${esc(p.name)}" title="Suivre ${esc(p.name)}"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">niv. ${p.level} · salle ${p.room}</span>${p.bot ? ' <span class="badge pnj">PNJ</span>' : ''}${p.traitor ? ' <span class="badge traitor">traître</span>' : ''}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div></div>`).join('');
   const mons = f.rooms.flatMap((r) => r.monsters ?? []);
-  $('room-card').innerHTML = `<div class="card-title">Étage ${f.n}</div><div class="desc">${f.rooms.length} salles · ${mons.length} monstres · boss : ${mons.find((m) => m.boss)?.name ?? 'vaincu'}</div>`;
+  $('room-card').innerHTML = `<div class="card-title">Étage ${f.n}</div><div class="desc">${f.rooms.length} salles · ${mons.length} monstres · boss : ${esc(mons.find((m) => m.boss)?.name ?? 'vaincu')}</div>`;
   $('pending').className = 'pending hidden';
 }
 
