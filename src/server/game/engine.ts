@@ -1460,7 +1460,7 @@ export class Game {
       case 'fontaine': {
         if (used.includes(p.key)) return this.say(p, 'You already drank from it. Your stomach says no.');
         used.push(p.key);
-        if (this.rng.chance(0.7)) {
+        if (this.rng.chance(0.9)) { // 1 chance sur 10 de tomber sur de l'eau croupie
           const heal = this.rng.die(6) + 2 * f.n;
           p.hp = Math.min(p.maxHp, p.hp + heal);
           return ev(`${p.name} drinks from the fountain: refreshing! +${heal} HP.`, 5, 'loot');
@@ -1470,8 +1470,11 @@ export class Game {
         return ev(`${p.name} drinks from the fountain… it was NOT water. −${dmg} HP and a very green face.`, 25, 'piege');
       }
       case 'puits': {
+        // Un vœu par joueur et par puits (sinon un joueur riche y farme des objets rares à chaque tour)
+        if (used.includes(p.key)) return this.say(p, 'You already made your wish here. The well only grants one per crawler.');
         const cost = 10 * f.n;
         if (p.gold < cost) return this.say(p, `A wish costs ${cost} gold here. You have ${p.gold}.`);
+        used.push(p.key);
         p.gold -= cost;
         const roll = this.rng.next();
         if (roll < 0.45) {

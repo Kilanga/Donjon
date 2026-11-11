@@ -217,9 +217,10 @@ describe('salles spéciales', () => {
     throw new Error('aucun ogre sur 30 graines');
   });
 
-  it('autel et fontaine : une seule fois par joueur', () => {
-    for (const kind of ['autel', 'fontaine']) {
+  it('autel, fontaine et puits : une seule fois par joueur', () => {
+    for (const kind of ['autel', 'fontaine', 'puits']) {
       const { g, p } = featured(kind);
+      p.gold = 500;
       act(g, T0 + 20_000);
       const ev = act(g, T0 + 40_000);
       expect(ev.some((e) => e.to === 'a' && /already/.test(e.text))).toBe(true);
