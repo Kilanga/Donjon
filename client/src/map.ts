@@ -584,6 +584,27 @@ export class MapRenderer {
     }
     if (r.trapArmed) tiles.tile(ctx, 'floor_spikes_anim', midCol, midRow, t);
     if (r.chest !== 'aucun') tiles.drawAnchored(ctx, r.chest === 'ferme' ? 'chest_full_open_anim_f0' : 'chest_empty_open_anim_f2', (midCol + 0.5) * PX, (oy + 3) * PX);
+    if (r.crypt) {
+      // La crypte : une pierre tombale par éliminé qui attend qu'on le ressuscite, et quelques crânes
+      tiles.drawAnchored(ctx, 'skull', (ox + 1.5) * PX, (oy + IH + 0.5) * PX);
+      tiles.drawAnchored(ctx, 'skull', (ox + IW - 1.2) * PX, (oy + 2.6) * PX);
+      r.crypt.slice(0, 6).forEach((g, i) => {
+        const x = (ox + 1.6 + (i % 3) * 1.9) * PX;
+        const y = (oy + 2.2 + Math.floor(i / 3) * 1.6) * PX;
+        const w = PX * 0.8;
+        const h = PX * 1.05;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(x - w / 2 + 3, y + 2, w, 5);
+        ctx.fillStyle = '#8d8a96';
+        ctx.beginPath();
+        ctx.roundRect(x - w / 2, y - h, w, h, [w / 2, w / 2, 2, 2]);
+        ctx.fill();
+        ctx.fillStyle = '#5d5a66';
+        ctx.fillRect(x - 1.5, y - h * 0.78, 3, h * 0.5);
+        ctx.fillRect(x - w * 0.22, y - h * 0.62, w * 0.44, 3);
+        this.labels.push({ text: g.name, x, y: y - h - 4, color: '#c9c2d8', hp: 0, maxHp: 0 });
+      });
+    }
     if (r.forge) {
       // La forge : un feu de forge dans le mur, le forgeron (nain) et ses caisses
       tiles.tile(ctx, 'wall_fountain_mid_red_anim', ox + 2, oy + 1, t);

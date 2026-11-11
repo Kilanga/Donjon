@@ -73,6 +73,7 @@ export interface RoomState {
   doors: Partial<Record<Dir, number>>;
   desc: string;
   searchedBy: string | null;
+  searchedTurn?: number; // tour de la fouille : la salle se remplit de nouveau 5 tours plus tard
   chest: 'aucun' | 'ferme' | 'ouvert';
   mimic: boolean;
   trapArmed: boolean;
@@ -98,8 +99,9 @@ export interface FloorState {
   warned5?: boolean;
   warned1?: boolean;
   stairsOpened?: boolean;
-  respawns?: { turn: number; kind: string }[]; // monstres tués, qui reviennent au tour indiqué // l'annonce « l'escalier se descelle » a été faite
+  respawns?: { turn: number; kind: string; roomId?: number }[]; // monstres tués, qui reviennent au tour indiqué // l'annonce « l'escalier se descelle » a été faite
   bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
+  cryptRoom?: number; // la crypte : les tombes des éliminés y attendent qu'un crawler les ressuscite
 }
 
 export interface VoteState {
@@ -116,6 +118,7 @@ export interface Grave {
   snap: PlayerState;
   floor: number; // étage où il a été éliminé
   turn: number;
+  cryptFloor?: number; // étage dont la crypte abrite sa tombe (!resurrect)
 }
 
 /** Points de faveur d'un viewer (avec ou sans perso). */

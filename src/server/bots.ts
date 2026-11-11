@@ -25,6 +25,7 @@ const LINES = {
   loot: ['Gold! Finally!', 'That\'s mine now.', 'Nice loot.'],
   safe: ['Ah, some rest.', 'Merchant, your prices are a disgrace.', 'Let\'s catch our breath.'],
   welcome: ['Welcome, adventurer!', 'Reinforcements, at last!', 'Watch out for the traps.'],
+  refuse: ['No offense, I work alone.', 'An alliance? With you? I thought about it. No.', 'Last time I trusted someone, I lost a boot.', 'Buy me a potion first, then we\'ll talk.'],
   closer: [
     'Wait for me!', 'Last one out turns off the lights.', 'We\'re in no hurry, us.', 'Has anyone seen my glasses?',
     'Is it shaking a bit, or is it just me?', 'The stairs? Never. We\'re closing up.', 'Just tidying up, coming!', 'Another floor to close down…',
@@ -142,9 +143,16 @@ export class BotManager {
     seen.add(`${f.n}:${r.id}`);
     this.visited.set(p.key, seen);
 
-    // Proposition d'alliance d'un joueur : acceptée si le PNJ ne lui en veut pas (et souvent si c'est un ami)
-    const offer = p.allyProposals.map((k) => g.state.players[k]).find((o) => o && !o.bot && (this.hooks.mood?.(p.name, o.key) ?? 0) >= 0);
-    if (offer && !p.allianceId) return `!ally ${offer.name}`;
+    // Proposition d'alliance d'un joueur : un ami accepte toujours, un inconnu une fois sur deux, une rancune jamais
+    for (const k of [...p.allyProposals]) {
+      const o = g.state.players[k];
+      if (!o || o.bot || p.allianceId) continue;
+      const mood = this.hooks.mood?.(p.name, o.key) ?? 0;
+      if (mood >= 3 || (mood >= 0 && Math.random() < 0.5)) return `!ally ${o.name}`;
+      p.allyProposals = p.allyProposals.filter((x) => x !== k); // refusé : il faudra redemander plus tard
+      this.lastSay.delete(p.key);
+      this.talk(p, 'refuse', 1);
+    }
     if (p.statPoints > 0) return `!levelup ${p.cls === 'mage' ? 'int' : p.cls === 'voleur' ? 'dex' : 'str'}`;
     const potion = p.items.find((i) => i.tpl === 'potion' || i.tpl === 'grande_potion');
     if (p.hp <= p.maxHp * 0.35 && potion) {

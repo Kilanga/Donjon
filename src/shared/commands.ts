@@ -22,6 +22,7 @@ export type CommandName =
   | 'levelup'
   | 'status'
   | 'help'
+  | 'resurrect'
   | 'vote';
 
 export interface ParsedCommand {
@@ -58,6 +59,7 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   status: { name: 'status' }, stats: { name: 'status' }, statut: { name: 'status' },
   help: { name: 'help' }, commands: { name: 'help' }, rules: { name: 'help' }, aide: { name: 'help' }, commandes: { name: 'help' }, regles: { name: 'help' },
   vote: { name: 'vote' }, voter: { name: 'vote' },
+  resurrect: { name: 'resurrect' }, revive: { name: 'resurrect' }, raise: { name: 'resurrect' }, ressuscite: { name: 'resurrect' }, ressusciter: { name: 'resurrect' },
 };
 
 /** Minuscules et sans accents, pour comparer des noms tapés au clavier. */
@@ -117,9 +119,8 @@ export function suggestCommand(raw: string): string | null {
 export const HELP_TEXT = [
   '!join [barbarian|knight|rogue|mage] — enter the dungeon',
   '!north !south !east !west — move to another room',
-  '!attack [target] — attack a monster or a player',
-  '!search — search the room, open a chest, disarm a trap',
-  '!pickup [item] — pick up what is lying on the floor',
+  '!attack [target] — attack a monster or a player (no monster here: a random player)',
+  '!search or !pickup — grab the loot on the floor, open a chest, disarm a trap, search the room (two at once: d20 vs d20)',
   '!use <item> / !equip <item> — use or equip',
   '!shop, !buy <#>, !sell <item> — trade (safe room)',
   '!rest — heal up (safe room)',
@@ -127,6 +128,7 @@ export const HELP_TEXT = [
   '!talk <message> — chat with the merchant (safe room)',
   '!ally <player> / !leave — form or leave an alliance',
   '!levelup <str|dex|int|cha> — spend a stat point',
+  '!resurrect <name> [gold|hp] — in the crypt, bring an eliminated player back (50 gold × floor, or half your current HP)',
   '!descend — take the stairs (boss dead and stairs unsealed: second half of the timer)',
   '!vote <#> — vote for the production\'s event (or to bring back a dead player after a collapse: one vote per name)',
   '!bet <name> <amount> — big bet: who gets out first? · !bet yes|no <amount> — current flash bet',

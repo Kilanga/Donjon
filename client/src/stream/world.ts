@@ -71,6 +71,8 @@ const MONSTER_LOOK: Record<string, Look> = {
   marais: { model: 'q_crapaud', scale: 1.0, tint: 0x9ac070, repli: { model: 'sk_minion', scale: 1.1, tint: 0x80b060 } },
   golem: { model: 'q_golem', scale: 0.95, tint: 0xd8b088, repli: { model: 'sk_warrior', scale: 1.3, tint: 0x9a7a50 } },
   lezard: { model: 'q_lezard', scale: 1.05, repli: { model: 'sk_rogue', scale: 1.05, tint: 0x80d090 } },
+  golem_ancien: { model: 'q_golem', scale: 1.55, tint: 0xb89878, repli: { model: 'sk_warrior', scale: 1.8, tint: 0x9a7a50 } },
+  chef_orque: { model: 'q_orque_chef', scale: 1.6, tint: 0xc0d890, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xb8d890 } },
   yeti_ancien: { model: 'q_yeti', scale: 1.6, tint: 0xd8ecff, repli: { model: 'sk_warrior', scale: 1.8, tint: 0xd0e8ff } },
   dragon: { model: 'q_dragon', scale: 1.5, emissive: 0x301000, repli: { model: 'sk_rogue', scale: 1.8, tint: 0xff8040, emissive: 0x401000 } },
   crapaud_roi: { model: 'q_crapaud', scale: 1.6, tint: 0xc0e090, repli: { model: 'sk_minion', scale: 1.8, tint: 0x90c070 } },
@@ -183,6 +185,7 @@ export class World {
   private beam: THREE.Mesh | null = null; // rayon au-dessus de l'escalier ouvert
   private collapseAt: number | null = null;
   private tombs: { obj: THREE.Object3D; label: HTMLDivElement | null }[] = [];
+  private cryptTombs = new Map<number, { obj: THREE.Object3D; label: HTMLDivElement | null }>(); // tombes de la crypte (n° de tombe)
   private motes: THREE.Points;
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
@@ -260,6 +263,11 @@ export class World {
         t.label?.remove();
       }
       this.tombs = [];
+      for (const t of this.cryptTombs.values()) {
+        this.scene.remove(t.obj);
+        t.label?.remove();
+      }
+      this.cryptTombs.clear();
       this.buildStatic(f);
       for (const e of this.ents.values()) this.removeEnt(e);
       this.ents.clear();
@@ -267,7 +275,34 @@ export class World {
       this.shot = { roomId: null, since: 0 };
     }
     this.buildDynamic(f);
+    this.syncCrypt(f);
     this.syncEntities(f, changed);
+  }
+
+  /** La crypte : une tombe nommée par éliminé qui attend qu'un crawler le ressuscite. */
+  private syncCrypt(f: FloorView) {
+    const room = f.rooms.find((r) => r.crypt);
+    const graves = room?.crypt ?? [];
+    const want = new Set(graves.map((g) => g.no));
+    for (const [no, t] of this.cryptTombs) {
+      if (want.has(no)) continue;
+      this.scene.remove(t.obj);
+      t.label?.remove();
+      this.cryptTombs.delete(no);
+    }
+    if (!room) return;
+    const c = center(room);
+    graves.slice(0, 8).forEach((g, i) => {
+      if (this.cryptTombs.has(g.no)) return;
+      const t = makeTomb(g.no * 17 + 3);
+      t.position.set(c.x - 4.5 + (i % 4) * 3, 0, c.z - 3 + Math.floor(i / 4) * 3.5);
+      this.scene.add(t);
+      const label = document.createElement('div');
+      label.className = 'tomb3d';
+      label.textContent = g.name;
+      this.labels.appendChild(label);
+      this.cryptTombs.set(g.no, { obj: t, label });
+    });
   }
 
   private buildStatic(f: FloorView) {
@@ -1230,7 +1265,7 @@ export class World {
       }
     }
     // Noms gravés sur les tombes des vrais joueurs (en plan rapproché seulement)
-    for (const t of this.tombs) {
+    for (const t of [...this.tombs, ...this.cryptTombs.values()]) {
       if (!t.label) continue;
       v.copy(t.obj.position).add(new THREE.Vector3(0, 2.25, 0)).project(this.camera);
       const vis = close && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
@@ -1242,6 +1277,7 @@ export class World {
 
 export function roomLabel(r: RoomView): string {
   if (r.forge) return 'Forge';
+  if (r.crypt) return `Crypt ${r.id}`;
   return { normale: 'Room', safe: 'Safe room', piege: 'Trapped room', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' }[r.type] + ` ${r.id}`;
 }
 

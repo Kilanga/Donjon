@@ -67,6 +67,7 @@ export interface RoomView {
   monsters?: MonsterView[];
   ground?: Item[];
   groundGold?: number;
+  crypt?: { no: number; name: string; level: number; cls: ClassId }[]; // la crypte de l'étage : tombes à ressusciter
 }
 
 export interface MerchantOffer {

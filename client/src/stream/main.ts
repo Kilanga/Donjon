@@ -116,11 +116,11 @@ function onMessage(m: ServerMsg) {
     for (const r of m.rooms) floorHeat.set(r.floor, { s: heatOf(r.floor, now) + r.score * 0.5, t: now });
     const top = m.rooms[0];
     const other = 1 - visible;
-    if (top && top.score >= 12 && slotFloor[other] === top.floor && state) {
+    if (top && top.score + top.floor >= 10 && slotFloor[other] === top.floor && state) {
       const sum = state.floors ?? [];
       const humansThere = sum.find((f) => f.n === top.floor)?.humans ?? 0;
       const humansHere = sum.find((f) => f.n === slotFloor[visible])?.humans ?? 0;
-      if (humansThere > 0 || humansHere === 0 || top.score >= 30) switchTo(other); // vrais joueurs d'abord, sauf gros moment ailleurs
+      if (humansThere > 0 || humansHere === 0 || top.score + top.floor >= 20) switchTo(other); // vrais joueurs d'abord, sauf gros moment ailleurs
     }
     if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
@@ -237,7 +237,8 @@ function pickFloor(s: PlayerViewMsg) {
   const occupied = floors.filter((f) => f.humans + f.bots > 0);
   if (!occupied.length) return;
   const now = performance.now();
-  const score = (f: { n: number; humans: number; bots: number }) => f.humans * 12 + f.bots * 2 + heatOf(f.n, now);
+  // Les vrais joueurs comptent, sans coller la caméra à leur étage ; chaque étage plus profond vaut +1
+  const score = (f: { n: number; humans: number; bots: number }) => f.humans * 6 + f.bots * 2 + heatOf(f.n, now) + f.n;
   const ranked = [...occupied].sort((a, b) => score(b) - score(a)).slice(0, 2).map((f) => f.n);
   let changed = false;
   // On garde les scènes déjà chargées sur un étage voulu ; on recharge la scène cachée en priorité

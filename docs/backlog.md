@@ -11,7 +11,7 @@ Mis de côté pendant le passage du jeu en anglais. À reprendre dans cet ordre.
 - Étages de 15 min (le premier 30) : environ 2 h 15 de partie. Afficher « Fin de saison dans … » sur le stream.
 - Immunité après réapparition : 1 min, perdue dès qu'on attaque.
 
-## 2. Règles
+## 2. Règles — FAIT (12/11) : résurrection au choix or (50 × étage) ou moitié des PV actuels
 - !attaque sans monstre : cible au hasard parmi les joueurs de la salle (hors alliés et immunisés).
 - Fusionner !fouille et !ramasse. Si deux joueurs le font au même tour : jet de d20 contre d20. Le butin de fouille revient au bout de 5 tours.
 - Monstres : réapparition dans la salle où ils sont morts (si elle est vide), avec un message.
@@ -32,6 +32,5 @@ Mis de côté pendant le passage du jeu en anglais. À reprendre dans cet ordre.
 - Lien de la partie dans le chat : !lien est déjà pris (liaison de compte) et le jeu ne peut pas écrire dans le chat. Options : (a) adresse fixe via un tunnel Cloudflare sur un domaine à soi + commande Cloudbot !carte ; (b) compte bot Twitch autorisé à écrire.
 
 ## Décisions en attente
-- Coût d'une résurrection par un autre joueur.
 - Lien : adresse fixe ou bot Twitch.
 - Quelles nouvelles salles garder.

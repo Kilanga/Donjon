@@ -113,7 +113,7 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
     if (r.type === 'arene') floor.monsters.push(spawnMonster(rng.pick(fixed), n + 1, r.id, rng, nextId));
   }
   // Boss : les classiques en haut, les boss des profondeurs plus bas (les plus récents d'abord)
-  const bosses = BOSSES.filter((b) => b.minFloor <= n && b.minFloor >= Math.max(1, n - 2));
+  const bosses = BOSSES.filter((b) => b.minFloor <= n && b.minFloor >= Math.max(1, n - 1));
   floor.monsters.push(spawnMonster(rng.pick(bosses.length ? bosses : BOSSES), n, boss.id, rng, nextId));
   const normals = rooms.filter((r) => r.type === 'normale' && dist[r.id] > 1);
   const nWander = Math.max(2, Math.round(count / 8));
@@ -125,7 +125,7 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
 
 export function spawnMonster(tpl: MonsterTpl, floorN: number, roomId: number, rng: Rng, nextId: () => string): MonsterState {
   const f = Math.max(0, floorN - 1);
-  const hp = Math.round(tpl.hp * (1 + 0.25 * f));
+  const hp = Math.round(tpl.hp * (1 + (tpl.boss ? 0.22 : 0.25) * f));
   const [g0, g1] = tpl.gold;
   return {
     id: nextId(), kind: tpl.kind, name: rng.pick(tpl.names), sprite: tpl.sprite, hp, maxHp: hp,

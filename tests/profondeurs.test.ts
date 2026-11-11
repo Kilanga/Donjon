@@ -124,7 +124,7 @@ describe('dernier étage et légendes', () => {
 });
 
 describe('monstres qui reviennent et XP', () => {
-  it('un monstre tué revient 3 tours plus tard, dans une salle vide ; un boss non', () => {
+  it('un monstre tué revient 5 tours plus tard, dans la salle où il est tombé (si elle est vide) ; un boss non', () => {
     const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 11 });
     g.submit('ana', '!join barbare', T0);
     const f = g.floor(1)!;
@@ -135,15 +135,14 @@ describe('monstres qui reviennent et XP', () => {
     kill(m, 1, null);
     kill(boss, 1, null);
     let t = T0;
-    g.tick((t += 20_000));
-    g.tick((t += 20_000));
+    for (let i = 0; i < 4; i++) g.tick((t += 20_000));
     expect(f.monsters.some((x) => !ids.has(x.id))).toBe(false); // pas encore
-    g.tick((t += 20_000));
+    const ev = g.tick((t += 20_000));
     const back = f.monsters.filter((x) => !ids.has(x.id));
     expect(back).toHaveLength(1); // le monstre revient, pas le boss (qui a ses propres règles)
     expect(back[0].kind).toBe(m.kind);
-    expect(back[0].roomId).not.toBe(g.player('ana')!.roomId);
-    expect(f.rooms[back[0].roomId].type).toBe('normale');
+    expect(back[0].roomId).toBe(m.roomId);
+    expect(ev.some((e) => /is back on its feet/.test(e.text))).toBe(true);
   });
 
   it('tuer un crawler rapporte moins que tuer un monstre du même étage', () => {

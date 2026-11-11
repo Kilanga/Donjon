@@ -89,14 +89,15 @@
       <p><b>Turns:</b> every 20 seconds, everyone acts at the same time. You send <b>one</b> command per turn (the last one counts). If you do nothing, you keep attacking your target, or you strike back if someone attacks you. <b>Turn order:</b> potions and items first, then attacks (by initiative: d20 + Dexterity), then everything else. So you can drink before getting hit, but you can't run away before.</p>
       <div class="help-grid">
         <div><code>!north !south !east !west</code> move to another room<br><small>fleeing a monster takes a Dexterity roll</small></div>
-        <div><code>!attack [target]</code> a monster (name or #) or a player (name)</div>
+        <div><code>!attack [target]</code> a monster (name or #) or a player (name); no monster here = a random player</div>
         <div><code>!search</code> find gold, open a chest, disarm a trap</div>
-        <div><code>!pickup</code> grab what's lying around (the loot of the dead!)</div>
+        <div><code>!pickup</code> same as !search: grab the loot first. Two at once? d20 vs d20</div>
         <div><code>!use</code> / <code>!equip</code> potions, weapons, weird items</div>
         <div><code>!buy</code> / <code>!sell</code> / <code>!rest</code> in safe rooms</div>
         <div><code>!ally name</code> team up (shared XP and map)</div>
         <div><code>!levelup str|dex|int|cha</code> spend a stat point</div>
         <div><code>!descend</code> take the stairs once the boss is dead</div>
+        <div><code>!resurrect name</code> in a crypt: bring an eliminated player back (gold or half your HP)</div>
         <div><code>!vote 1</code> vote for the production's event</div>
         <div><code>!talk hello</code> chat with the merchant (safe room)</div>
         <div><code>!forge weapon</code> / <code>!forge armor</code> upgrade your gear at the blacksmith</div>

@@ -119,6 +119,11 @@ export class Game {
     return f.theme === 'inondé' || this.state.turn < this.state.floodUntil;
   }
 
+  /** Défense d'un joueur (sans le d20) : la moitié de l'Agilité, la moitié du niveau, l'armure, et le bouclier du chevalier. */
+  private defense(p: PlayerState): number {
+    return Math.floor(p.stats.agi / 2) + half(p.level) + (p.armor?.def ?? 0) + (p.cls === 'chevalier' ? 2 : 0) - (this.wet(p.floor, p.roomId) ? 1 : 0);
+  }
+
   private isImmune(p: PlayerState) {
     return this.now < p.immuneUntil;
   }
@@ -157,6 +162,12 @@ export class Game {
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
       f = generateFloor(n, rooms, this.rng, this.nextId);
       this.state.floors[n] = f;
+      // La crypte : une salle ordinaire loin de l'entrée, où reposent les éliminés des étages du dessus
+      const crypt = this.rng.shuffle(f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom))[0];
+      if (crypt) {
+        f.cryptRoom = crypt.id;
+        crypt.desc = 'A crypt. Fresh graves line the walls, and some of them still seem to be waiting for someone.';
+      }
       const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: beat the boss and take the exit to become a Legend. When it collapses, the season is over! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out (${f.rooms.length} rooms, theme: ${THEME_LABEL[f.theme] ?? f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
@@ -508,6 +519,8 @@ export class Game {
           if (error) this.say(p, error);
           continue;
         }
+        // Cible tirée au hasard : on la garde pour les tours suivants (on continue de la frapper)
+        if (!it.arg && target.kind === 'player' && p.lastAction?.name === 'attack') p.lastAction = { ...p.lastAction, arg: target.p.name };
         this.attack(it.attacker, target, attackedBy);
       } else {
         const m = it.attacker.m;
@@ -547,13 +560,28 @@ export class Game {
       else if (a.name === 'buy') this.doBuy(p, a.arg);
       else if (a.name === 'sell') this.doSell(p, a.arg);
       else if (a.name === 'rest') this.doRest(p);
-      else if (a.name === 'pickup') this.doPickup(p, a.arg);
+      else if (a.name === 'resurrect') this.doResurrect(p, a.arg);
     }
 
-    // 4. Fouilles
+    // 4. Fouilles et ramassage (même commande) : à plusieurs dans une salle qui a quelque chose à prendre,
+    // d20 contre d20, le meilleur se sert
+    const searchers = new Map<string, PlayerState[]>();
     for (const p of players) {
       const a = actions.get(p.key);
-      if (a?.name === 'search' && p.alive) this.doSearch(p);
+      if ((a?.name !== 'search' && a?.name !== 'pickup') || !p.alive) continue;
+      const k = `${p.floor}:${p.roomId}`;
+      searchers.set(k, [...(searchers.get(k) ?? []), p]);
+    }
+    for (const group of searchers.values()) {
+      const r = this.room(group[0]);
+      const prize = r.ground.length > 0 || r.groundGold > 0 || r.chest === 'ferme' || (!r.searchedBy && r.type !== 'safe' && r.type !== 'piege');
+      if (group.length > 1 && prize) {
+        const rolls = group.map((p) => ({ p, d: this.rng.die(20) })).sort((a, b) => b.d - a.d || this.rng.next() - 0.5);
+        const [win, ...rest] = rolls;
+        this.roomEvent(win.p, win.p.floor, r.id, 'drole', `Scramble for the loot! ${rolls.map((x) => `${x.p.name} ${x.d}`).join(', ')}: ${win.p.name} gets there first.`, 10, rest.map((x) => x.p.key));
+        this.doSearch(win.p, actions.get(win.p.key)?.arg ?? '');
+        for (const x of rest) this.say(x.p, `${win.p.name} beat you to it (${win.d} vs ${x.d}).`);
+      } else for (const p of group) this.doSearch(p, actions.get(p.key)?.arg ?? '');
     }
 
     // 5. Déplacements et descentes
@@ -607,7 +635,12 @@ export class Game {
         const aggro = monsters.find((m) => m.aggro === p.key);
         return { target: { kind: 'monster', m: aggro ?? monsters[0] } };
       }
-      return { error: silent ? undefined : 'Attack whom? There are no monsters here. To attack a player: !attack <name>.' };
+      if (silent || p.bot) return {}; // les PNJ figurants ne s'en prennent jamais aux joueurs
+      // Pas de monstre : un joueur de la salle au hasard (ni allié, ni protégé), sauf en safe room
+      if (this.room(p).type === 'safe') return { error: 'No fighting in a safe room. The merchant insists.' };
+      const prey = others.filter((o) => !this.isAlly(p, o) && !this.isImmune(o));
+      if (!prey.length) return { error: 'Attack whom? No monster here, and nobody you can hit.' };
+      return { target: { kind: 'player', p: this.rng.pick(prey) } };
     }
     if (/^\d+$/.test(a)) {
       const m = monsters[Number(a) - 1];
@@ -676,7 +709,8 @@ export class Game {
     if (this.state.floors[floorN]?.theme === 'plongé dans le noir') bonus -= 2; // on y voit mal
     const nat = this.rng.die(20);
     const total = nat + bonus;
-    const defRoll = dp ? this.rng.die(20) + dp.stats.agi - (this.wet(dp.floor, dp.roomId) ? 1 : 0) + half(dp.level) + (dp.armor?.def ?? 0) : this.rng.die(20) + (def as { m: MonsterState }).m.def;
+    // La magie passe en partie à travers les défenses : le mage ignore 3 points de défense d'un monstre
+    const defRoll = dp ? this.rng.die(20) + this.defense(dp) : this.rng.die(20) + Math.max(0, (def as { m: MonsterState }).m.def - (ap?.cls === 'mage' ? 3 : 0));
     const margin = total - defRoll;
     const dice = `(${total} vs ${defRoll})`;
     const actors = [ap?.key, dp?.key].filter(Boolean) as string[];
@@ -705,7 +739,7 @@ export class Game {
         this.roomEvent(ap, floorN, roomId, 'drole', this.rng.pick(FIASCO_TEXTS).replace('{a}', name(att)).replace('{t}', name(def)) + ` ${dice}`, 40, actors, { kind: 'miss', src: ek(att), dst: ek(def) });
         if (ap) ap.stunned = true;
         else (att as { m: MonsterState }).m.distracted = 2;
-      } else this.roomEvent(ap, floorN, roomId, 'combat', `${name(att)} rate ${name(def)} ${dice}.`, 0, actors, { kind: 'miss', src: ek(att), dst: ek(def) });
+      } else this.roomEvent(ap, floorN, roomId, 'combat', `${name(att)} misses ${name(def)} ${dice}.`, 0, actors, { kind: 'miss', src: ek(att), dst: ek(def) });
       return;
     }
 
@@ -796,7 +830,7 @@ export class Game {
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
-    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 3 * this.phases, kind: m.kind });
+    if (!m.boss && m.kind !== 'mimique') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
     if (!killer) return;
     killer.kills++;
     killer.gold += m.gold;
@@ -1028,11 +1062,12 @@ export class Game {
     return { ok: total >= dc, total };
   }
 
-  private doSearch(p: PlayerState) {
+  private doSearch(p: PlayerState, arg = '') {
     const r = this.room(p);
     const f = this.state.floors[p.floor];
     // Ce qui traîne au sol (loot d'un mort, pluie d'or) passe avant tout : fouiller le ramasse
-    if (r.ground.length || r.groundGold) return this.doPickup(p, '');
+    if (r.ground.length || r.groundGold) return this.doPickup(p, arg);
+    if (r.type === 'safe') return this.say(p, 'Nothing to search in here. The merchant keeps the place spotless.');
     if (r.type === 'tresor' && r.chest === 'ferme') {
       r.chest = 'ouvert';
       if (r.mimic) {
@@ -1059,8 +1094,9 @@ export class Game {
       this.roomEvent(p, p.floor, r.id, 'piege', `${p.name} tries to disarm the trap (${c.total})… and sets it off.`, 20);
       return this.springTrap(p, f);
     }
-    if (r.searchedBy) return this.say(p, `This room has already been searched by ${this.state.players[r.searchedBy]?.name ?? 'someone'}.`);
+    if (r.searchedBy) return this.say(p, `This room has already been searched by ${this.state.players[r.searchedBy]?.name ?? 'someone'}. Come back in a few turns.`);
     r.searchedBy = p.key;
+    r.searchedTurn = this.state.turn;
     const c = this.check(p, 'int', 10);
     if (!c.ok) return this.roomEvent(p, p.floor, r.id, 'drole', this.rng.pick(SEARCH_FAIL_TEXTS).replace('{p}', p.name));
     if (this.rng.chance(0.6)) {
@@ -1196,12 +1232,17 @@ export class Game {
     }
     this.themeEffects(players.filter((p) => this.state.players[p.key]));
     this.respawnMonsters();
+    // Les salles fouillées se remplissent de nouveau au bout de 5 tours
+    for (const f of Object.values(this.state.floors)) {
+      if (f.collapsed) continue;
+      for (const r of f.rooms) if (r.searchedBy && this.state.turn >= (r.searchedTurn ?? 0) + 5 * this.phases) r.searchedBy = null;
+    }
     // Le gardien du dernier étage se relève : la sortie se referme
     for (const f of Object.values(this.state.floors)) {
       if (f.bossBackTurn === undefined || this.state.turn < f.bossBackTurn) continue;
       f.bossBackTurn = undefined;
       if (f.monsters.some((m) => m.boss && m.hp > 0)) continue;
-      const pool = BOSSES.filter((b) => b.minFloor <= f.n && b.minFloor >= Math.max(1, f.n - 2));
+      const pool = BOSSES.filter((b) => b.minFloor <= f.n && b.minFloor >= Math.max(1, f.n - 1));
       const boss = spawnMonster(this.rng.pick(pool.length ? pool : BOSSES), f.n, f.bossRoom, this.rng, this.nextId);
       f.monsters.push(boss);
       this.emit({ floor: f.n, roomId: f.bossRoom, kind: 'systeme', text: `${boss.name} gets back up and guards the exit again. You'll have to earn it.`, scope: 'global', drama: 60 });
@@ -1344,18 +1385,51 @@ export class Game {
     return live[0] ?? this.freshFloor(Math.min(n, this.cfg.finalFloor));
   }
 
-  private revive(g: Grave, f: FloorState) {
+  private revive(g: Grave, f: FloorState, roomId = f.spawnRoom) {
     this.state.graveyard = this.state.graveyard.filter((x) => x.no !== g.no);
     const cur = this.state.players[g.key];
     if (cur) this.gameOver(cur); // il avait recommencé avec un nouveau perso : l'ancien, ressuscité, le remplace
     const p = g.snap;
     Object.assign(p, {
-      floor: f.n, roomId: f.spawnRoom, alive: true, hp: p.maxHp, respawnIn: 0, pending: null, lastAction: null, stunned: false,
+      floor: f.n, roomId, alive: true, hp: p.maxHp, respawnIn: 0, pending: null, lastAction: null, stunned: false,
       allianceId: null, allyProposals: [], traitorUntilTurn: 0, immuneUntil: this.now + 60_000, deepest: Math.max(p.deepest, f.n),
     });
     this.state.players[g.key] = p;
     this.discover(p);
     this.startTimer(f, p);
+  }
+
+  /** !resurrect <nom|n°> [gold|hp] dans la crypte : le sauveteur paie 50 × l'étage en or, ou la moitié de ses PV actuels. */
+  private doResurrect(p: PlayerState, arg: string) {
+    const f = this.state.floors[p.floor];
+    if (f.cryptRoom !== p.roomId) return this.say(p, f.cryptRoom !== undefined ? `The graves are in the crypt of this floor (room ${f.cryptRoom}).` : 'There is no crypt on this floor.');
+    const graves = this.state.graveyard.filter((g) => g.cryptFloor === f.n);
+    if (!graves.length) return this.say(p, 'Every grave in here is empty. For now.');
+    const words = normalize(arg).split(/\s+/).filter(Boolean);
+    let mode = '';
+    if (words.length && /^(gold|or|po|hp|pv|health|life|vie)$/.test(words[words.length - 1])) mode = /^(gold|or|po)$/.test(words.pop()!) ? 'gold' : 'hp';
+    const who = words.join(' ').replace(/^#/, '');
+    const g = !who && graves.length === 1 ? graves[0] : graves.find((x) => String(x.no) === who || x.key === playerKey(who) || normalize(x.name).startsWith(who));
+    if (!g || (!who && graves.length > 1)) return this.say(p, `Whose grave? ${graves.map((x) => `#${x.no} ${x.name}`).join(', ')}. Type !resurrect <name> [gold|hp].`);
+    const cost = 50 * f.n;
+    if (!mode) mode = p.gold >= cost ? 'gold' : 'hp';
+    let paid: string;
+    if (mode === 'gold') {
+      if (p.gold < cost) return this.say(p, `Raising the dead costs ${cost} gold here (you have ${p.gold}). Or pay with half your HP: !resurrect ${g.name} hp.`);
+      p.gold -= cost;
+      paid = `${cost} gold`;
+    } else {
+      if (p.hp < 2) return this.say(p, 'You don\'t have enough life left to share. Heal up first.');
+      const loss = Math.ceil(p.hp / 2);
+      p.hp -= loss;
+      paid = `${loss} HP of their own life`;
+    }
+    this.revive(g, f, p.roomId);
+    this.gainXp(p, 20);
+    this.emit({
+      floor: f.n, roomId: p.roomId, kind: 'niveau', scope: 'global', drama: 100, actors: [p.key, g.key], fx: { kind: 'levelup', dst: `p:${g.name}` },
+      text: `NECROMANCY! ${p.name} pays ${paid} to drag ${g.name} out of their grave in the crypt of floor ${f.n}. Welcome back, level ${g.snap.level}! (+20 XP for ${p.name})`,
+    });
   }
 
   // ------------------------------------------------------ points de faveur
@@ -1596,6 +1670,12 @@ export class Game {
       floor: f.n, kind: 'systeme', scope: 'global', drama: lost.length ? 90 : 60,
       text: `FLOOR ${f.n} COLLAPSES! ${lost.length ? `GAME OVER for ${[...humans, ...(npcs ? [`${npcs} NPC${npcs > 1 ? 's' : ''}`] : [])].join(', ')}: left inside.${humans.length ? ' Only chat can bring them back now.' : ''}` : 'Nobody got stuck, well done.'}${sealing ? ' The dungeon gates are now SEALED: no new adventurers this season.' : ''}`,
     });
+    // Les tombes (anciennes et nouvelles) descendent dans la crypte de l'étage suivant
+    if (f.n < this.cfg.finalFloor) {
+      const moved = this.state.graveyard.filter((g) => (g.cryptFloor ?? g.floor) <= f.n);
+      for (const g of moved) g.cryptFloor = f.n + 1;
+      if (moved.length) this.emit({ floor: f.n + 1, kind: 'systeme', scope: 'global', drama: 30, text: `The graves of ${moved.map((g) => g.name).join(', ')} sink into the crypt of floor ${f.n + 1}. A crawler can bring them back there: !resurrect <name>.` });
+    }
     this.afterCollapse(f, humans.length > 0);
     if (!victims.length) return;
     const next = this.freshFloor(f.n + 1);
@@ -1962,6 +2042,7 @@ export class Game {
       v.ground = r.ground;
       v.groundGold = r.groundGold;
     }
+    if (f.cryptRoom === r.id) v.crypt = this.state.graveyard.filter((g) => g.cryptFloor === f.n).map((g) => ({ no: g.no, name: g.name, level: g.snap.level, cls: g.snap.cls }));
     return v;
   }
 
@@ -2028,13 +2109,18 @@ export class Game {
       f.respawns = f.respawns.filter((x) => x.turn > this.state.turn);
       const occupied = new Set(Object.values(this.state.players).filter((p) => p.alive && p.floor === f.n).map((p) => p.roomId));
       const rooms = f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom && !occupied.has(r.id));
-      if (!rooms.length) {
-        f.respawns.push(...due.map((x) => ({ ...x, turn: this.state.turn + 1 }))); // tout est occupé : au tour suivant
-        continue;
-      }
       for (const x of due) {
+        // Le monstre revient là où il est tombé, quand la salle est vide ; sinon il attend un tour
+        const home = x.roomId !== undefined ? f.rooms[x.roomId] : undefined;
+        const room = home && home.type !== 'safe' ? (occupied.has(home.id) ? null : home) : rooms.length ? this.rng.pick(rooms) : null;
+        if (!room || this.monstersIn(f.n, room.id).length >= this.maxMonstersPerRoom(f.n)) {
+          f.respawns.push({ ...x, turn: this.state.turn + 1 });
+          continue;
+        }
         const tpl = MONSTERS.find((t) => t.kind === x.kind) ?? this.rng.pick(MONSTERS.filter((t) => t.minFloor <= f.n));
-        f.monsters.push(spawnMonster(tpl, f.n, this.rng.pick(rooms).id, this.rng, this.nextId));
+        const m = spawnMonster(tpl, f.n, room.id, this.rng, this.nextId);
+        f.monsters.push(m);
+        this.emit({ floor: f.n, roomId: room.id, kind: 'combat', scope: 'etage', drama: 3, text: `Something stirs in room ${room.id}: ${m.name} is back on its feet.` });
       }
     }
   }

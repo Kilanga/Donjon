@@ -50,10 +50,26 @@ describe('PNJ persistants', () => {
     expect(said.at(-1)?.[0]).toBe('Brunhilde');
   });
 
-  it('un PNJ accepte l\'alliance d\'un joueur qui ne lui a rien fait', () => {
+  it('un PNJ ami accepte l\'alliance ; un inconnu peut refuser (et le dit)', () => {
     const { g, npcs, a } = world();
     const humans = new Set(['ana']);
-    const bots = new BotManager(g, { submit: (n, t) => void g.submit(n, t), say: () => {}, pos: () => {}, humanActive: (p) => humans.has(p.key), mood: (p, k) => npcs.mood(p, k) }, 3); // 3 PNJ voulus − 1 joueur : Brunhilde reste
+    let mood = 3;
+    const lines: string[] = [];
+    const bots = new BotManager(g, { submit: (n, t) => void g.submit(n, t), say: (_n, t) => void lines.push(t), pos: () => {}, humanActive: (p) => humans.has(p.key), mood: () => mood }, 3); // 3 PNJ voulus − 1 joueur : Brunhilde reste
+    void npcs;
+    // Un inconnu : sur 30 propositions, au moins un refus
+    mood = 0;
+    let refused = 0;
+    for (let i = 0; i < 30 && !refused; i++) {
+      g.submit('ana', '!alliance Brunhilde', T0);
+      const before = lines.length;
+      bots.afterTurn();
+      if (lines.length > before && !a.allianceId) refused++;
+      if (a.allianceId) g.submit('ana', '!leave', T0);
+    }
+    expect(refused).toBe(1);
+    // Un ami : toujours oui
+    mood = 3;
     g.submit('ana', '!alliance Brunhilde', T0);
     bots.afterTurn();
     expect(a.allianceId).not.toBeNull();

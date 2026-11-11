@@ -12,9 +12,9 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 const CLASS_INFO: Record<string, { label: string; desc: string }> = {
   barbare: { label: 'Barbarian', desc: 'Strength +3, 14 HP. Hits first, never thinks.' },
-  chevalier: { label: 'Knight', desc: 'Strength +2, Charisma +1, 12 HP, tunic. Sturdy and polite.' },
+  chevalier: { label: 'Knight', desc: 'Strength +2, Charisma +1, 12 HP, tunic and shield (+2 defense). Sturdy and polite.' },
   voleur: { label: 'Rogue', desc: 'Dexterity +3, 10 HP. Dodges, flees, betrays.' },
-  mage: { label: 'Mage', desc: 'Intelligence +3, 8 HP. Powerful, fragile, proud.' },
+  mage: { label: 'Mage', desc: 'Intelligence +3, 10 HP. Spells slip through monster armor. Proud.' },
 };
 const STAT_SHORT = { for: 'str', agi: 'dex', int: 'int', cha: 'cha' } as const;
 const ROOM_LABEL: Record<string, string> = { normale: 'Room', safe: 'Safe room', piege: 'Room (traps?)', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' };
@@ -253,6 +253,8 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
     return `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[p.cls])}" alt=""><div class="grow"><b>${esc(p.name)}</b> <span class="muted">lvl ${p.level}</span> ${tags}<div class="meter hp"><i style="width:${(100 * p.hp) / p.maxHp}%"></i></div></div><div style="display:flex;flex-direction:column;gap:3px">${atk}${ally}</div></div>`;
   }).join('');
   const ground = (room.ground ?? []).map((it) => `<div class="entity"><img src="${tiles.icon(it.sprite)}" alt=""><div class="grow">${itemLine(it)}</div><button data-cmd="!pickup ${esc(it.name)}">Take</button></div>`).join('');
+  const cryptCost = 50 * (s.floor?.n ?? 1);
+  const crypt = (room.crypt ?? []).map((g) => `<div class="entity"><img src="${tiles.icon(CLASS_SPRITE[g.cls])}" alt="" style="filter:grayscale(1) opacity(.6)"><div class="grow"><b>${esc(g.name)}</b> <span class="muted">#${g.no} · lvl ${g.level}</span></div><div style="display:flex;flex-direction:column;gap:3px"><button data-cmd="!resurrect ${esc(g.name)} gold" ${me.gold < cryptCost ? 'disabled' : ''}>Raise · ${cryptCost} gold</button><button data-cmd="!resurrect ${esc(g.name)} hp" ${me.hp < 2 ? 'disabled' : ''}>Raise · ${Math.ceil(me.hp / 2)} HP</button></div></div>`).join('');
   const shop = (s.merchant ?? []).map((o) => `<div class="entity"><img src="${tiles.icon(o.item.sprite)}" alt=""><div class="grow">${itemLine(o.item)}</div><button data-cmd="!buy ${o.index}" ${o.price > me.gold ? 'disabled' : ''}>${o.price} gold</button></div>`).join('');
 
   const acts: string[] = [];
@@ -271,12 +273,13 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   if (room.stairs) acts.push(`<button data-cmd="!descend" ${room.bossAlive ? 'disabled title="The boss blocks the stairs"' : ''}>Descend</button>`);
 
   $('room-card').innerHTML = `
-    <div class="card-title">${room.forge ? 'Forge' : ROOM_LABEL[room.type]} <span class="muted">room ${room.id}</span></div>
+    <div class="card-title">${room.forge ? 'Forge' : room.crypt ? 'Crypt' : ROOM_LABEL[room.type]} <span class="muted">room ${room.id}</span></div>
     ${room.desc ? `<div class="desc">${esc(room.desc)}</div>` : ''}
     <div class="actions">${acts.join('')}</div>
     ${monsters ? `<div class="section-label">Monsters</div>${monsters}` : ''}
     ${players ? `<div class="section-label">Crawlers</div>${players}` : ''}
     ${ground ? `<div class="section-label">On the floor</div>${ground}` : ''}
+    ${crypt ? `<div class="section-label">Graves</div>${crypt}` : ''}
     ${shop ? `<div class="section-label">Merchant</div>${shop}` : ''}`;
 }
 

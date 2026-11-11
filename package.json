@@ -16,7 +16,8 @@
     "simulate": "tsx scripts/simulate.ts",
     "bots": "tsx scripts/bots.ts",
     "typecheck": "tsc --noEmit",
-    "rapport": "tsx scripts/rapport.ts"
+    "rapport": "tsx scripts/rapport.ts",
+    "balance": "tsx scripts/balance.ts"
   },
   "dependencies": {
     "@fontsource/alegreya": "^5.3.0",

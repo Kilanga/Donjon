@@ -54,7 +54,7 @@ describe('PNJ figurants', () => {
       kills += ev.filter((e) => e.fx?.kind === 'kill' && e.fx.src?.startsWith('p:') && e.fx.src !== 'p:ana').length;
       for (const b of bots.bots()) deepest = Math.max(deepest, b.deepest);
     }
-    expect(bots.bots().length).toBeGreaterThan(0);
+    // (les portes se scellent après l'étage 1 : à la fin, il peut ne plus rester personne)
     expect(kills).toBeGreaterThan(10);
     expect(deepest).toBeGreaterThanOrEqual(2);
     expect(pvp).toBe(0);
