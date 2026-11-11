@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_AI, type AiConfig, type AiProvider } from './ai.js';
+import { DEFAULT_VOICE, type VoiceConfig } from './voice.js';
 
 export interface GameConfig {
   port: number;
@@ -25,6 +26,7 @@ export interface GameConfig {
   tunnel: boolean; // lance cloudflared et affiche l'adresse publique sur le stream (page 2D pour les viewers) // PNJ retardataires : arrivent après le premier joueur, ne descendent jamais et ferment chaque étage
   finalFloor: number; // dernier étage : son escalier est la sortie du donjon (victoire)
   ai: AiConfig; // IA du donjon (optionnelle) ; la clé API reste dans ANTHROPIC_API_KEY
+  voice: VoiceConfig; // voix de Victoria (service local voix/victoria_server.py ; sans lui, sous-titres seuls)
   seed?: number;
 }
 
@@ -51,6 +53,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   tunnel: false,
   finalFloor: 8,
   ai: { ...DEFAULT_AI },
+  voice: { ...DEFAULT_VOICE },
 };
 
 /** Charge config.json (s'il existe) puis les variables d'environnement. */
@@ -61,6 +64,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
     const fromFile = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); // Bloc-notes/PowerShell ajoutent parfois un BOM
     Object.assign(cfg, fromFile);
     cfg.ai = { ...DEFAULT_AI, ...(fromFile.ai ?? {}) };
+    cfg.voice = { ...DEFAULT_VOICE, ...(fromFile.voice ?? {}) };
     delete (cfg.ai as unknown as Record<string, unknown>).anthropicKey; // la clé ne se met jamais dans config.json
   }
   const env = process.env;
@@ -82,6 +86,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   if (env.AI_PROVIDER && ['off', 'ollama', 'anthropic'].includes(env.AI_PROVIDER)) cfg.ai.provider = env.AI_PROVIDER as AiProvider;
   if (env.OLLAMA_MODEL) cfg.ai.ollamaModel = env.OLLAMA_MODEL;
   if (env.OLLAMA_URL) cfg.ai.ollamaUrl = env.OLLAMA_URL;
+  if (env.VOICE) cfg.voice = { ...cfg.voice, enabled: env.VOICE === '1' || env.VOICE === 'true' };
   // En local (Ollama), les appels ne coûtent rien : plus de répliques par minute, sauf réglage explicite
   if (cfg.ai.provider === 'ollama' && cfg.ai.maxPerMinute === DEFAULT_AI.maxPerMinute) cfg.ai.maxPerMinute = 20;
   return cfg;

@@ -256,6 +256,60 @@ class Sfx {
     this.amb = { nodes, gain, drip };
   }
 
+  private voiceSrc: AudioBufferSourceNode | null = null;
+
+  /**
+   * Victoria : joue un clip WAV par-dessus le reste, avec une chaîne « antenne » (coupe des graves, présence,
+   * compresseur doux). Les effets et l'ambiance baissent pendant qu'elle parle. Résout quand elle a fini.
+   */
+  async voice(data: ArrayBuffer, volume = 1): Promise<void> {
+    if (!this.ctx || !this.master) return;
+    const ctx = this.ctx;
+    const master = this.master;
+    const buf = await ctx.decodeAudioData(data);
+    this.stopVoice();
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 90;
+    const presence = ctx.createBiquadFilter();
+    presence.type = 'peaking';
+    presence.frequency.value = 3200;
+    presence.Q.value = 0.9;
+    presence.gain.value = 2.5;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20;
+    comp.ratio.value = 3;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.2;
+    const g = ctx.createGain();
+    g.gain.value = Math.max(0, Math.min(1, volume));
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(hp).connect(presence).connect(comp).connect(g).connect(ctx.destination);
+    master.gain.cancelScheduledValues(ctx.currentTime);
+    master.gain.setTargetAtTime(this.volume * 0.3, ctx.currentTime, 0.08); // le reste baisse
+    this.voiceSrc = src;
+    return new Promise((resolve) => {
+      src.onended = () => {
+        if (this.voiceSrc === src) {
+          this.voiceSrc = null;
+          master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.5);
+        }
+        resolve();
+      };
+      src.start();
+    });
+  }
+
+  /** Coupe Victoria (régie : « Skip »). */
+  stopVoice() {
+    try {
+      this.voiceSrc?.stop();
+    } catch {
+      /* déjà arrêtée */
+    }
+  }
+
   get running() {
     return !!this.ctx && this.ctx.state === 'running';
   }

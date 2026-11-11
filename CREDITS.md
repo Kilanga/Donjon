@@ -13,6 +13,12 @@
 - **KayKit** dungeon, adventurers and skeletons by **Kay Lousberg** — <https://kaylousberg.itch.io> — CC0 1.0.
 - **Quaternius** monsters — <https://quaternius.com> — CC0 1.0.
 
+## Voice (Victoria Steele)
+
+- **Qwen3-TTS** by the Qwen team (Alibaba Cloud) — <https://github.com/QwenLM/Qwen3-TTS> — Apache 2.0.
+  Victoria's voice is an original voice designed with Qwen3-TTS VoiceDesign from a text description
+  (`voix/victoria_ref.wav`): it imitates no real person.
+
 ## Fonts
 
 - Alegreya, Alegreya Sans and Grenze Gotisch (SIL Open Font License), served from the game itself (@fontsource).

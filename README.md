@@ -371,6 +371,32 @@ l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable av
 Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
 Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
 
+## Victoria Steele, l'animatrice (voix)
+
+L'IA du donjon a un visage et une voix : **Victoria Steele**, animatrice glamour et sadique du jeu télé.
+Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voix haute**, avec une voix créée pour elle
+(Qwen3-TTS, licence Apache 2.0, sur ta carte graphique, en local et gratuit).
+
+- **Quand elle parle :** à la fin d'un tour, sur le moment le plus fort (mort, trahison, boss tué, effondrement…),
+  une réplique de 15 s au plus. Avec l'IA éteinte, elle garde des répliques écrites pour les très grands moments.
+- **Le chat :** elle répond parfois à un message (environ 1 sur 8, au plus une fois toutes les 2 min). Jamais aux
+  commandes (`!…`), aux bots (Streamlabs, WZBot, Nightbot…) ni aux PNJ. Elle ne lit **jamais** un message :
+  une réplique qui en recopie un morceau est jetée, et les pseudos refusés par la modération deviennent « a contestant ».
+- **Le son :** les effets et l'ambiance baissent pendant qu'elle parle. `?sansvoix` sur l'adresse du stream la coupe
+  (sous-titres seuls), `?muet` coupe tout.
+- **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute » et le volume de sa voix.
+
+**Installation (une fois) :** double-clic sur `voix\installer-voix.bat`. Il installe un Python à part avec PyTorch
+(environ 3 Go) et le modèle de voix (environ 4,5 Go) dans `D:\DonjonVoix`. Ensuite, « Le Donjon » la lance tout seul,
+dans une fenêtre réduite « Victoria » ; elle met une minute ou deux à charger, et reste en sous-titres en attendant.
+Sa voix vient de `voix\victoria_ref.wav` (voix créée avec Qwen3-TTS VoiceDesign) : la changer, c'est remplacer ce fichier
+et son texte `voix\victoria_ref.txt`.
+
+| Réglage (`voice`) | Défaut | Rôle |
+| --- | --- | --- |
+| `enabled` | `true` | `false` : sous-titres seuls |
+| `url` | `http://127.0.0.1:3791` | Service de voix local (jamais ouvert sur le réseau) |
+
 ## Journaux de session
 
 Le serveur note tout dans `logs/session-<date>_<heure>.jsonl` (un fichier par lancement, une ligne JSON par fait) :

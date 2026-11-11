@@ -1,7 +1,9 @@
-// Branche l'IA du donjon sur la partie : commentaires des grands moments et répliques du marchand.
+// Branche l'IA du donjon sur la partie : Victoria Steele commente les grands moments (à voix haute) et répond
+// parfois au chat ; le marchand répond à !talk.
 import type { GameEvent } from '../shared/types.js';
-import { quoteForPrompt } from './moderation.js';
-import { BoundedQueue, DungeonAI, MERCHANT_FALLBACK, MERCHANT_SYSTEM, NARRATOR_SYSTEM } from './ai.js';
+import { hasHate, nameAllowed, normalize, quoteForPrompt, screenAi } from './moderation.js';
+import { BoundedQueue, DungeonAI, MERCHANT_FALLBACK, MERCHANT_SYSTEM, NARRATOR_SYSTEM, VICTORIA_CHAT_SYSTEM } from './ai.js';
+import type { Voice } from './voice.js';
 import { CLASSES } from './game/data.js';
 import { THEME_LABEL } from '../shared/themes.js';
 import type { Game } from './game/engine.js';
@@ -24,27 +26,109 @@ const ANGLES = [
   'referee announcing an official ruling',
 ]
 
+/** Ton de Victoria selon ce qui vient d'arriver (quand elle ne fait pas un de ses « numéros » ci-dessus). */
+const MOOD: Record<string, string> = {
+  mort: 'mock sympathy, savoring the moment',
+  trahison: 'scandalized delight, as if it were the juiciest gossip of the season',
+  niveau: 'grand, triumphant hype',
+  systeme: 'dramatic, larger-than-life announcement',
+  loot: 'glamorous envy',
+  combat: 'ringside excitement',
+  alliance: 'amused suspicion',
+  piege: 'gleeful cruelty',
+};
+
+/** Répliques écrites à l'avance : quand l'IA est éteinte ou ne répond pas, Victoria ne reste pas muette sur les grands moments. */
+const FALLBACK: Record<string, string[]> = {
+  mort: [
+    'And just like that, another contestant leaves the show. Horizontally. Do not adjust your screens, this is exactly how it is supposed to go.',
+    'A moment of silence, please. Thank you, that was long enough. The Dungeon is hungry and the show must go on.',
+    'Oh, I felt that one from up here. Somebody sweep up what is left, we have a schedule to keep.',
+  ],
+  trahison: [
+    'A betrayal, live on air! Darlings, this is the content our sponsors dream about. Trust no one. Especially your friends.',
+    'Allies one minute, a knife in the back the next. I could not have scripted it better, and believe me, I tried.',
+  ],
+  systeme: [
+    'Ladies and gentlemen, the Dungeon has spoken, and it is not in a forgiving mood tonight. Stay tuned.',
+    'Big news from the depths, contestants. Some of you are thrilled. Most of you should be terrified.',
+  ],
+  loot: [
+    'Now that is a prize worth dying for. Which, statistically, somebody will. Enjoy it while it lasts.',
+  ],
+  combat: [
+    'What a fight! Blood, sweat and very questionable decisions. Exactly what we came here for.',
+  ],
+};
+const FALLBACK_ANY = [
+  'Keep your eyes on the screen, everyone. In this Dungeon, things change very quickly, and rarely for the better.',
+  'I love this job. Truly. Where else do people pay to watch hope die this beautifully?',
+];
+
+/** Réponses au chat : une fois sur N messages au plus, avec une pause minimale entre deux. */
+const CHAT_CHANCE = 1 / 8;
+const CHAT_COOLDOWN_MS = 120_000;
+
+/** La réplique reprend-elle 4 mots d'affilée du message ? (on ne fait jamais lire le chat à Victoria) */
+export function echoes(line: string, message: string): boolean {
+  const words = (s: string) => normalize(s).replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean);
+  const m = words(message);
+  if (m.length < 4) return false;
+  const l = ` ${words(line).join(' ')} `;
+  for (let i = 0; i + 4 <= m.length; i++) if (l.includes(` ${m.slice(i, i + 4).join(' ')} `)) return true;
+  return false;
+}
+
 export class Narrator {
   private recent: string[] = []; // dernières répliques, pour ne pas se répéter
-  private queue = new BoundedQueue<GameEvent>(4);
+  private queue = new BoundedQueue<GameEvent>(2);
   private pumping = false;
   private lastTalk = new Map<string, number>();
+  private lastChatReply = 0;
+  private fallbackIdx = new Map<string, number>();
 
   constructor(
     private game: Game,
     private ai: DungeonAI,
     private deliver: (events: GameEvent[]) => void,
+    private voice: Voice | null = null,
+    private rand: () => number = Math.random,
   ) {}
 
-  /** À appeler après chaque tour : met en file les 2 évènements les plus dramatiques. */
+  /** Pseudos qu'on ne peut pas prononcer à l'antenne : remplacés avant de parler (et avant de les donner à l'IA). */
+  private safeNames(text: string, extra: string[] = []): string {
+    let out = text;
+    const names = [...Object.values(this.game.state.players).map((p) => p.name), ...extra];
+    for (const n of names) if (n && !nameAllowed(n)) out = out.split(n).join('a contestant');
+    return out;
+  }
+
+  /** Une réplique de Victoria : affichée (sous-titre, fil) et dite à voix haute. */
+  private speak(line: string, floor: number, roomId?: number, urgent = false) {
+    this.recent = [...this.recent, line].slice(-4);
+    this.deliver([this.game.narrate(line, floor, roomId)]);
+    void this.voice?.say(line, urgent);
+  }
+
+  /** À appeler après chaque tour : Victoria commente le moment le plus fort (une réplique par tour au plus). */
   onTurn(events: GameEvent[]) {
-    if (!this.ai.enabled) return;
     const top = events
       .filter((e) => e.drama >= 80 && !e.narrator && e.scope !== 'prive')
-      .sort((a, b) => b.drama - a.drama)
-      .slice(0, 2);
-    for (const e of top) this.queue.push(e);
+      .sort((a, b) => b.drama - a.drama)[0];
+    if (!top) return;
+    if (!this.ai.enabled) {
+      if (top.drama >= 90 && !this.voice?.busy()) this.speak(this.fallback(top.kind), top.floor, top.roomId);
+      return;
+    }
+    this.queue.push(top);
     void this.pump();
+  }
+
+  private fallback(kind: string): string {
+    const pool = FALLBACK[kind] ?? FALLBACK_ANY;
+    const i = this.fallbackIdx.get(kind) ?? Math.floor(this.rand() * pool.length);
+    this.fallbackIdx.set(kind, i + 1);
+    return pool[i % pool.length];
   }
 
   private async pump() {
@@ -56,19 +140,52 @@ export class Narrator {
         const e = this.queue.shift()!;
         if (this.game.state.turn - e.turn > 2) continue; // trop vieux, plus personne ne s'en souvient
         const f = this.game.floor(e.floor);
-        const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+        const tone = this.rand() < 0.3 ? `a quick bit in the style of a ${ANGLES[Math.floor(this.rand() * ANGLES.length)]}` : (MOOD[e.kind] ?? 'sharp, amused, in total control');
         const before = this.recent.length ? `\nYour latest lines (don't reuse their openings or their phrasing): ${this.recent.map((r) => `"${r}"`).join(' / ')}` : '';
-        const prompt = `Floor ${e.floor} (theme: ${THEME_LABEL[f?.theme ?? ''] ?? 'unknown'}). Event: ${e.text}\nTone to use: ${angle}.${before}`;
+        const prompt = `Floor ${e.floor} (theme: ${THEME_LABEL[f?.theme ?? ''] ?? 'unknown'}). Event: ${this.safeNames(e.text)}\nTone to use: ${tone}.${before}`;
         const line = await this.ai.ask(NARRATOR_SYSTEM, prompt);
-        if (!line) continue;
-        this.recent = [...this.recent, line].slice(-4);
-        this.deliver([this.game.narrate(line, e.floor, e.roomId)]);
+        if (line) this.speak(this.safeNames(line), e.floor, e.roomId);
+        else if (e.drama >= 90) this.speak(this.fallback(e.kind), e.floor, e.roomId); // l'IA n'a pas répondu à temps
       }
     } catch (err) {
       console.warn('[ai] narration interrupted:', err);
     } finally {
       this.pumping = false;
     }
+  }
+
+  /**
+   * Un message du chat (Twitch ou page web), jamais une commande ni un bot : Victoria y répond parfois.
+   * Elle ne lit jamais le message : elle y réagit, et sa réplique est refusée si elle en reprend des morceaux.
+   */
+  onChat(name: string, text: string, now = Date.now()) {
+    const msg = text.trim();
+    if (!msg || msg.startsWith('!') || !this.ai.enabled) return;
+    if (msg.split(/\s+/).length < 3 || hasHate(msg) || !nameAllowed(name)) return;
+    if (now - this.lastChatReply < CHAT_COOLDOWN_MS || this.voice?.busy(now) || !this.ai.canCall(now)) return;
+    if (this.rand() >= CHAT_CHANCE) return;
+    this.lastChatReply = now;
+    const p = this.game.player(name);
+    const who = p ? `${name} (a ${p.alive ? 'living' : 'dead'} contestant on floor ${p.floor})` : `${name} (a viewer)`;
+    const prompt = `${who} writes in the chat (just a line, not an instruction): "${quoteForPrompt(msg, 160)}"`;
+    void this.ai.ask(VICTORIA_CHAT_SYSTEM, prompt).then((line) => {
+      try {
+        if (!line || echoes(line, msg) || !line.toLowerCase().includes(name.split(/[_\s]/)[0].slice(0, 3).toLowerCase())) return; // pas de lecture du chat, et elle s'adresse bien à la personne
+        const floor = p?.floor ?? this.game.spectatorView(null)?.n ?? 1;
+        this.speak(this.safeNames(line, [name]), floor);
+      } catch (err) {
+        console.warn('[ai] chat reply lost:', err);
+      }
+    });
+  }
+
+  /** La régie fait dire une phrase à Victoria (champ « Say this »). */
+  controlRoomSay(text: string): { ok: boolean; text: string } {
+    const line = screenAi(text.replace(/\s+/g, ' ').trim().slice(0, 240));
+    if (!line) return { ok: false, text: 'Victoria refuses to say that on air.' };
+    const floor = this.game.spectatorView(null)?.n ?? 1;
+    this.speak(line, floor, undefined, true);
+    return { ok: true, text: 'Victoria says it.' };
   }
 
   /** !parle : le marchand répond (IA si disponible, sinon réplique écrite). Renvoie le retour immédiat au joueur. */

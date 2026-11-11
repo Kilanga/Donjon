@@ -252,7 +252,7 @@ input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rg
 .admin-row { display: flex; gap: 6px; margin-top: 6px; }
 .admin-row select, .admin-row input { flex: 1; min-width: 0; font-size: 13px; padding: 5px; }
 #log .k-ia { color: #3d2a12; font-family: var(--serif); font-style: italic; }
-#log .k-ia::before { content: 'Dungeon AI'; font-family: var(--serif); font-style: normal; font-weight: 700; font-size: 14px; color: var(--red); margin-right: 7px; }
+#log .k-ia::before { content: 'Victoria Steele'; font-family: var(--serif); font-style: normal; font-weight: 700; font-size: 14px; color: var(--red); margin-right: 7px; }
 #log .k-npc { color: #5b4a1f; font-style: italic; }
 .btn-link { display: block; flex: 1; text-align: center; color: var(--text); background: var(--panel); border: 1px solid #9d9485; border-radius: 3px; padding: 6px 4px; text-decoration: none; font-size: 13px; }
 .btn-link:hover { border-color: var(--text); background: #fffdf8; }

@@ -352,16 +352,22 @@ function renderShared(s: PlayerViewMsg) {
   const adm = $('admin-card');
   if (!s.admin) return adm.classList.add('hidden');
   adm.classList.remove('hidden');
-  if (adm.dataset.ready && adm.dataset.paused === String(s.paused)) return; // ne pas réécrire pendant la saisie
+  const voiceKey = `${s.voice?.muted}`;
+  if (adm.dataset.ready && adm.dataset.paused === String(s.paused) && adm.dataset.voice === voiceKey) {
+    const st = document.getElementById('adm-voice-status');
+    if (st) st.textContent = s.voice?.status ?? ''; // ne pas réécrire le panneau pendant la saisie
+    return;
+  }
   adm.dataset.ready = '1';
   adm.dataset.paused = String(s.paused);
+  adm.dataset.voice = voiceKey;
   adm.innerHTML = `<div class="card-title">Control room <span class="muted">game master</span></div>
     <div class="admin-grid">
       <button data-admin="${s.paused ? 'resume' : 'pause'}">${s.paused ? 'Resume' : 'Pause'}</button>
       <button data-admin="next">Next turn</button>
       <button data-admin="vote">Start a vote</button>
       <button data-admin="healAll">Heal everyone</button>
-      <button data-admin="ai">Dungeon AI: on / off</button>
+      <button data-admin="ai">AI (Victoria's lines): on / off</button>
       <button data-admin="collapse" class="danger">Collapse the floor shown</button>
       <button data-admin="reset" class="danger">New game</button>
     </div>
@@ -369,6 +375,9 @@ function renderShared(s: PlayerViewMsg) {
     <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Turn length (s), currently ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
     <div class="admin-row"><input id="adm-bots" type="number" min="0" max="30" placeholder="Extra NPCs (0 to 30, default 10)"><button data-admin="bots">OK</button></div>
     <div class="admin-row"><input id="adm-kick" placeholder="Name to kick"><button data-admin="kick" class="danger">Kick</button></div>
+    <div class="section-label">Victoria Steele <span class="muted" id="adm-voice-status">${esc(s.voice?.status ?? '')}</span></div>
+    <div class="admin-row"><input id="adm-say" maxlength="240" placeholder="Say this (Victoria reads it on air)"><button data-admin="voiceSay">Say</button></div>
+    <div class="admin-row"><button data-admin="voiceSkip">Skip</button><button data-admin="voiceMute">${s.voice?.muted ? 'Unmute' : 'Mute'}</button><label class="muted" style="display:flex;align-items:center;gap:6px">Volume <input id="adm-voice-vol" type="range" min="0" max="100" value="${Math.round((s.voice?.volume ?? 1) * 100)}"></label><button data-admin="voiceVolume">OK</button></div>
     <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Tonight's recap</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Logs for Claude</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">3D stream view</a></div>`;
 }
 
@@ -379,6 +388,13 @@ function adminAction(action: string) {
   if (action === 'kick') arg = ($('adm-kick') as HTMLInputElement).value.trim();
   if (action === 'bots') arg = Number(($('adm-bots') as HTMLInputElement).value);
   if (action === 'collapse') arg = state?.floor?.n;
+  if (action === 'voiceSay') {
+    const input = $('adm-say') as HTMLInputElement;
+    arg = input.value.trim();
+    if (!arg) return;
+    input.value = '';
+  }
+  if (action === 'voiceVolume') arg = Number(($('adm-voice-vol') as HTMLInputElement).value) / 100;
   if ((action === 'reset' || action === 'collapse' || action === 'kick') && !confirm('Sure? This cannot be undone.')) return;
   send({ type: 'admin', action: action as never, arg });
 }

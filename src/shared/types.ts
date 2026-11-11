@@ -182,6 +182,7 @@ export interface EffectsView {
 
 export interface PlayerViewMsg {
   type: 'state';
+  voice?: { status: string; muted: boolean; volume: number }; // régie : état de la voix de Victoria
   turn: number;
   turnEndsAt: number;
   turnSeconds: number;
@@ -268,7 +269,10 @@ export type ServerMsg =
   | { type: 'linked'; name: string; token: string } // liaison réussie : jeton à garder
   | { type: 'forecast'; turn: number; rooms: ForecastRoom[] } // quelques secondes avant la fin du tour : où placer la caméra
   | { type: 'chat'; from: string; text: string; cmd?: boolean; floor?: number; roomId?: number; ok?: boolean; reply?: string; src?: 'web' | 'twitch' }
-  | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number }; // position libre d'un crawler dans sa salle
+  | { type: 'pos'; name: string; floor: number; roomId: number; x: number; y: number } // position libre d'un crawler dans sa salle
+  // Victoria parle (stream) : id = clip à télécharger sur /voix/<id>.wav?cle=… (null : sous-titre seul)
+  | { type: 'voice'; id: string | null; text: string; ms: number; volume: number }
+  | { type: 'voiceStop' };
 
 export type ClientMsg =
   | { type: 'hello'; name: string; spectatorKey?: string; token?: string } // token : jeton de liaison Twitch gardé par la page
@@ -280,4 +284,4 @@ export type ClientMsg =
   | { type: 'clientPerf'; fps: number; w: number; h: number; page?: string } // images/seconde (journal)
   | { type: 'pos'; x: number; y: number }; // déplacement libre dans la salle (0..1, purement visuel)
 
-export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots' | 'ai';
+export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots' | 'ai' | 'voiceMute' | 'voiceSkip' | 'voiceSay' | 'voiceVolume';

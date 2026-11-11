@@ -27,7 +27,7 @@ Mis de côté pendant le passage du jeu en anglais. À reprendre dans cet ordre.
 - Nouvelles salles possibles : autel (bénédiction/malédiction), fontaine (soin ou poison), tripot squelette, prisonnier à libérer, salle aux leviers (vote du chat), bibliothèque (parchemins), statue à énigme, puits à vœux, portail instable, ogre endormi, mini-boss errant, coffre du sponsor.
 
 ## 4. Son et voix
-- Voix pour l'IA du donjon : Piper (local, gratuit), 15 s max en fin de tour si nécessaire, réagit parfois au chat (hors WZBOT, Streamlabs et autres bots), répliques entièrement réécrites (personnage d'animateur sadique de jeu télé), baisse du reste du son pendant qu'elle parle.
+- ~~Voix pour l'IA du donjon~~ : fait — Victoria Steele, Qwen3-TTS en local (voix créée sur mesure), 15 s max en fin de tour, réagit parfois au chat (jamais aux commandes ni aux bots), baisse du reste du son, régie (Say this, Skip, Mute, volume).
 - Musique adaptative (exploration / combat / boss / dernière minute) à partir de morceaux sans risque sur Twitch (StreamBeats).
 - Lien de la partie dans le chat : !lien est déjà pris (liaison de compte) et le jeu ne peut pas écrire dans le chat. Options : (a) adresse fixe via un tunnel Cloudflare sur un domaine à soi + commande Cloudbot !carte ; (b) compte bot Twitch autorisé à écrire.
 

@@ -74,7 +74,55 @@ setInterval(() => {
   connect();
 }, 5000);
 
+// ------------------------------------------------------------------ Victoria
+// Ses répliques arrivent avec un clip à télécharger (avec la clé) : sous-titre pendant toute la réplique,
+// le reste du son baisse. Une file courte : jamais deux répliques l'une sur l'autre.
+const voiceOn = soundOnParam() && !params.has('sansvoix');
+const voiceQueue: { id: string | null; text: string; ms: number; volume: number }[] = [];
+let voicePlaying = false;
+function soundOnParam() {
+  return !params.has('muet');
+}
+function showVictoria(text: string, ms: number) {
+  $('ia-text').textContent = text;
+  $('ia').classList.remove('hidden');
+  clearTimeout(iaTimer);
+  iaTimer = window.setTimeout(() => $('ia').classList.add('hidden'), ms + 1500);
+}
+async function playVoice() {
+  if (voicePlaying) return;
+  const v = voiceQueue.shift();
+  if (!v) return;
+  voicePlaying = true;
+  try {
+    showVictoria(v.text, v.ms);
+    if (v.id && voiceOn && sfx.running) {
+      const res = await fetch(`/voix/${v.id}.wav?cle=${encodeURIComponent(key)}`, { cache: 'no-store' });
+      if (res.ok) await sfx.voice(await res.arrayBuffer(), v.volume);
+      else await new Promise((r) => setTimeout(r, v.ms));
+    } else await new Promise((r) => setTimeout(r, v.ms));
+  } catch (err) {
+    console.warn('[stream] voice clip lost', err);
+  } finally {
+    voicePlaying = false;
+    void playVoice();
+  }
+}
+
 function onMessage(m: ServerMsg) {
+  if (m.type === 'voice') {
+    if (replay) return;
+    voiceQueue.push(m);
+    while (voiceQueue.length > 2) voiceQueue.shift();
+    void playVoice();
+    return;
+  }
+  if (m.type === 'voiceStop') {
+    voiceQueue.length = 0;
+    sfx.stopVoice();
+    $('ia').classList.add('hidden');
+    return;
+  }
   if (m.type === 'state') {
     state = m;
     clockOffset = m.serverNow - Date.now();
@@ -363,7 +411,7 @@ let ltTimer = 0;
 let iaTimer = 0;
 function onEvent(e: GameEvent) {
   const isIa = !!(e as GameEvent & { narrator?: boolean }).narrator;
-  if (isIa) {
+  if (isIa && !voicePlaying) {
     $('ia-text').textContent = e.text;
     $('ia').classList.remove('hidden');
     clearTimeout(iaTimer);

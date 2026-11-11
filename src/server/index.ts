@@ -14,6 +14,7 @@ import { connectTwitch } from './twitch.js';
 import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
+import { Voice } from './voice.js';
 import { BotManager } from './bots.js';
 import { maskPlayerText, nameAllowed } from './moderation.js';
 import { readJsonSafe, writeAtomic } from './fsutil.js';
@@ -144,6 +145,13 @@ const server = http.createServer((req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
   if (url.pathname.startsWith('/journaux')) return journaux(url, res, ipOf(req));
+  if (url.pathname.startsWith('/voix/')) {
+    // Clips de Victoria : seulement pour le stream (clé de la régie), jamais mis en cache
+    const clip = keyCheck(ipOf(req), url.searchParams.get('cle')) ? voice.getClip(url.pathname.slice('/voix/'.length).replace(/\.wav$/, '')) : undefined;
+    if (!clip) return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'audio/wav', 'cache-control': 'no-store', 'content-length': clip.length }).end(clip);
+    return;
+  }
   if (url.pathname === '/bilan') {
     if (!keyCheck(ipOf(req), url.searchParams.get('cle'))) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('Control-room key required.');
@@ -300,7 +308,7 @@ function sendState(c: Client) {
   if (c.spectator) {
     const shown = game.spectatorView(c.floor, now);
     const standby = c.standby != null && c.standby !== shown?.n ? game.liveFloorView(c.standby, now) : null;
-    send(c, { ...base, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
+    send(c, { ...base, voice: { status: voice.describe(), muted: voice.muted, volume: voice.volume }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
   } else if (c.name) {
     const v = game.viewFor(c.name, now);
     send(c, { ...base, ...v, spectator: false });
@@ -349,10 +357,14 @@ function deliver(events: GameEvent[]) {
 
 // IA du donjon (optionnelle) : la clé API ne vient que de la variable d'environnement
 const ai = new DungeonAI(cfg.ai, process.env.ANTHROPIC_API_KEY ?? '');
-const narrator = new Narrator(game, ai, (evs) => deliver(evs));
+// Victoria Steele : sa voix (service local) part vers les pages du stream, qui téléchargent le clip avec la clé
+const voice = new Voice(cfg.voice, (clip) => {
+  for (const c of clients) if (c.spectator) send(c, { type: 'voice', ...clip, volume: voice.volume });
+});
+const narrator = new Narrator(game, ai, (evs) => deliver(evs), voice);
 
 /** Bots de chat connus : on ignore leurs messages (le rappel de Cloudbot s'affichait en bulle). */
-const CHAT_BOTS = new Set(['streamlabs', 'nightbot', 'streamelements', 'moobot', 'fossabot', 'wizebot', 'sery_bot', 'soundalerts', 'commanderroot', 'kilakbot']);
+const CHAT_BOTS = new Set(['streamlabs', 'nightbot', 'streamelements', 'moobot', 'fossabot', 'wizebot', 'wzbot', 'sery_bot', 'soundalerts', 'commanderroot', 'kilakbot']);
 
 /** Pseudos vus dans le chat Twitch (la page web ne les prend qu'avec « !lien <code> ») et viewers rendus muets par la modération Twitch. */
 const links = new Links<Client>(path.join(root, 'data', 'liens.json'), cfg.twitchChannel ? [playerKey(cfg.twitchChannel)] : []);
@@ -363,10 +375,12 @@ const webVoteByIp = new Map<string, { vote: object; key: string }>(); // page we
 const isMuted = (name: string) => (muted.get(playerKey(name)) ?? 0) > Date.now();
 
 /** Message libre : apparaît dans le chat et en bulle au-dessus du crawler. */
-function say(name: string, text: string) {
+function say(name: string, text: string, chat = false) {
   if (isMuted(name)) return;
   const clean = maskPlayerText(text.replace(/\s+/g, ' ').trim().slice(0, 140));
   if (!clean) return;
+  // Un vrai message du chat (pas une commande, pas un PNJ) : Victoria y répond parfois
+  if (chat && !game.player(name)?.bot) narrator.onChat(name, clean);
   journal.write('say', { name, text: clean });
   const p = game.player(name);
   for (const c of clients) send(c, { type: 'chat', from: name, text: clean, floor: p?.floor, roomId: p?.alive ? p.roomId : undefined });
@@ -404,7 +418,7 @@ function command(name: string, text: string, from?: Client) {
   }
   const dis = text.match(/^!(dis|say|parler)\s+(.+)/i);
   if (dis) return say(name, dis[2]);
-  if (!text.startsWith('!')) return say(name, text);
+  if (!text.startsWith('!')) return say(name, text, true);
   const talk = text.match(/^!(parle|talk)(?:\s+(.*))?$/i);
   if (talk) {
     let r;
@@ -567,7 +581,7 @@ function onClientMessage(c: Client, msg: ClientMsg) {
       }
       c.recent.push(now);
       const text = String(msg.text ?? '').slice(0, 200);
-      if (msg.type === 'say') say(c.name, text);
+      if (msg.type === 'say') say(c.name, text, true);
       else command(c.name, text, c);
     } else if (msg.type === 'floor' && c.spectator) {
       c.floor = Number(msg.n);
@@ -649,6 +663,24 @@ function admin(c: Client, action: string, arg?: string | number) {
       if (on && cfg.ai.provider === 'off') cfg.ai.provider = 'ollama';
       msg = on ? `Dungeon AI on: ${ai.describe()}.` : 'Dungeon AI off (written lines).';
       if (on) void ai.check().then((m) => send(c, { type: 'feedback', ok: !m.includes('not answering') && !m.includes('not installed'), text: `AI: ${m}` }));
+      break;
+    }
+    case 'voiceMute':
+      voice.muted = !voice.muted;
+      if (voice.muted) for (const cl of clients) if (cl.spectator) send(cl, { type: 'voiceStop' });
+      msg = voice.muted ? 'Victoria is muted (subtitles only).' : `Victoria is back on air (${voice.describe()}).`;
+      break;
+    case 'voiceSkip':
+      for (const cl of clients) if (cl.spectator) send(cl, { type: 'voiceStop' });
+      msg = 'Victoria stops talking.';
+      break;
+    case 'voiceVolume':
+      voice.volume = Math.max(0, Math.min(1, Number(arg))) || 0;
+      msg = `Victoria's volume: ${Math.round(voice.volume * 100)}%.`;
+      break;
+    case 'voiceSay': {
+      const r = narrator.controlRoomSay(String(arg ?? ''));
+      msg = r.text;
       break;
     }
     case 'bots': {
@@ -854,6 +886,8 @@ server.listen(cfg.port, cfg.tunnel ? '127.0.0.1' : undefined, () => {
   console.log(`  Control room (spectator view + game master, DO NOT SHARE): http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
   console.log(`  Turn: ${cfg.turnSeconds} s · floor: ${cfg.floorMinutes} min · Twitch: ${cfg.twitchChannel || 'disabled'}`);
   console.log(`  Dungeon AI: ${ai.describe()}`);
+  voice.start();
+  console.log(`  Victoria's voice: ${cfg.voice.enabled ? 'waiting for the voice service (voix\\demarrer-voix.bat); subtitles until then' : 'off'}`);
   if (ai.provider === 'ollama') void ai.check().then((m) => console.log(`  [ai] ${m}`));
   console.log(`  Tonight's logs (send them to Claude): http://localhost:${cfg.port}/journaux?cle=${cfg.spectatorKey}\n`);
 });

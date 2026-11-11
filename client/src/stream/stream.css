@@ -95,7 +95,7 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 .fi.systeme { border-left-color: var(--or); }
 .fi.niveau, .fi.alliance { border-left-color: var(--green-l); }
 .fi.ia { border-left-color: var(--red-l); font-family: var(--serif); font-style: italic; }
-.fi.ia::before { content: 'Dungeon AI'; font: 700 16px var(--serif); color: var(--red-l); margin-right: 7px; font-style: normal; }
+.fi.ia::before { content: 'Victoria'; font: 700 16px var(--serif); color: var(--red-l); margin-right: 7px; font-style: normal; }
 @keyframes slidein { from { transform: translateX(-24px); opacity: 0; } to { transform: none; } }
 
 /* Colonne de droite : classement, commandes, étages, en texte sur le voile */

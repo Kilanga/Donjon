@@ -18,6 +18,8 @@ if errorlevel 1 (
 echo Construction de la page...
 call npm run build
 if errorlevel 1 ( pause & exit /b 1 )
+rem La voix de Victoria (si elle est installee : voix\installer-voix.bat) tourne dans sa propre fenetre, reduite
+if exist "voix\demarrer-voix.bat" start "Victoria" /min cmd /c "voix\demarrer-voix.bat"
 start "" http://localhost:3000
 call npm start
 pause
