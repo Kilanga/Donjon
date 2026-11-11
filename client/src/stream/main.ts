@@ -99,7 +99,7 @@ function onMessage(m: ServerMsg) {
     const first = replay;
     replay = false;
     if (first) return;
-    if (win?.victory) showCard('VICTOIRE !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
+    if (win?.victory) showCard('Victoire !', `${win.victory.name}${win.victory.bot ? ' (PNJ)' : ''} sort du Donjon et entre dans la Légende`);
   } else if (m.type === 'chat' && !m.cmd) {
     for (const w of worlds) w.bubble(m.from, m.text);
   } else if (m.type === 'pos') {
@@ -169,7 +169,7 @@ function heatFloor(e: GameEvent) {
 let cardTimer = 0;
 function showCard(n: number | string, sub: string) {
   const card = $('card');
-  card.querySelector('.c1')!.textContent = typeof n === 'number' ? `ÉTAGE ${n}` : n;
+  card.querySelector('.c1')!.textContent = typeof n === 'number' ? `Étage ${n}` : n;
   card.querySelector('.c2')!.textContent = sub;
   card.classList.remove('hidden');
   card.style.animation = 'none';
@@ -266,21 +266,21 @@ function renderHud(s: PlayerViewMsg) {
     }).join('');
   } else $('floors').classList.add('hidden');
   // Classement
-  $('lb').innerHTML = `<h3>Classement</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">PNJ</small>' : ''}${r.bounty ? ' 💰' : ''}${r.traitor ? ' ☠' : ''}</span><span class="s">niv ${r.level} · ét. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
+  $('lb').innerHTML = `<h3>Classement</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">PNJ</small>' : ''}${r.bounty ? ' <small style="color:var(--gold)">prime</small>' : ''}${r.traitor ? ' <small style="color:var(--pink)">traître</small>' : ''}</span><span class="s">niv ${r.level} · ét. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
   // Vote
   const v = s.vote;
   $('vote').classList.toggle('hidden', !v);
-  if (v) $('vote').innerHTML = `<div class="t">${v.title ? `⚰️ ${esc(v.title)} — !vote &lt;n°&gt; · encore ${v.turnsLeft} tour(s)` : `VOTEZ DANS LE CHAT — encore ${v.turnsLeft} tour(s)`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
+  if (v) $('vote').innerHTML = `<div class="t">${v.title ? `${esc(v.title)} : !vote &lt;n°&gt;, encore ${v.turnsLeft} tour(s)` : `Votez dans le chat, encore ${v.turnsLeft} tour(s)`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
   // Pari éclair, grand pari et meilleurs parieurs
   const b = s.bet;
   $('bet').classList.toggle('hidden', !b && !s.grandBet?.open);
   if (b) {
     const tot = Math.max(1, b.oui + b.non);
-    $('bet').innerHTML = `<div class="t">💰 PARI ÉCLAIR ${b.closesInSec ? `· ${b.closesInSec} s pour miser` : '· mises fermées'}</div><div class="q">${esc(b.title)}</div>
-      <div class="bar"><span class="oui" style="width:${(100 * b.oui) / tot}%">OUI ${b.oui}</span><span class="non" style="width:${(100 * b.non) / tot}%">NON ${b.non}</span></div>
+    $('bet').innerHTML = `<div class="t">Pari éclair ${b.closesInSec ? `: ${b.closesInSec} s pour miser` : ': mises fermées'}</div><div class="q">${esc(b.title)}</div>
+      <div class="bar"><span class="oui" style="width:${(100 * b.oui) / tot}%">oui ${b.oui}</span><span class="non" style="width:${(100 * b.non) / tot}%">non ${b.non}</span></div>
       <small>!parie oui &lt;mise&gt; · !parie non &lt;mise&gt; · ${b.bettors} parieur(s)</small>`;
   } else if (s.grandBet?.open) {
-    $('bet').innerHTML = `<div class="t">🏆 GRAND PARI · qui sortira en premier ?</div><div class="q">Cagnotte : ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!parie &lt;pseudo&gt; &lt;mise&gt; · !sponsor &lt;pseudo&gt; potion|or|monstre</small>`;
+    $('bet').innerHTML = `<div class="t">Grand pari : qui sortira en premier ?</div><div class="q">Cagnotte : ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!parie &lt;pseudo&gt; &lt;mise&gt; · !sponsor &lt;pseudo&gt; potion|or|monstre</small>`;
   }
   // Appel à jouer
   const tips = [
@@ -291,7 +291,7 @@ function renderHud(s: PlayerViewMsg) {
   ];
   const tip = tips[Math.floor(Date.now() / 8000) % tips.length];
   $('cta').innerHTML = s.publicUrl
-    ? `<div class="url">🗺️ Ta carte perso : <b>${esc(s.publicUrl.replace(/^https:\/\//, ''))}</b> <small>(ton pseudo Twitch)</small></div><div>${tip}</div>`
+    ? `<div class="url">Ta carte perso : <b>${esc(s.publicUrl.replace(/^https:\/\//, ''))}</b> <small>(ton pseudo Twitch)</small></div><div>${tip}</div>`
     : tip;
 }
 
@@ -333,7 +333,7 @@ function tickHud() {
     const lobby = state.lobbyInSec;
     if (lobby !== null && lobby !== undefined) {
       const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
-      $('collapse').textContent = `⏳ La partie commence dans ${fmt(rest)} · tapez !join`;
+      $('collapse').textContent = `La partie commence dans ${fmt(rest)} : tapez !join`;
     } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;
       const rest = Math.max(0, c - elapsed);
