@@ -5,3 +5,4 @@ data/
 *.log
 logs/
 __pycache__/
+config.json
