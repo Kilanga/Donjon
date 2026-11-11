@@ -1,3 +1,4 @@
+import { sfx } from '../sfx';
 // Page « stream 3D » : la partie en cours rendue avec les modèles KayKit, pour OBS ou un partage d'écran.
 // Adresse : /stream.html?cle=<clé de la régie>
 import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../src/shared/types';
@@ -196,7 +197,42 @@ function heatFloor(e: GameEvent) {
 }
 
 let cardTimer = 0;
+// ------------------------------------------------------------------ son
+// Le stream a sa bande-son : les effets de ce qui est à l'image, les grands moments, une ambiance discrète.
+// ?muet : aucun son ; ?sansambiance : effets seulement ; ?volume=0.5 : volume général (0 à 1).
+const FX_SOUND: Record<string, Parameters<typeof sfx.play>[0]> = {
+  hit: 'hit', crit: 'crit', miss: 'miss', gag: 'gag', death: 'death', kill: 'kill', loot: 'coin', levelup: 'levelup', trap: 'trap', heal: 'heal', forge: 'forge', rumble: 'rumble',
+};
+const soundOn = !params.has('muet');
+function initSound() {
+  if (!soundOn) return;
+  const vol = Number(params.get('volume'));
+  sfx.setVolume(Number.isFinite(vol) && vol > 0 ? Math.min(1, vol) * 0.45 : 0.45);
+  sfx.setMuted(false);
+  // OBS / Streamlabs autorisent le son sans clic ; dans un navigateur ordinaire, il démarre au premier clic
+  const start = () => {
+    sfx.unlock();
+    if (sfx.running && !params.has('sansambiance')) sfx.ambience(true, 0.8);
+  };
+  start();
+  const retry = setInterval(() => {
+    start();
+    if (sfx.running) clearInterval(retry);
+  }, 1000);
+  addEventListener('pointerdown', start);
+  for (const w of worlds) w.onSound = (kind, v) => {
+    if (w !== worlds[visible]) return; // seulement l'étage à l'écran
+    const name = FX_SOUND[kind];
+    if (name) sfx.play(name, v);
+  };
+}
+const cue = (name: Parameters<typeof sfx.play>[0], v = 1) => soundOn && sfx.play(name, v);
+let lastVoteKey = '';
+let lastBetKey = '';
+let bellFloor = -1;
+
 function showCard(n: number | string, sub: string) {
+  cue(typeof n === 'number' ? 'whoosh' : 'fanfare', 0.8);
   const card = $('card');
   card.querySelector('.c1')!.textContent = typeof n === 'number' ? `Étage ${n}` : n;
   card.querySelector('.c2')!.textContent = sub;
@@ -298,10 +334,16 @@ function renderHud(s: PlayerViewMsg) {
   $('lb').innerHTML = `<h3>Classement</h3>` + s.leaderboard.slice(0, 6).map((r, i) => `<div class="r ${r.alive ? '' : 'dead'}"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${r.bot ? ' <small style="opacity:.6">PNJ</small>' : ''}${r.bounty ? ' <small style="color:var(--gold)">prime</small>' : ''}${r.traitor ? ' <small style="color:var(--pink)">traître</small>' : ''}</span><span class="s">niv ${r.level} · ét. ${r.deepest} · ${r.kills} kills</span></div>`).join('');
   // Vote
   const v = s.vote;
+  const voteKey = v ? `${v.title ?? ''}|${v.options.map((o) => o.key).join(',')}` : '';
+  if (voteKey && voteKey !== lastVoteKey) cue('horn', 0.8);
+  lastVoteKey = voteKey;
   $('vote').classList.toggle('hidden', !v);
   if (v) $('vote').innerHTML = `<div class="t">${v.title ? `${esc(v.title)} : !vote &lt;n°&gt;, encore ${v.turnsLeft} tour(s)` : `Votez dans le chat, encore ${v.turnsLeft} tour(s)`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
   // Pari éclair, grand pari et meilleurs parieurs
   const b = s.bet;
+  const betKey = b ? b.title : '';
+  if (betKey && betKey !== lastBetKey) cue('coin', 0.9);
+  lastBetKey = betKey;
   $('bet').classList.toggle('hidden', !b && !s.grandBet?.open);
   if (b) {
     const tot = Math.max(1, b.oui + b.non);
@@ -370,6 +412,12 @@ function tickHud() {
       const seal = st !== null && st !== undefined ? Math.max(0, st - elapsed) : 0;
       $('collapse').textContent = seal > 0 ? `🔒 Escalier scellé ${fmt(seal)} · effondrement ${fmt(rest)}` : `🔓 Escalier ouvert · effondrement dans ${fmt(rest)}`;
       $('collapse').classList.toggle('urgent', rest < 60);
+      // la cloche sonne une fois quand l'étage affiché entre dans sa dernière minute
+      const fn = view.floor?.n ?? -1;
+      if (rest < 60 && rest > 50 && bellFloor !== fn) {
+        bellFloor = fn;
+        cue('bell', 0.9);
+      }
     } else $('collapse').textContent = view.floor ? 'Chrono en attente d\'un aventurier' : '';
   }
 }
@@ -385,6 +433,7 @@ function tickHud() {
   });
   World.light = params.has('leger');
   worlds.push(new World($('c') as HTMLCanvasElement, $('labels'), assets), new World($('c2') as HTMLCanvasElement, $('labels2'), assets));
+  initSound();
   world = worlds[0];
   for (const w of worlds) {
     if (follow) w.followName = follow;
@@ -392,7 +441,7 @@ function tickHud() {
       if (w === world) $('shot').textContent = label;
     };
   }
-  if (params.has('debug')) Object.assign(window as unknown as Record<string, unknown>, { world: worlds[0], worlds, switchTo });
+  if (params.has('debug')) Object.assign(window as unknown as Record<string, unknown>, { world: worlds[0], worlds, switchTo, sfx });
   // Le HUD est dessiné pour du 1920×1080 : on le réduit dans une fenêtre plus petite
   const ui = document.querySelector('.ui') as HTMLElement;
   const resize = () => {

@@ -278,30 +278,76 @@ export function makeHalo(color: number, strong: boolean, size = 1): THREE.Mesh {
 
 // --------------------------------------------------------------- tombes
 
-const STONE = new THREE.MeshStandardMaterial({ color: 0xb5afa4, roughness: 0.9 });
-const DIRT = new THREE.MeshStandardMaterial({ color: 0x3a2d22, roughness: 1 });
-const SLAB_GEO = new THREE.BoxGeometry(0.9, 1.0, 0.22);
-const TOP_GEO = new THREE.CylinderGeometry(0.45, 0.45, 0.22, 16, 1, false, 0, Math.PI);
-const MOUND_GEO = new THREE.SphereGeometry(0.75, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-/** Petite tombe là où un crawler est tombé. */
+const STONE = new THREE.MeshStandardMaterial({ color: 0xa9a49b, roughness: 0.92 });
+const ENGRAVE = new THREE.MeshStandardMaterial({ color: 0x3b3833, roughness: 1 });
+const MOSS = new THREE.MeshStandardMaterial({ color: 0x4f6b38, roughness: 1, flatShading: true });
+const DIRT = new THREE.MeshStandardMaterial({ color: 0x5e4632, roughness: 1, flatShading: true });
+const WAX = new THREE.MeshStandardMaterial({ color: 0xefe6cf, roughness: 0.7 });
+const FLAME = new THREE.MeshBasicMaterial({ color: 0xffc060, toneMapped: false });
+const PETAL = new THREE.MeshStandardMaterial({ color: 0x9a3040, roughness: 0.8 });
+// Stèle : un rectangle coiffé d'un arc, extrudée avec un léger chanfrein
+const HEADSTONE_GEO = (() => {
+  const w = 0.5;
+  const h = 0.85;
+  const sh = new THREE.Shape();
+  sh.moveTo(-w, 0);
+  sh.lineTo(w, 0);
+  sh.lineTo(w, h);
+  sh.absarc(0, h, w, 0, Math.PI, false);
+  sh.lineTo(-w, 0);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.18, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2, curveSegments: 14 });
+  g.translate(0, 0, -0.09);
+  return g;
+})();
+const PLINTH_GEO = new THREE.BoxGeometry(1.25, 0.18, 0.5);
+const MOUND_GEO = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+const CANDLE_GEO = new THREE.CylinderGeometry(0.07, 0.08, 0.32, 8);
+const FLAME_GEO = new THREE.ConeGeometry(0.045, 0.14, 6);
+const MOSS_GEO = new THREE.IcosahedronGeometry(1, 0);
+
+/** Tombe d'un crawler : stèle arrondie gravée d'une croix, socle, butte de terre, une bougie et une fleur. */
 export function makeTomb(seed: number): THREE.Group {
+  const r = rng(Math.floor(Math.abs(seed)) + 1);
   const g = new THREE.Group();
-  const slab = new THREE.Mesh(SLAB_GEO, STONE);
-  slab.position.y = 0.5;
-  const top = new THREE.Mesh(TOP_GEO, STONE);
-  top.rotation.x = Math.PI / 2;
-  top.rotation.z = Math.PI / 2;
-  top.position.y = 1.0;
-  const mound = new THREE.Mesh(MOUND_GEO, DIRT);
-  mound.scale.set(0.7, 0.2, 1.0);
-  mound.position.z = 0.75;
-  for (const m of [slab, top, mound]) {
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.scale.set(sx, sy, sz);
     m.castShadow = true;
     m.receiveShadow = true;
     g.add(m);
-  }
-  g.rotation.set(0, ((seed % 7) - 3) * 0.06, ((seed % 5) - 2) * 0.05);
-  g.scale.setScalar(1.45);
+    return m;
+  };
+  add(PLINTH_GEO, STONE, 0, 0.09, 0);
+  const stone = add(HEADSTONE_GEO, STONE, 0, 0.18, 0);
+  stone.rotation.z = (r() - 0.5) * 0.12; // un peu de travers, comme une vraie vieille tombe
+  stone.rotation.x = -0.05 - r() * 0.06;
+  // croix gravée sur la face avant
+  const cross = new THREE.Group();
+  const v = new THREE.Mesh(BOX, ENGRAVE);
+  v.scale.set(0.09, 0.62, 0.02);
+  v.position.set(0, 0.78, 0.125);
+  const hz = new THREE.Mesh(BOX, ENGRAVE);
+  hz.scale.set(0.4, 0.09, 0.02);
+  hz.position.set(0, 0.92, 0.125);
+  cross.add(v, hz);
+  stone.add(cross);
+  // mousse au pied et sur un coin
+  for (let i = 0; i < 4; i++) add(MOSS_GEO, MOSS, (r() - 0.5) * 1.1, 0.12 + r() * 0.05, 0.18 + r() * 0.12, 0.12 + r() * 0.1, 0.06, 0.1 + r() * 0.08);
+  // butte de terre devant
+  add(MOUND_GEO, DIRT, 0, 0, 0.95, 0.48, 0.2, 0.72);
+  // une bougie allumée et une fleur posée sur la butte
+  const cx = 0.38 + r() * 0.12;
+  add(CANDLE_GEO, WAX, cx, 0.34, 0.32);
+  const fl = new THREE.Mesh(FLAME_GEO, FLAME);
+  fl.position.set(cx, 0.57, 0.32);
+  g.add(fl);
+  const st = add(BOX, LEAF, -0.25, 0.25, 0.9, 0.03, 0.03, 0.5);
+  st.rotation.y = 0.4;
+  add(MOSS_GEO, PETAL, -0.36, 0.27, 0.68, 0.09, 0.07, 0.09);
+  g.rotation.y = (r() - 0.5) * 0.25;
+  g.scale.setScalar(1.25);
+  g.userData.flame = fl;
   return g;
 }
 

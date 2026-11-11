@@ -196,7 +196,7 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 #load p { color: var(--mut); margin: 0; font: italic 400 19px var(--serif); }
 
 /* Nom gravé sur la tombe d'un vrai joueur */
-.tomb3d { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; font: italic 400 14px var(--serif); color: #e6e0d4; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.9); }
+.tomb3d { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; font: italic 700 16px var(--serif); color: #e6e0d4; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.9); }
 .tomb3d::before { content: '✝ '; font-style: normal; color: #bdb4a5; }
 
 /* Amélioration à la forge, au-dessus du joueur pendant un tour */

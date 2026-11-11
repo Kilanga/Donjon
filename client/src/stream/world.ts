@@ -174,6 +174,8 @@ export class World {
   private wantLook = new THREE.Vector3();
   followName: string | null = null;
   onShot?: (label: string) => void;
+  /** Son d'un effet : `vol` baisse avec la distance au centre de l'image (0 = hors champ). */
+  onSound?: (kind: string, vol: number) => void;
   private hemi: THREE.HemisphereLight;
   private mood: Mood = moodFor('classique');
   private moodLights: THREE.PointLight[] = []; // lumière colorée des salles spéciales proches
@@ -777,6 +779,13 @@ export class World {
     const src = fx.src ? this.ents.get(fx.src) : undefined;
     const dst = fx.dst ? this.ents.get(fx.dst) : undefined;
     const now = performance.now();
+    const at = (dst ?? src)?.obj.position;
+    if (at && this.onSound) {
+      // on n'entend que ce qui se passe à l'image (ou juste à côté), plus fort au centre
+      const d = Math.hypot(at.x - this.camLook.x, at.z - this.camLook.z);
+      const reach = this.wide ? 60 : 22;
+      if (d < reach) this.onSound(fx.kind, Math.max(0.25, 1 - d / reach));
+    }
     const face = (a: Ent, b: Ent) => {
       a.yaw = Math.atan2(b.obj.position.x - a.obj.position.x, b.obj.position.z - a.obj.position.z);
     };
@@ -1168,7 +1177,10 @@ export class World {
       this.hemi.color.copy(red);
       this.sun.color.setHex(0xaab8d8).lerp(new THREE.Color(0xff4a30), 0.5 + 0.4 * k);
       this.hemi.intensity = this.mood.ambient * (0.9 + 0.25 * Math.max(0, Math.sin(now / 180)) * k);
-      if (Math.sin(now / 900) > 0.92) this.shake = Math.max(this.shake, 0.12 + 0.35 * k);
+      if (Math.sin(now / 900) > 0.92) {
+        if (this.shake < 0.1) this.onSound?.('rumble', 0.4 + 0.6 * k); // une fois par secousse
+        this.shake = Math.max(this.shake, 0.12 + 0.35 * k);
+      }
       if (now > this.nextDebris) {
         this.nextDebris = now + 600 - 450 * k;
         const at = this.camLook.clone().add(new THREE.Vector3((Math.random() - 0.5) * 14, 9 + Math.random() * 3, (Math.random() - 0.5) * 12));
@@ -1220,7 +1232,7 @@ export class World {
     // Noms gravés sur les tombes des vrais joueurs (en plan rapproché seulement)
     for (const t of this.tombs) {
       if (!t.label) continue;
-      v.copy(t.obj.position).add(new THREE.Vector3(0, 1.5, 0)).project(this.camera);
+      v.copy(t.obj.position).add(new THREE.Vector3(0, 2.25, 0)).project(this.camera);
       const vis = close && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
       t.label.style.display = vis ? 'block' : 'none';
       if (vis) t.label.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;
