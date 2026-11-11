@@ -20,8 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import numpy as np
 import soundfile as sf
 import torch
-from qwen_tts import Qwen3TTSModel
-
 from studio import studio
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,26 +57,41 @@ def gpu_info() -> str:
     return f'{torch.cuda.get_device_name(0)}, VRAM free {free / 2**30:.1f} / {total / 2**30:.1f} GB (torch {torch.__version__})'
 
 
-state = {'ready': False, 'model': None, 'prompt': None}
+state = {'ready': False, 'model': None, 'prompt': None, 'engine': ''}
 lock = threading.Lock()  # une seule génération à la fois sur la carte graphique
 
 
 def load():
     t0 = time.time()
     log(f'device {DEVICE}; {gpu_info()}')
-    dtype = torch.bfloat16 if DEVICE.startswith('cuda') or os.environ.get('VOIX_BF16') == '1' else torch.float32
-    model = Qwen3TTSModel.from_pretrained(MODEL, device_map=DEVICE, dtype=dtype)
-    prompt = model.create_voice_clone_prompt(ref_audio=REF_WAV, ref_text=REF_TEXT)
-    state['model'], state['prompt'] = model, prompt
-    synth('Testing, testing. Victoria Steele, live.')  # premier passage : chauffe la carte
+    # Moteur rapide (graphes CUDA, faster-qwen3-tts : 5 à 10 fois plus rapide) ; sinon le moteur d'origine
+    if DEVICE.startswith('cuda') and torch.cuda.is_available() and os.environ.get('VOIX_RAPIDE', '1') != '0':
+        try:
+            from faster_qwen3_tts import FasterQwen3TTS
+            model = FasterQwen3TTS.from_pretrained(MODEL, device=DEVICE, dtype=torch.bfloat16)
+            model.warmup()
+            state['model'], state['engine'] = model, 'rapide'
+        except Exception as e:  # pas installé, ou incompatible : on garde la voix, en plus lent
+            log(f'moteur rapide indisponible ({e.__class__.__name__}: {str(e)[:160]}) : moteur standard')
+    if not state['engine']:
+        from qwen_tts import Qwen3TTSModel
+        dtype = torch.bfloat16 if DEVICE.startswith('cuda') or os.environ.get('VOIX_BF16') == '1' else torch.float32
+        model = Qwen3TTSModel.from_pretrained(MODEL, device_map=DEVICE, dtype=dtype)
+        state['prompt'] = model.create_voice_clone_prompt(ref_audio=REF_WAV, ref_text=REF_TEXT)
+        state['model'], state['engine'] = model, 'standard'
+    synth('Testing, testing. Victoria Steele, live.')  # premier passage : chauffe la carte (et met la voix en cache)
     state['ready'] = True
-    log(f'Victoria est prete ({DEVICE}, {time.time() - t0:.0f} s) ; {gpu_info()}')
+    log(f'Victoria est prete (moteur {state["engine"]}, {DEVICE}, {time.time() - t0:.0f} s) ; {gpu_info()}')
 
 
 def synth(text: str) -> bytes:
     with lock:
-        wavs, sr = state['model'].generate_voice_clone(
-            text=text, language='English', voice_clone_prompt=state['prompt'], max_new_tokens=MAX_TOKENS)
+        if state['engine'] == 'rapide':
+            wavs, sr = state['model'].generate_voice_clone(
+                text=text, language='English', ref_audio=REF_WAV, ref_text=REF_TEXT, max_new_tokens=MAX_TOKENS)
+        else:
+            wavs, sr = state['model'].generate_voice_clone(
+                text=text, language='English', voice_clone_prompt=state['prompt'], max_new_tokens=MAX_TOKENS)
     audio = np.asarray(wavs[0], dtype=np.float32)
     if audio.size and USE_STUDIO:
         audio = studio(audio, sr)  # micro et pièce réels ; normalisé à -1 dBFS
@@ -106,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/health':
-            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready'], 'device': DEVICE}).encode(), 'application/json')
+            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready'], 'device': f"{DEVICE} ({state['engine'] or 'loading'})"}).encode(), 'application/json')
         self.reply(404, b'{}', 'application/json')
 
     def do_POST(self):
@@ -129,10 +142,16 @@ class Handler(BaseHTTPRequestHandler):
             wav = synth(text)
             secs = (len(wav) - 44) / 2 / 24000
             log(f'{len(text)} caracteres -> {secs:.1f} s de voix en {time.time() - t0:.1f} s')
-            self.reply(200, wav, 'audio/wav')
         except Exception as e:  # une réplique ratée ne doit pas arrêter le service
             log(f'erreur : {e}')
-            self.reply(500, b'{"error":"synthesis failed"}', 'application/json')
+            return self.safe_reply(500, b'{"error":"synthesis failed"}', 'application/json')
+        self.safe_reply(200, wav, 'audio/wav')
+
+    def safe_reply(self, code: int, body: bytes, ctype: str):
+        try:
+            self.reply(code, body, ctype)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            log('le jeu n\'attendait plus cette replique (trop lente) : abandonnee')
 
 
 if __name__ == '__main__':
