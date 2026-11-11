@@ -287,6 +287,7 @@ function sendState(c: Client) {
     type: 'state' as const, turn: Math.ceil(game.state.turn / game.phases), turnEndsAt: floorTurnEnds(shownFloor ?? undefined, now),
     turnSeconds: cfg.turnSeconds, serverNow: now, online: clients.size, paused: pausedAt !== null, admin: c.spectator,
     leaderboard: game.leaderboard(), vote: game.voteView(c.spectator ? null : key), effects: game.effectsView(), obituary: game.obituary(),
+    ...game.socialView(c.spectator ? null : key, now),
     seasonOver: game.state.seasonOver,
     lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
@@ -375,6 +376,7 @@ function say(name: string, text: string) {
 function command(name: string, text: string, from?: Client) {
   const src = from ? 'web' : 'twitch';
   if (isMuted(name)) return { ok: false, text: '' };
+  game.seen(name); // présent dans le chat : points de faveur à chaque effondrement
   if (/^!(donjon|jouer|lien)\b/i.test(text.trim())) return { ok: true, text: '' }; // commandes de Cloudbot (ou !lien hors Twitch) : pas pour le jeu
   if (game.player(name)?.bot) {
     // Un vrai joueur prend le pseudo d'un PNJ : le PNJ s'en va

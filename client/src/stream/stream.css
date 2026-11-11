@@ -106,3 +106,15 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 #load p { color: var(--mut); margin: 0; }
 #cta .url { font-size: 18px; margin-bottom: 4px; }
 #cta .url small { opacity: .7; font-size: 13px; }
+
+/* Vote et paris : en haut au centre, l'un sous l'autre */
+#topc { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#topc #vote { position: static; transform: none; }
+#bet { min-width: 460px; max-width: 640px; padding: 10px 14px; border: 2px solid #4ade80; text-align: center; }
+#bet .t { font: 600 16px 'Pixelify Sans', monospace; color: #86efac; }
+#bet .q { font-size: 15px; margin: 4px 0 6px; }
+#bet .bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,.06); font: 600 12px/22px Inter, sans-serif; }
+#bet .bar span { min-width: 48px; white-space: nowrap; }
+#bet .oui { background: #15803d; }
+#bet .non { background: #b91c1c; }
+#bet small { opacity: .75; }

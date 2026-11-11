@@ -11,6 +11,9 @@ export type CommandName =
   | 'equip'
   | 'buy'
   | 'forge'
+  | 'bet'
+  | 'sponsor'
+  | 'favor'
   | 'sell'
   | 'shop'
   | 'rest'
@@ -41,6 +44,9 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   utilise: { name: 'use' }, utiliser: { name: 'use' }, use: { name: 'use' }, bois: { name: 'use' }, drink: { name: 'use' },
   equipe: { name: 'equip' }, equiper: { name: 'equip' }, equip: { name: 'equip' },
   achete: { name: 'buy' }, acheter: { name: 'buy' }, buy: { name: 'buy' },
+  parie: { name: 'bet' }, parier: { name: 'bet' }, pari: { name: 'bet' }, bet: { name: 'bet' }, mise: { name: 'bet' },
+  sponsor: { name: 'sponsor' }, sponsorise: { name: 'sponsor' }, offre: { name: 'sponsor' }, cadeau: { name: 'sponsor' },
+  faveur: { name: 'favor' }, points: { name: 'favor' }, favor: { name: 'favor' },
   forge: { name: 'forge' }, forger: { name: 'forge' }, ameliore: { name: 'forge' }, ameliorer: { name: 'forge' }, upgrade: { name: 'forge' },
   vends: { name: 'sell' }, vendre: { name: 'sell' }, sell: { name: 'sell' },
   marchand: { name: 'shop' }, shop: { name: 'shop' },
@@ -121,7 +127,9 @@ export const HELP_TEXT = [
   '!alliance <joueur> / !quitte — former ou quitter une alliance',
   '!monte <for|agi|int|cha> — dépenser un point de stat',
   '!descendre — prendre l\'escalier (boss vaincu, et escalier descellé : dernière moitié du chrono)',
-  '!vote <n°> — voter pour l\'événement proposé par la production',
+  '!vote <n°> — voter pour l\'événement proposé par la production (ou pour ressusciter un mort : !vote <n°> <points> pour peser plus lourd)',
+  '!parie <pseudo> <mise> — grand pari : qui sortira en premier ? · !parie oui|non <mise> — pari éclair en cours',
+  '!sponsor <pseudo> potion|or|monstre — offrir un cadeau (ou un sale tour) avec tes points de faveur · !faveur — tes points',
   '!bug <description> / !avis <message> — signaler un souci ou donner ton avis (test)',
   '!commandes ou !aide — afficher cette liste',
 ];

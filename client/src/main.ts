@@ -288,6 +288,8 @@ function renderShared(s: PlayerViewMsg) {
   if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
   if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
   if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
+  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris, sponsors (!sponsor), voix au vote de résurrection">⭐ ${s.myFavor} faveur</span>`);
+  if (s.myGrave) chips.push(`<span class="chip urgent">⚰️ Tu es le n°${s.myGrave} au vote de résurrection : fais campagne dans le chat !</span>`);
   $('hud-effects').innerHTML = chips.join('');
   $('paused').classList.toggle('hidden', !s.paused);
 
@@ -302,8 +304,22 @@ function renderShared(s: PlayerViewMsg) {
       const attr = s.spectator ? 'class="vote-opt card"' : `class="vote-opt${v.myVote === o.key ? ' mine' : ''}" data-cmd="!vote ${o.n}"`;
       return `<${tag} ${attr} title="${esc(o.desc)}"><span class="n">${o.votes}</span><b>${o.n}. ${esc(o.label)}</b><small>${esc(o.desc)}</small></${tag}>`;
     }).join('');
-    box.innerHTML = `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
+    box.innerHTML = v.title
+      ? `<div class="vote-title">⚰️ ${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; (et !vote &lt;n°&gt; &lt;points&gt; : 10 points = 1 voix)</span></div><div class="vote-options">${opts}</div>`
+      : `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
   } else box.classList.add('hidden');
+
+  // Pari éclair
+  const b = s.bet;
+  const bx = $('bet');
+  bx.classList.toggle('hidden', !b);
+  if (b) {
+    const can = !s.spectator && b.closesInSec > 0 && !b.mine;
+    const btn = (opt: string, amt: number) => `<button class="vote-opt" data-cmd="!parie ${opt} ${amt}">${opt} · ${amt}</button>`;
+    bx.innerHTML = `<div class="vote-title">💰 Pari éclair : ${esc(b.title)} ${b.closesInSec ? `— ${b.closesInSec} s pour miser` : '— mises fermées'}</div>
+      <div class="muted">Oui : ${b.oui} pts · Non : ${b.non} pts · ${b.bettors} parieur(s)${b.mine ? ` · ta mise : ${b.mine.amount} sur « ${b.mine.opt} »` : ''}</div>
+      ${can ? `<div class="vote-options">${btn('oui', 10)}${btn('oui', 50)}${btn('non', 10)}${btn('non', 50)}</div>` : ''}`;
+  }
 
   // Classement
   const rows = s.leaderboard;

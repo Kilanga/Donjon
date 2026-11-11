@@ -13,7 +13,7 @@ import { THEME_EFFECTS } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
-import { emptyState, migrate, type FloorState, type GameState, type MonsterState, type PlayerState, type RoomState } from './state.js';
+import { emptyState, migrate, type FlashBet, type FloorState, type GameState, type Grave, type MonsterState, type PlayerState, type RoomState, type Wallet } from './state.js';
 
 export const INVENTORY_MAX = 8;
 export const ALLIANCE_MAX = 4;
@@ -187,8 +187,7 @@ export class Game {
   private openLobby() {
     this.state.lobbyUntil = this.now + this.cfg.lobbySeconds * 1000;
     this.state.lobbyWarned = false;
-    const min = Math.round(this.cfg.lobbySeconds / 60);
-    this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 70, text: `INSCRIPTIONS OUVERTES ! La partie commence dans ${min} min : tapez !join pour en être. En attendant, échauffement avec les PNJ (tout repart à zéro au coup d'envoi).` });
+    this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 70, text: `INSCRIPTIONS OUVERTES ! La partie commence dans ${fmtWait(this.cfg.lobbySeconds * 1000)} : tapez !join pour en être. En attendant, échauffement avec les PNJ (tout repart à zéro au coup d'envoi).` });
   }
 
   /** Fin des inscriptions : donjon neuf, tout le monde (PNJ compris) repart niveau 1 à l'entrée, et l'horloge démarre. */
@@ -196,7 +195,7 @@ export class Game {
     const roster = Object.values(this.state.players)
       .sort((a, b) => Number(!!a.bot) - Number(!!b.bot))
       .map((p) => ({ name: p.name, cls: p.cls, bot: !!p.bot, closer: !!p.closer }));
-    const keep = { nextId: this.state.nextId, turn: this.state.turn, events: this.state.events };
+    const keep = { nextId: this.state.nextId, turn: this.state.turn, events: this.state.events, wallets: this.state.wallets, grandBet: this.state.grandBet };
     this.state = emptyState(this.rng.int(1, 2 ** 31));
     Object.assign(this.state, keep);
     this.rng = new Rng(this.state.rng);
@@ -278,6 +277,11 @@ export class Game {
 
   private handle(name: string, cmd: ParsedCommand): SubmitResult {
     if (cmd.name === 'help') return { ok: true, text: HELP_TEXT.join('\n') };
+    // Ouvert à tout le chat, perso ou pas (les éliminés parient, sponsorisent et votent pour revenir)
+    if (cmd.name === 'vote' && this.state.resurrection) return this.voteResurrection(name, cmd.arg);
+    if (cmd.name === 'bet') return this.placeBet(name, cmd.arg);
+    if (cmd.name === 'sponsor') return this.sponsor(name, cmd.arg);
+    if (cmd.name === 'favor') return this.favorText(name);
     const p = this.player(name);
     if (cmd.name === 'join') return this.join(name, cmd.arg);
     if (!p) return { ok: false, text: 'Tu n\'es pas encore dans le donjon. Tape !join [barbare|chevalier|voleur|mage].' };
@@ -423,7 +427,7 @@ export class Game {
         this.sync();
         return this.out;
       }
-      if (left <= 60_000 && !this.state.lobbyWarned) {
+      if (left <= 60_000 && this.cfg.lobbySeconds > 90 && !this.state.lobbyWarned) {
         this.state.lobbyWarned = true;
         this.emit({ floor: 1, kind: 'systeme', scope: 'global', drama: 50, text: 'Plus qu\'UNE MINUTE pour rejoindre la partie : !join ! Ensuite, tout repart à zéro et le donjon commence à s\'effondrer.' });
       }
@@ -1224,6 +1228,284 @@ export class Game {
   }
 
   /** Le dernier étage s'effondre : la saison est terminée, la partie se fige (la régie peut relancer une nouvelle partie). */
+  // ------------------------------------------------- cimetière et résurrection
+
+  /** Un vrai joueur éliminé entre au cimetière avec son perso intact ; il reçoit un numéro pour faire campagne. */
+  private bury(p: PlayerState, floorN: number): number {
+    this.state.graveyard = this.state.graveyard.filter((g) => g.key !== p.key); // un seul numéro par personne (le plus récent)
+    const no = ++this.state.graveNo;
+    this.state.graveyard.push({ no, key: p.key, name: p.name, snap: JSON.parse(JSON.stringify(p)) as PlayerState, floor: floorN, turn: this.state.turn });
+    return no;
+  }
+
+  /** Après un effondrement : points aux viewers présents, pari « sortie » tranché, vote de résurrection lancé. */
+  private afterCollapse(f: FloorState, humansLost: boolean) {
+    const st = this.state;
+    for (const w of Object.values(st.wallets)) if (this.now - w.seen < 10 * 60_000) w.pts += 10; // fidélité
+    if (st.flashBet?.kind === 'sortie' && st.flashBet.floor === f.n) this.settleFlash(humansLost ? 'non' : 'oui');
+    if (f.n === 2 && st.grandBet.open) {
+      st.grandBet.open = false;
+      if (Object.keys(st.grandBet.stakes).length) this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 30, text: `Le GRAND PARI est fermé : ${this.grandPot()} points en jeu sur le premier à sortir du Donjon.` });
+    }
+    if (!st.graveyard.length) return;
+    if (st.vote) {
+      st.vote = null; // la résurrection passe avant
+      st.nextVoteTurn = st.turn + this.voteEvery();
+    }
+    const floorTo = f.n + 1;
+    if (st.resurrection) st.resurrection.floorTo = Math.max(st.resurrection.floorTo, floorTo);
+    else st.resurrection = { endTurn: st.turn + 3 * this.phases, floorTo, votes: {} };
+    const list = [...st.graveyard].sort((a, b) => b.snap.level - a.snap.level).slice(0, 8).map((g) => `n°${g.no} ${g.name} (niv ${g.snap.level})`);
+    this.emit({
+      floor: 0, kind: 'systeme', scope: 'global', drama: 85,
+      text: `⚰️ VOTE DE RÉSURRECTION (1 min) : qui mérite une seconde chance ? ${list.join(' · ')}${st.graveyard.length > 8 ? ' …' : ''}. Tapez !vote <n°> (et !vote <n°> <points> pour peser plus lourd : 10 points = 1 voix).`,
+    });
+  }
+
+  private voteResurrection(name: string, arg: string): SubmitResult {
+    const r = this.state.resurrection!;
+    const key = playerKey(name);
+    if (this.state.players[key]?.bot) return { ok: false, text: 'Les PNJ ne votent pas pour les morts.' };
+    const [noS, ptsS] = arg.trim().split(/\s+/);
+    const no = Number(noS);
+    const g = this.state.graveyard.find((x) => x.no === no);
+    if (!g) return { ok: false, text: `Vote de résurrection : !vote <n°> parmi ${this.state.graveyard.map((x) => `n°${x.no} ${x.name}`).join(', ')}.` };
+    const w = this.wallet(name);
+    const pts = Math.max(0, Math.min(w.pts, Math.floor(Number(ptsS) || 0)));
+    w.pts -= pts;
+    const prev = r.votes[key];
+    const voices = (prev && prev.no === no ? prev.voices : 1) + Math.floor(pts / 10);
+    r.votes[key] = { no, voices };
+    return { ok: true, text: `Voix pour n°${no} ${g.name} : ${voices}${pts ? ` (−${pts} points de faveur)` : ''}.` };
+  }
+
+  /** Fin du vote : le plus de voix revient (égalité : jet de d20 entre les ex æquo, relancé tant qu'il y a égalité). */
+  private resolveResurrection() {
+    const st = this.state;
+    const r = st.resurrection!;
+    st.resurrection = null;
+    const tally = new Map<number, number>();
+    for (const v of Object.values(r.votes)) if (st.graveyard.some((g) => g.no === v.no)) tally.set(v.no, (tally.get(v.no) ?? 0) + v.voices);
+    if (!tally.size) {
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: 'Personne n\'a voté : les morts restent morts. Le chat a le cœur sec.' });
+      return;
+    }
+    const best = Math.max(...tally.values());
+    let tied = [...tally.entries()].filter(([, v]) => v === best).map(([no]) => no);
+    let rolls = '';
+    while (tied.length > 1) {
+      const r20 = tied.map((no) => [no, this.rng.int(1, 20)] as const);
+      rolls += ` Égalité à ${best} voix ! Jet de d20 : ${r20.map(([no, d]) => `${st.graveyard.find((g) => g.no === no)!.name} ${d}`).join(', ')}.`;
+      const top = Math.max(...r20.map(([, d]) => d));
+      tied = r20.filter(([, d]) => d === top).map(([no]) => no);
+    }
+    const g = st.graveyard.find((x) => x.no === tied[0])!;
+    const f = this.reviveFloor(r.floorTo);
+    this.revive(g, f);
+    const others = [...tally.entries()].filter(([no]) => no !== g.no).sort((a, b) => b[1] - a[1])[0];
+    this.emit({
+      floor: f.n, roomId: f.spawnRoom, kind: 'niveau', scope: 'global', drama: 110, actors: [g.key], fx: { kind: 'levelup', dst: `p:${g.name}` },
+      text: `RÉSURRECTION !${rolls} Le chat a parlé : ${g.name} (n°${g.no}) revient d'entre les morts à l'étage ${f.n}, tous ses PV, niveau ${g.snap.level} (${best} voix${others ? ` contre ${others[1]}` : ''}).`,
+    });
+  }
+
+  /** Étage où ressuscite le gagnant : celui sous l'étage effondré, ou le plus profond encore debout. */
+  private reviveFloor(n: number): FloorState {
+    const f = this.state.floors[n];
+    if (f && !f.collapsed) return f;
+    const live = Object.values(this.state.floors).filter((x) => !x.collapsed).sort((a, b) => b.n - a.n);
+    return live[0] ?? this.freshFloor(Math.min(n, this.cfg.finalFloor));
+  }
+
+  private revive(g: Grave, f: FloorState) {
+    this.state.graveyard = this.state.graveyard.filter((x) => x.no !== g.no);
+    const cur = this.state.players[g.key];
+    if (cur) this.gameOver(cur); // il avait recommencé avec un nouveau perso : l'ancien, ressuscité, le remplace
+    const p = g.snap;
+    Object.assign(p, {
+      floor: f.n, roomId: f.spawnRoom, alive: true, hp: p.maxHp, respawnIn: 0, pending: null, lastAction: null, stunned: false,
+      allianceId: null, allyProposals: [], traitorUntilTurn: 0, immuneUntil: this.now + 60_000, deepest: Math.max(p.deepest, f.n),
+    });
+    this.state.players[g.key] = p;
+    this.discover(p);
+    this.startTimer(f, p);
+  }
+
+  // ------------------------------------------------------ points de faveur
+
+  private wallet(name: string): Wallet {
+    const key = playerKey(name);
+    return (this.state.wallets[key] ??= { name: name.trim().slice(0, 24), pts: 100, seen: this.now, lastSponsor: 0, won: 0, bets: 0, gain: 0 });
+  }
+
+  /** Un viewer vient d'écrire dans le chat (il gagne des points de présence à chaque effondrement). */
+  seen(name: string, now = Date.now()) {
+    if (!playerKey(name)) return;
+    this.now = now;
+    this.wallet(name).seen = now;
+  }
+
+  private favorText(name: string): SubmitResult {
+    const w = this.wallet(name);
+    const g = this.state.graveyard.find((x) => x.key === playerKey(name));
+    return { ok: true, text: `${w.name} : ${w.pts} points de faveur · paris gagnés ${w.won}/${w.bets}${g ? ` · tu es le n°${g.no} au vote de résurrection` : ''}.` };
+  }
+
+  // ------------------------------------------------------------- sponsors
+
+  private sponsor(name: string, arg: string): SubmitResult {
+    const COST = { potion: 40, or: 40, monstre: 80 } as const;
+    const parts = arg.trim().split(/\s+/);
+    const what = normalize(parts.pop() ?? '') as keyof typeof COST;
+    const t = this.player(parts.join(' '));
+    if (!(what in COST) || !t) return { ok: false, text: `!sponsor <pseudo> potion (${COST.potion}) | or (${COST.or}) | monstre (${COST.monstre}) — avec tes points de faveur (!faveur).` };
+    if (playerKey(name) === t.key) return { ok: false, text: 'Se sponsoriser soi-même ? La production a vu, la production refuse.' };
+    if (!t.alive) return { ok: false, text: `${t.name} est mort pour l'instant.` };
+    const w = this.wallet(name);
+    if (this.now - w.lastSponsor < 120_000) return { ok: false, text: `Un sponsor toutes les 2 minutes : encore ${Math.ceil((120_000 - (this.now - w.lastSponsor)) / 1000)} s.` };
+    if (w.pts < COST[what]) return { ok: false, text: `Il te faut ${COST[what]} points de faveur (tu en as ${w.pts}). Gagne des paris !` };
+    const f = this.state.floors[t.floor];
+    const r = f?.rooms[t.roomId];
+    if (what === 'monstre') {
+      if (!f || !r || r.type === 'safe' || t.immuneUntil > this.now) return { ok: false, text: `${t.name} est à l'abri (safe room ou protection d'arrivée). Le monstre attendra.` };
+      const pool = MONSTERS.filter((m) => m.minFloor <= f.n && m.minFloor >= f.n - 3);
+      const m = spawnMonster(this.rng.pick(pool.length ? pool : MONSTERS), f.n, r.id, this.rng, this.nextId);
+      f.monsters.push(m);
+      this.emit({ floor: f.n, roomId: r.id, kind: 'systeme', scope: 'global', drama: 60, actors: [t.key], text: `😈 CADEAU EMPOISONNÉ : ${w.name} sponsorise ${t.name}… avec ${m.name}, livré directement dans sa salle !` });
+    } else if (what === 'potion' && t.items.length < INVENTORY_MAX) {
+      t.items.push(makeItem('potion', this.nextId));
+      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `🎁 SPONSOR : ${w.name} envoie une potion à ${t.name}. Elle tombe du plafond, intacte. Presque.` });
+    } else {
+      t.gold += 30;
+      this.emit({ floor: t.floor, roomId: t.roomId, kind: 'loot', scope: 'global', drama: 35, actors: [t.key], text: `🎁 SPONSOR : ${w.name} offre 30 po à ${t.name}. Pluie de pièces sur une seule tête.` });
+    }
+    w.pts -= COST[what];
+    w.lastSponsor = this.now;
+    return { ok: true, text: `Sponsor envoyé (−${COST[what]} points, il t'en reste ${w.pts}).` };
+  }
+
+  // --------------------------------------------------------------- paris
+
+  private grandPot(): number {
+    return Object.values(this.state.grandBet.stakes).reduce((s, x) => s + x.amount, 0);
+  }
+
+  private placeBet(name: string, arg: string): SubmitResult {
+    const key = playerKey(name);
+    if (this.state.players[key]?.bot) return { ok: false, text: 'Les PNJ ne parient pas.' };
+    const parts = arg.trim().split(/\s+/).filter(Boolean);
+    const amount = Math.floor(Number(parts[parts.length - 1]));
+    const w = this.wallet(name);
+    const fb = this.state.flashBet;
+    const first = normalize(parts[0] ?? '');
+    if (first === 'oui' || first === 'non') {
+      if (!fb) return { ok: false, text: 'Aucun pari éclair en cours. Le grand pari : !parie <pseudo> <mise>.' };
+      if (this.now > fb.closeAt) return { ok: false, text: 'Les mises sont fermées pour ce pari. Résultat bientôt !' };
+      if (!(amount >= 5)) return { ok: false, text: `!parie ${first} <mise> (5 points minimum, tu en as ${w.pts}).` };
+      if (amount > w.pts) return { ok: false, text: `Tu n'as que ${w.pts} points de faveur.` };
+      const prev = fb.stakes[key];
+      if (prev && prev.opt !== first) return { ok: false, text: `Tu as déjà parié « ${prev.opt} ». On ne retourne pas sa veste en plein pari.` };
+      w.pts -= amount;
+      if (!prev) w.bets++;
+      fb.stakes[key] = { opt: first, amount: (prev?.amount ?? 0) + amount, name: w.name };
+      return { ok: true, text: `Pari « ${first} » : ${fb.stakes[key].amount} points sur « ${fb.title} ».` };
+    }
+    // Grand pari : qui sortira en premier ?
+    const gb = this.state.grandBet;
+    if (!gb.open) return { ok: false, text: 'Le grand pari est fermé (il ferme à l\'effondrement de l\'étage 2).' + (fb ? ' Pari éclair en cours : !parie oui|non <mise>.' : '') };
+    const t = this.player(parts.slice(0, -1).join(' '));
+    if (!t || !(amount >= 5)) return { ok: false, text: `Grand pari, qui sortira en premier ? !parie <pseudo> <mise> (5 points minimum, tu en as ${w.pts}).` };
+    if (amount > w.pts) return { ok: false, text: `Tu n'as que ${w.pts} points de faveur.` };
+    const prev = gb.stakes[key];
+    if (prev && prev.target !== t.key) return { ok: false, text: `Tu as déjà misé sur ${prev.targetName}. On ne change pas de cheval.` };
+    w.pts -= amount;
+    if (!prev) w.bets++;
+    gb.stakes[key] = { target: t.key, targetName: t.name, amount: (prev?.amount ?? 0) + amount };
+    return { ok: true, text: `Grand pari : ${gb.stakes[key].amount} points sur ${t.name}. Cagnotte : ${this.grandPot()} points.` };
+  }
+
+  /** Paris éclair : la production en lance un aux moments chauds (combat de boss, escalier qui s'ouvre). */
+  private updateFlashBet() {
+    const st = this.state;
+    const fb = st.flashBet;
+    if (fb?.kind === 'boss') {
+      const f = st.floors[fb.floor];
+      const boss = f?.monsters.find((m) => m.id === fb.monsterId && m.hp > 0);
+      if (!boss) return this.settleFlash('oui');
+      if (this.now >= fb.deadline) return this.settleFlash('non');
+    }
+    if (fb || st.resurrection || st.seasonStart === null || this.now < st.nextFlashAt) return;
+    for (const f of Object.values(st.floors)) {
+      if (f.collapsed) continue;
+      const humans = Object.values(st.players).filter((p) => p.alive && !p.bot && p.floor === f.n);
+      if (!humans.length) continue;
+      const boss = f.monsters.find((m) => m.boss && m.hp > 0 && m.hp < m.maxHp && humans.some((p) => p.roomId === m.roomId));
+      if (boss) return this.openFlash({ kind: 'boss', floor: f.n, monsterId: boss.id, title: `${boss.name} tombe-t-il dans les 2 minutes ?`, closeAt: this.now + 45_000, deadline: this.now + 120_000 });
+      if (f.stairsOpened && f.collapseAt !== null && f.collapseAt - this.now > 90_000) {
+        return this.openFlash({ kind: 'sortie', floor: f.n, title: `Tous les vrais joueurs de l'étage ${f.n} s'en sortent avant l'effondrement ?`, closeAt: this.now + 60_000, deadline: f.collapseAt });
+      }
+    }
+  }
+
+  private openFlash(b: Omit<FlashBet, 'id' | 'stakes'>) {
+    this.state.flashBet = { ...b, id: this.state.nextId, stakes: {} };
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 55, text: `💰 PARI ÉCLAIR : ${b.title} !parie oui <mise> ou !parie non <mise> (${Math.round((b.closeAt - this.now) / 1000)} s pour miser, la production ajoute 50 % à la cagnotte).` });
+  }
+
+  /** Tranche le pari éclair : les gagnants se partagent la cagnotte + 50 % de la production, au prorata de leur mise. */
+  private settleFlash(result: 'oui' | 'non') {
+    const st = this.state;
+    const fb = st.flashBet!;
+    st.flashBet = null;
+    st.nextFlashAt = this.now + 3 * 60_000;
+    const stakes = Object.entries(fb.stakes);
+    if (!stakes.length) return;
+    const pot = stakes.reduce((s, [, x]) => s + x.amount, 0);
+    const winners = stakes.filter(([, x]) => x.opt === result);
+    const total = pot + Math.max(30, Math.round(pot / 2));
+    if (!winners.length) {
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: `PARI ÉCLAIR : c'est « ${result} » ! Personne n'avait vu juste : la production empoche ${pot} points.` });
+      return;
+    }
+    const winPot = winners.reduce((s, [, x]) => s + x.amount, 0);
+    let best = { name: '', gain: 0 };
+    for (const [key, x] of winners) {
+      const gain = Math.floor((total * x.amount) / winPot);
+      const w = (st.wallets[key] ??= { name: x.name, pts: 100, seen: this.now, lastSponsor: 0, won: 0, bets: 1, gain: 0 });
+      w.pts += gain;
+      w.won++;
+      w.gain += gain - x.amount;
+      if (gain > best.gain) best = { name: x.name, gain };
+    }
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 50, text: `PARI ÉCLAIR : c'est « ${result} » ! ${winners.length} parieur${winners.length > 1 ? 's' : ''} se partagent ${total} points (meilleur gain : ${best.name}, +${best.gain}).` });
+  }
+
+  /** Premier à sortir du Donjon : le grand pari est tranché (cagnotte + 100 points de la production). */
+  private settleGrandBet(winner: PlayerState) {
+    const gb = this.state.grandBet;
+    const stakes = Object.entries(gb.stakes);
+    gb.open = false;
+    gb.stakes = {};
+    if (!stakes.length) return;
+    const pot = stakes.reduce((s, [, x]) => s + x.amount, 0);
+    const winners = stakes.filter(([, x]) => x.target === winner.key);
+    if (!winners.length) {
+      this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 60, text: `GRAND PARI : personne n'avait misé sur ${winner.name}. La production rafle ${pot} points et ricane.` });
+      return;
+    }
+    const total = pot + 100;
+    const winPot = winners.reduce((s, [, x]) => s + x.amount, 0);
+    for (const [key, x] of winners) {
+      const w = this.state.wallets[key];
+      if (!w) continue;
+      const gain = Math.floor((total * x.amount) / winPot);
+      w.pts += gain;
+      w.won++;
+      w.gain += gain - x.amount;
+    }
+    this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 90, text: `GRAND PARI GAGNÉ : ${winners.map(([key]) => this.state.wallets[key]?.name ?? key).slice(0, 5).join(', ')} avai${winners.length > 1 ? 'ent' : 't'} misé sur ${winner.name} et se partage${winners.length > 1 ? 'nt' : ''} ${total} points !` });
+  }
+
   /** Éliminé : le crawler quitte la partie (il peut refaire !join pour recommencer avec un nouveau perso). */
   private gameOver(p: PlayerState) {
     this.leaveAlliance(p, false);
@@ -1234,6 +1516,8 @@ export class Game {
 
   private endSeason(f: FloorState) {
     this.state.seasonOver = true;
+    for (const [key, x] of Object.entries(this.state.grandBet.stakes)) if (this.state.wallets[key]) this.state.wallets[key].pts += x.amount; // personne n'est sorti : remboursé
+    this.state.grandBet.stakes = {};
     const stuck = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive).map((p) => p.name);
     const champs = this.state.champions.map((c) => c.name);
     this.emit({
@@ -1249,6 +1533,7 @@ export class Game {
       bot: !!p.bot, date: new Date(this.now).toISOString(), turn: this.state.turn, floor: p.floor,
     };
     this.state.champions.push(legend);
+    if (this.state.champions.length === 1) this.settleGrandBet(p);
     this.emit({
       floor: p.floor, roomId: p.roomId, kind: 'niveau', scope: 'global', actors: [p.key], drama: 150, victory: legend, fx: { kind: 'levelup', src: `p:${p.name}` },
       text: `VICTOIRE ! ${p.name}${p.bot ? ' (PNJ)' : ''} sort du Donjon par la grande porte, niveau ${p.level}, ${p.kills} monstres terrassés. Son nom entre dans la Légende.`,
@@ -1269,13 +1554,18 @@ export class Game {
     const here = Object.values(this.state.players).filter((p) => p.floor === f.n);
     const lost = here.filter((p) => !p.closer);
     const victims = here.filter((p) => p.closer && p.alive);
-    for (const p of lost) this.gameOver(p);
-    const humans = lost.filter((p) => !p.bot).map((p) => p.name);
+    const graves = new Map<string, number>();
+    for (const p of lost) {
+      if (!p.bot) graves.set(p.key, this.bury(p, f.n)); // numéro au vote de résurrection
+      this.gameOver(p);
+    }
+    const humans = lost.filter((p) => !p.bot).map((p) => `${p.name} (n°${graves.get(p.key)})`);
     const npcs = lost.filter((p) => p.bot).length;
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: lost.length ? 90 : 60,
       text: `L'ÉTAGE ${f.n} S'EFFONDRE ! ${lost.length ? `GAME OVER pour ${[...humans, ...(npcs ? [`${npcs} PNJ`] : [])].join(', ')} : resté${lost.length > 1 ? 's' : ''} à l'intérieur. Tapez !join pour recommencer à l'étage 1.` : 'Personne n\'est resté coincé, bravo.'}`,
     });
+    this.afterCollapse(f, humans.length > 0);
     if (!victims.length) return;
     const next = this.freshFloor(f.n + 1);
     const landing = next.rooms.filter((r) => r.type !== 'safe' && r.type !== 'boss' && !next.monsters.some((m) => m.hp > 0 && m.roomId === r.id));
@@ -1342,6 +1632,9 @@ export class Game {
 
   private updateProduction() {
     const st = this.state;
+    if (st.resurrection && st.turn >= st.resurrection.endTurn) this.resolveResurrection();
+    this.updateFlashBet();
+    if (st.resurrection) return; // pas de vote de la production pendant la résurrection
     if (st.bounty && (st.turn > st.bounty.untilTurn || !st.players[st.bounty.target])) {
       const t = st.players[st.bounty.target];
       if (t) this.emit({ floor: t.floor, kind: 'systeme', scope: 'global', drama: 20, text: `La prime sur ${t.name} expire. Il a survécu, le chat est déçu.` });
@@ -1478,6 +1771,21 @@ export class Game {
   }
 
   voteView(key: string | null): VoteView | null {
+    const rz = this.state.resurrection;
+    if (rz) {
+      // Vote de résurrection : les candidats sont au cimetière, numérotés depuis leur élimination
+      const voices = (no: number) => Object.values(rz.votes).filter((x) => x.no === no).reduce((s, x) => s + x.voices, 0);
+      const mine = key ? rz.votes[key]?.no : undefined;
+      return {
+        title: 'QUI MÉRITE UNE SECONDE CHANCE ?',
+        options: [...this.state.graveyard]
+          .sort((a, b) => voices(b.no) - voices(a.no) || b.snap.level - a.snap.level)
+          .slice(0, 6)
+          .map((g) => ({ n: g.no, key: String(g.no), label: g.name, desc: `niv ${g.snap.level} · éliminé à l'étage ${g.floor}`, votes: voices(g.no) })),
+        turnsLeft: Math.max(0, Math.ceil((rz.endTurn - this.state.turn) / this.phases)),
+        myVote: mine !== undefined ? String(mine) : null,
+      };
+    }
     const v = this.state.vote;
     if (!v) return null;
     const count = (k: string) => Object.values(v.votes).filter((x) => x === k).length;
@@ -1485,6 +1793,23 @@ export class Game {
       options: v.options.map((k, i) => ({ n: i + 1, key: k, label: PRODUCTION_BY_KEY[k].label, desc: PRODUCTION_BY_KEY[k].desc, votes: count(k) })),
       turnsLeft: Math.max(0, Math.ceil((v.endTurn - this.state.turn) / this.phases)),
       myVote: key ? v.votes[key] ?? null : null,
+    };
+  }
+
+  /** Paris, points de faveur et cimetière, pour les pages (key : le viewer, s'il en est un). */
+  socialView(key: string | null, now = Date.now()) {
+    const st = this.state;
+    const fb = st.flashBet;
+    const sum = (o: 'oui' | 'non') => (fb ? Object.values(fb.stakes).filter((x) => x.opt === o).reduce((s, x) => s + x.amount, 0) : 0);
+    const byTarget = new Map<string, number>();
+    for (const x of Object.values(st.grandBet.stakes)) byTarget.set(x.targetName, (byTarget.get(x.targetName) ?? 0) + x.amount);
+    const w = key ? st.wallets[key] : undefined;
+    const mine = key && fb ? fb.stakes[key] : undefined;
+    return {
+      bet: fb ? { title: fb.title, closesInSec: Math.max(0, Math.ceil((fb.closeAt - now) / 1000)), oui: sum('oui'), non: sum('non'), bettors: Object.keys(fb.stakes).length, mine: mine ? { opt: mine.opt, amount: mine.amount } : null } : null,
+      grandBet: st.grandBet.open || byTarget.size ? { open: st.grandBet.open, pot: this.grandPot(), top: [...byTarget.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, pot]) => ({ name, pot })) } : null,
+      bettors: Object.values(st.wallets).filter((x) => x.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, 3).map((x) => ({ name: x.name, gain: x.gain, pts: x.pts })),
+      ...(key ? { myFavor: w?.pts ?? 100, myGrave: st.graveyard.find((g) => g.key === key)?.no ?? null } : {}),
     };
   }
 

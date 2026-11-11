@@ -214,3 +214,7 @@ input:focus { outline: none; border-color: var(--violet); }
 
 /* Code de liaison Twitch (« !lien 1234 ») : bien visible, facile à recopier */
 .link-code{margin:10px auto;padding:10px 14px;font:700 26px/1.2 ui-monospace,monospace;letter-spacing:2px;color:var(--gold,#f6b73c);background:#1b1622;border:1px solid var(--gold,#f6b73c);border-radius:8px;user-select:all;width:max-content}
+
+/* Pari éclair : sous le vote, même style */
+.vote.bet { top: auto; bottom: 14px; }
+.chip.urgent { background: #3a1420; border-color: #ff6b81; color: #ffd0d7; }

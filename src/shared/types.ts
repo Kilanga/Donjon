@@ -161,6 +161,7 @@ export interface VoteOption {
 }
 
 export interface VoteView {
+  title?: string; // vote spécial (résurrection)
   options: VoteOption[];
   turnsLeft: number;
   myVote: string | null;
@@ -182,7 +183,12 @@ export interface PlayerViewMsg {
   me: MeView | null;
   floor: FloorView | null;
   standby?: FloorView | null;
-  lobbyInSec?: number | null; // salon d'attente : secondes avant le coup d'envoi (null = pas de salon en cours) // stream : second étage gardé chargé (bascule instantanée)
+  lobbyInSec?: number | null;
+  bet?: BetView | null; // pari éclair en cours
+  grandBet?: { open: boolean; pot: number; top: { name: string; pot: number }[] } | null;
+  bettors?: { name: string; gain: number; pts: number }[]; // meilleurs parieurs
+  myFavor?: number; // mes points de faveur
+  myGrave?: number | null; // éliminé : mon numéro au vote de résurrection // salon d'attente : secondes avant le coup d'envoi (null = pas de salon en cours) // stream : second étage gardé chargé (bascule instantanée)
   standbyTurnEndsAt?: number;
   merchant: MerchantOffer[] | null;
   forge?: ForgeOffer | null; // dans la forge : ce que le forgeron peut améliorer, et à quel prix
@@ -213,6 +219,15 @@ export interface Legend {
   date: string; // ISO
   turn: number;
   floor: number; // dernier étage
+}
+
+export interface BetView {
+  title: string;
+  closesInSec: number; // 0 : mises fermées, résultat en attente
+  oui: number; // total misé sur oui
+  non: number;
+  bettors: number;
+  mine?: { opt: 'oui' | 'non'; amount: number } | null;
 }
 
 /** Offre du forgeron pour l'équipement du joueur (null : pas d'objet, ou déjà au maximum). */

@@ -177,7 +177,7 @@ export class BotManager {
     const open = g.stairsOpen(f);
     if (r.stairs && open && !p.closer && !f.monsters.some((m) => m.boss && m.hp > 0)) return '!descendre';
     if (r.type !== 'safe' && !r.searchedBy && !r.trapArmed && Math.random() < 0.5) return '!fouille';
-    if (g.state.vote && !g.state.vote.votes[p.key] && Math.random() < 0.3) return `!vote ${1 + Math.floor(Math.random() * g.state.vote.options.length)}`;
+    if (g.state.vote && !g.state.resurrection && !g.state.vote.votes[p.key] && Math.random() < 0.3) return `!vote ${1 + Math.floor(Math.random() * g.state.vote.options.length)}`;
 
     // Déplacement : vers l'escalier si l'étage presse, sinon vers une salle encore inconnue
     // (les retardataires, eux, ne cherchent jamais l'escalier : ils restent jusqu'à l'effondrement)

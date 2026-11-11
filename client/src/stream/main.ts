@@ -270,7 +270,18 @@ function renderHud(s: PlayerViewMsg) {
   // Vote
   const v = s.vote;
   $('vote').classList.toggle('hidden', !v);
-  if (v) $('vote').innerHTML = `<div class="t">VOTEZ DANS LE CHAT — encore ${v.turnsLeft} tour(s)</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
+  if (v) $('vote').innerHTML = `<div class="t">${v.title ? `⚰️ ${esc(v.title)} — !vote &lt;n°&gt; · encore ${v.turnsLeft} tour(s)` : `VOTEZ DANS LE CHAT — encore ${v.turnsLeft} tour(s)`}</div>` + v.options.map((o) => `<div class="o"><span class="n">${o.votes}</span><b>!vote ${o.n} · ${esc(o.label)}</b><small>${esc(o.desc)}</small></div>`).join('');
+  // Pari éclair, grand pari et meilleurs parieurs
+  const b = s.bet;
+  $('bet').classList.toggle('hidden', !b && !s.grandBet?.open);
+  if (b) {
+    const tot = Math.max(1, b.oui + b.non);
+    $('bet').innerHTML = `<div class="t">💰 PARI ÉCLAIR ${b.closesInSec ? `· ${b.closesInSec} s pour miser` : '· mises fermées'}</div><div class="q">${esc(b.title)}</div>
+      <div class="bar"><span class="oui" style="width:${(100 * b.oui) / tot}%">OUI ${b.oui}</span><span class="non" style="width:${(100 * b.non) / tot}%">NON ${b.non}</span></div>
+      <small>!parie oui &lt;mise&gt; · !parie non &lt;mise&gt; · ${b.bettors} parieur(s)</small>`;
+  } else if (s.grandBet?.open) {
+    $('bet').innerHTML = `<div class="t">🏆 GRAND PARI · qui sortira en premier ?</div><div class="q">Cagnotte : ${s.grandBet.pot} pts${s.grandBet.top.length ? ' · ' + s.grandBet.top.map((x) => `${esc(x.name)} ${x.pot}`).join(' · ') : ''}</div><small>!parie &lt;pseudo&gt; &lt;mise&gt; · !sponsor &lt;pseudo&gt; potion|or|monstre</small>`;
+  }
   // Appel à jouer
   const tips = [
     'Tape <b>!join</b> dans le chat pour entrer dans le donjon',

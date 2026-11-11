@@ -108,6 +108,39 @@ export interface VoteState {
   endTurn: number;
 }
 
+/** Un vrai joueur éliminé : son perso est gardé tel quel, au cas où le chat le ressuscite. */
+export interface Grave {
+  no: number;
+  key: string;
+  name: string;
+  snap: PlayerState;
+  floor: number; // étage où il a été éliminé
+  turn: number;
+}
+
+/** Points de faveur d'un viewer (avec ou sans perso). */
+export interface Wallet {
+  name: string;
+  pts: number;
+  seen: number; // dernier message dans le chat (ms) : les présents gagnent des points à chaque effondrement
+  lastSponsor: number;
+  won: number; // paris gagnés
+  bets: number; // paris joués
+  gain: number; // points gagnés aux paris (classement)
+}
+
+/** Pari éclair : oui / non, ouvert un court moment, tranché dans les minutes qui suivent. */
+export interface FlashBet {
+  id: number;
+  kind: 'boss' | 'sortie';
+  title: string;
+  floor: number;
+  monsterId?: string;
+  closeAt: number; // fin des mises (ms)
+  deadline: number; // pour « boss » : il doit tomber avant (ms)
+  stakes: Record<string, { opt: 'oui' | 'non'; amount: number; name: string }>;
+}
+
 export interface GameState {
   version: 1;
   turn: number;
@@ -123,6 +156,13 @@ export interface GameState {
   floodUntil: number; // tour de fin de l'inondation
   champions: import('../../shared/types.js').Legend[]; // sortis vainqueurs pendant cette partie
   seasonOver: boolean; // le dernier étage s'est effondré : la saison est finie, la partie est figée
+  graveyard: Grave[]; // vrais joueurs éliminés (game over) : candidats au vote de résurrection
+  graveNo: number; // dernier numéro attribué
+  wallets: Record<string, Wallet>; // points de faveur des viewers (paris, sponsors, voix achetées)
+  resurrection: { endTurn: number; floorTo: number; votes: Record<string, { no: number; voices: number }> } | null;
+  flashBet: FlashBet | null; // pari éclair en cours (lancé par la production)
+  nextFlashAt: number; // pas de nouveau pari éclair avant (ms)
+  grandBet: { open: boolean; stakes: Record<string, { target: string; targetName: string; amount: number }> };
   lobbyUntil: number | null; // salon d'attente : fin des inscriptions (la partie repart alors à zéro pour tous)
   lobbyWarned?: boolean;
   seasonStart: number | null; // arrivée du premier vrai joueur : l'horloge de la saison (étage n tombe à seasonStart + n × floorMinutes)
@@ -133,6 +173,7 @@ export function emptyState(seed: number): GameState {
   return {
     version: 1, turn: 0, nextId: 1, rng: seed >>> 0, floors: {}, players: {}, alliances: {}, events: [],
     vote: null, nextVoteTurn: 0, happyHourUntil: 0, floodUntil: 0, bounty: null, champions: [], seasonOver: false, seasonStart: null, lobbyUntil: null,
+    graveyard: [], graveNo: 0, wallets: {}, resurrection: null, flashBet: null, nextFlashAt: 0, grandBet: { open: true, stakes: {} },
   };
 }
 
