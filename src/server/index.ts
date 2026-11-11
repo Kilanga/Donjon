@@ -109,6 +109,7 @@ journal.write('start', {
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2', '.woff': 'font/woff',
 };
 /** Adresse du visiteur : derrière le tunnel (connexion locale de cloudflared), la vraie IP est dans CF-Connecting-IP. */
 const isLoopback = (ip: string) => ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
@@ -228,15 +229,16 @@ function journaux(url: URL, res: http.ServerResponse, ip: string) {
     .join('');
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Journaux — Le Donjon</title>
-<style>body{font:15px system-ui;background:#16121c;color:#eee;max-width:760px;margin:30px auto;padding:0 16px}a{color:#f6b73c}
-.big{display:inline-block;margin:8px 8px 8px 0;padding:12px 16px;background:#2a2233;border:1px solid #f6b73c;border-radius:8px;text-decoration:none;font-weight:600}
-table{border-collapse:collapse;width:100%;margin-top:20px}td{padding:6px;border-bottom:1px solid #333;font-size:13px}p{color:#bbb}</style>
+<style>body{font:16px/1.5 system-ui,sans-serif;background:#e2ded3;color:#231d19;max-width:760px;margin:30px auto;padding:0 16px}a{color:#a3161b}
+h1{font-family:Georgia,serif}
+.big{display:inline-block;margin:8px 8px 8px 0;padding:10px 16px;background:#f4f2ec;color:#231d19;border:1px solid #231d19;border-radius:3px;text-decoration:none;font-weight:600}
+table{border-collapse:collapse;width:100%;margin-top:20px;background:#f4f2ec}td{padding:6px 8px;border-bottom:1px solid #d6d0c3;font-size:14px}p{color:#4d453c}</style>
 <h1>Journaux de session</h1>
 <p>À la fin de la soirée, télécharge ces deux fichiers et glisse-les dans la conversation avec Claude.
 Ils couvrent la dernière soirée (★ : ${evening.size} fichier(s), un par démarrage du serveur).</p>
-<a class="big" href="/journaux/rapport.md?${q}">⬇ Rapport (Markdown)</a>
-<a class="big" href="/journaux/journal.jsonl?${q}">⬇ Journal complet (.jsonl)</a>
-<a class="big" href="/journaux/rapport.md?${q}&voir">👁 Voir le rapport</a>
+<a class="big" href="/journaux/rapport.md?${q}">Télécharger le rapport (Markdown)</a>
+<a class="big" href="/journaux/journal.jsonl?${q}">Télécharger le journal complet (.jsonl)</a>
+<a class="big" href="/journaux/rapport.md?${q}&voir">Lire le rapport</a>
 <table>${rows || '<tr><td>Aucun journal pour l’instant.</td></tr>'}</table>
 <p>Les fichiers sont aussi dans le dossier <code>logs/</code> du jeu. Ils contiennent les pseudos et messages du chat, mais jamais la clé de régie.</p>`);
 }

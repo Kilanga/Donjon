@@ -88,7 +88,7 @@ function onMessage(m: ServerMsg) {
     // Pseudo d'un compte Twitch : la preuve se fait dans le chat
     $('login').classList.remove('hidden');
     $('login-form').classList.remove('hidden');
-    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.<br>⚠️ Ne tape jamais un code !lien que quelqu'un d'autre te donne : il prendrait ton perso.</small>`;
+    $('login-msg').innerHTML = `<b>${esc(m.name)}</b> joue déjà depuis le chat Twitch. Si c'est toi, écris ceci dans le chat Twitch :<div class="link-code">!lien ${esc(m.code)}</div><small>Le code est valable 10 minutes. Ensuite, cette page reste reliée à ton perso.<br>Attention : ne tape jamais un code !lien que quelqu'un d'autre te donne : il prendrait ton perso.</small>`;
   } else if (m.type === 'linked') {
     localStorage.setItem('donjon-jeton', m.token);
     $('login-msg').textContent = '';
@@ -102,7 +102,7 @@ function colorFor(name: string) {
   if (!userColors.has(name)) {
     let h = 0;
     for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-    userColors.set(name, `hsl(${h} 80% 68%)`);
+    userColors.set(name, `hsl(${h} 62% 32%)`);
   }
   return userColors.get(name)!;
 }
@@ -244,7 +244,7 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
   const ms = room.monsters ?? [];
   const others = (room.players ?? []).filter((p) => !p.me);
   const canPvp = room.type !== 'safe' && me.immuneSeconds === 0;
-  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : '#ffb0b0'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attaque ${i + 1}">Attaquer</button></div>`).join('');
+  const monsters = ms.map((m, i) => `<div class="entity"><img src="${tiles.icon(m.sprite)}" alt=""><div class="grow"><b style="color:${m.boss ? 'var(--gold)' : 'var(--red)'}">${esc(m.name)}</b><div class="meter hp"><i style="width:${(100 * m.hp) / m.maxHp}%"></i></div></div><button class="danger" data-cmd="!attaque ${i + 1}">Attaquer</button></div>`).join('');
   const players = others.map((p) => {
     const tags = [p.bot ? '<span class="badge pnj">PNJ</span>' : '', p.ally ? '<span class="badge ally">allié</span>' : '', p.traitor ? '<span class="badge traitor">traître</span>' : '', p.immune ? '<span class="badge immune">immunisé</span>' : '', !p.alive ? '<span class="badge">mort</span>' : ''].join('');
     const atk = p.alive && canPvp && !p.immune ? `<button class="danger" data-cmd="!attaque ${esc(p.name)}">${p.ally ? 'Trahir' : 'Attaquer'}</button>` : '';
@@ -288,8 +288,8 @@ function renderShared(s: PlayerViewMsg) {
   if (fx.floodTurns) chips.push(`<span class="chip flood">Inondation ${fx.floodTurns} tours</span>`);
   if (fx.bounty) chips.push(`<span class="chip bounty">Prime sur ${esc(fx.bounty.target)} : ${fx.bounty.gold} po</span>`);
   if (fx.nextVoteInTurns !== null && !s.vote) chips.push(`<span class="chip">Vote dans ${fx.nextVoteInTurns} tours</span>`);
-  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris (!parie) et sponsors (!sponsor)">⭐ ${s.myFavor} faveur</span>`);
-  if (s.myGrave) chips.push(`<span class="chip urgent">⚰️ Tu es le n°${s.myGrave} au vote de résurrection : fais campagne dans le chat !</span>`);
+  if (s.myFavor !== undefined) chips.push(`<span class="chip" title="Points de faveur : paris (!parie) et sponsors (!sponsor)">${s.myFavor} pts de faveur</span>`);
+  if (s.myGrave) chips.push(`<span class="chip urgent">Tombe n°${s.myGrave} : fais campagne dans le chat pour être ressuscité</span>`);
   $('hud-effects').innerHTML = chips.join('');
   $('paused').classList.toggle('hidden', !s.paused);
 
@@ -305,7 +305,7 @@ function renderShared(s: PlayerViewMsg) {
       return `<${tag} ${attr} title="${esc(o.desc)}"><span class="n">${o.votes}</span><b>${o.n}. ${esc(o.label)}</b><small>${esc(o.desc)}</small></${tag}>`;
     }).join('');
     box.innerHTML = v.title
-      ? `<div class="vote-title">⚰️ ${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; · une seule voix par pseudo</span></div><div class="vote-options">${opts}</div>`
+      ? `<div class="vote-title">${esc(v.title)} — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote &lt;n°&gt; · une seule voix par pseudo</span></div><div class="vote-options">${opts}</div>`
       : `<div class="vote-title">La production propose — encore ${v.turnsLeft} tour(s) · <span class="muted">!vote 1, 2 ou 3</span></div><div class="vote-options">${opts}</div>`;
   } else box.classList.add('hidden');
 
@@ -316,7 +316,7 @@ function renderShared(s: PlayerViewMsg) {
   if (b) {
     const can = !s.spectator && b.closesInSec > 0 && !b.mine;
     const btn = (opt: string, amt: number) => `<button class="vote-opt" data-cmd="!parie ${opt} ${amt}">${opt} · ${amt}</button>`;
-    bx.innerHTML = `<div class="vote-title">💰 Pari éclair : ${esc(b.title)} ${b.closesInSec ? `— ${b.closesInSec} s pour miser` : '— mises fermées'}</div>
+    bx.innerHTML = `<div class="vote-title">Pari éclair : ${esc(b.title)} ${b.closesInSec ? `— ${b.closesInSec} s pour miser` : '— mises fermées'}</div>
       <div class="muted">Oui : ${b.oui} pts · Non : ${b.non} pts · ${b.bettors} parieur(s)${b.mine ? ` · ta mise : ${b.mine.amount} sur « ${b.mine.opt} »` : ''}</div>
       ${can ? `<div class="vote-options">${btn('oui', 10)}${btn('oui', 50)}${btn('non', 10)}${btn('non', 50)}</div>` : ''}`;
   }
@@ -356,7 +356,7 @@ function renderShared(s: PlayerViewMsg) {
     <div class="admin-row"><input id="adm-turn" type="number" min="3" max="120" placeholder="Durée du tour (s), actuellement ${s.turnSeconds}"><button data-admin="turnSeconds">OK</button></div>
     <div class="admin-row"><input id="adm-bots" type="number" min="0" max="30" placeholder="PNJ figurants (0 à 30, défaut 10)"><button data-admin="bots">OK</button></div>
     <div class="admin-row"><input id="adm-kick" placeholder="Pseudo à expulser"><button data-admin="kick" class="danger">Expulser</button></div>
-    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée ↗</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Journaux pour Claude ↗</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Vue stream 3D ↗</a></div>`;
+    <div class="admin-row"><a class="btn-link" href="/bilan?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Bilan de la soirée</a> <a class="btn-link" href="/journaux?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Journaux pour Claude</a> <a class="btn-link" href="/stream.html?cle=${encodeURIComponent(spectatorKey ?? '')}" target="_blank" rel="noopener">Vue stream 3D</a></div>`;
 }
 
 function adminAction(action: string) {
@@ -401,7 +401,7 @@ function tickHud() {
     if (lobby !== null && lobby !== undefined) {
       // Salon d'attente : décompte avant le coup d'envoi
       const rest = Math.max(0, lobby - (now - state.serverNow) / 1000);
-      el.textContent = `⏳ La partie commence dans ${fmtTime(rest)} : !join pour en être (échauffement en attendant)`;
+      el.textContent = `La partie commence dans ${fmtTime(rest)} : !join pour en être (échauffement en attendant)`;
       el.classList.toggle('urgent', rest < 60);
     } else if (c !== null && c !== undefined) {
       const elapsed = (now - state.serverNow) / 1000;

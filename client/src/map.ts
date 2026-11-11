@@ -369,7 +369,7 @@ export class MapRenderer {
     const w = (canvas.width = canvas.clientWidth * devicePixelRatio);
     const h = (canvas.height = canvas.clientHeight * devicePixelRatio);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#0c0a12';
+    ctx.fillStyle = '#15110e';
     ctx.fillRect(0, 0, w, h);
     const f = this.floor;
     if (!f || !this.tiles.img) return;
@@ -721,7 +721,7 @@ export class MapRenderer {
       ctx.stroke();
       ctx.fill();
       ctx.restore();
-      ctx.font = `700 ${Math.round(12 * dpr)}px Inter, system-ui, sans-serif`;
+      ctx.font = `700 ${Math.round(12 * dpr)}px 'Alegreya Sans', system-ui, sans-serif`;
       ctx.textAlign = 'center';
       const lx = Math.min(w - 50 * dpr, Math.max(50 * dpr, ax - Math.cos(a) * 30 * dpr));
       const ly = Math.min(h - 12 * dpr, Math.max(20 * dpr, ay - Math.sin(a) * 24 * dpr));
@@ -736,9 +736,9 @@ export class MapRenderer {
     const big = Math.round(15 * dpr);
     const small = Math.round(11 * dpr);
     ctx.textAlign = 'center';
-    ctx.font = `800 ${big}px Inter, system-ui, sans-serif`;
+    ctx.font = `800 ${big}px 'Alegreya Sans', system-ui, sans-serif`;
     const title = '▼ ESCALIER ▼';
-    const tw = Math.max(ctx.measureText(title).width, (ctx.font = `600 ${small}px Inter, system-ui, sans-serif`, ctx.measureText(status).width)) + 16 * dpr;
+    const tw = Math.max(ctx.measureText(title).width, (ctx.font = `600 ${small}px 'Alegreya Sans', system-ui, sans-serif`, ctx.measureText(status).width)) + 16 * dpr;
     const top = y - 40 * dpr + bob;
     ctx.fillStyle = 'rgba(12,8,20,0.88)';
     ctx.strokeStyle = color;
@@ -748,9 +748,9 @@ export class MapRenderer {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = color;
-    ctx.font = `800 ${big}px Inter, system-ui, sans-serif`;
+    ctx.font = `800 ${big}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.fillText(title, x, top + 17 * dpr);
-    ctx.font = `600 ${small}px Inter, system-ui, sans-serif`;
+    ctx.font = `600 ${small}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.fillStyle = '#f2ecff';
     ctx.fillText(status, x, top + 32 * dpr);
   }
@@ -760,7 +760,7 @@ export class MapRenderer {
     const { ctx } = this;
     const dpr = devicePixelRatio;
     const fs = Math.round((this.zoom >= 3 ? 12 : this.zoom === 2 ? 11 : 10) * dpr);
-    ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+    ctx.font = `600 ${fs}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     for (const l of this.labels) {
@@ -783,7 +783,7 @@ export class MapRenderer {
     // Bulles de dialogue
     const now = performance.now();
     for (const [k, b] of this.bubbles) if (now - b.t0 > b.dur) this.bubbles.delete(k);
-    ctx.font = `500 ${Math.round(12 * dpr)}px Inter, system-ui, sans-serif`;
+    ctx.font = `500 ${Math.round(12 * dpr)}px 'Alegreya Sans', system-ui, sans-serif`;
     for (const b of this.bubblePos) {
       const [x, y] = toScreen(b.x, b.y);
       const lines = b.npc ? wrap(b.text, 38).slice(0, 6) : wrap(b.text, 28).slice(0, 3);

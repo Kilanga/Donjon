@@ -4,13 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Le Donjon</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <header id="top">
-    <div class="brand">LE DONJON</div>
+    <div class="brand">Le Donjon</div>
     <div class="hud">
       <span id="hud-floor">Étage —</span>
       <span id="hud-theme" class="muted"></span>
@@ -18,7 +16,7 @@
       <span id="hud-effects"></span>
       <span id="hud-online" class="muted"></span>
     </div>
-    <button id="help-btn" title="Comment jouer (?)">? Aide</button>
+    <button id="help-btn" title="Comment jouer (touche ?)">Aide</button>
     <div class="turn">
       <span id="hud-turn">Tour —</span>
       <div class="bar"><i id="turn-bar"></i></div>
@@ -38,7 +36,7 @@
         <button data-cmd="!est" title="Est">▶</button>
         <button data-cmd="!sud" title="Sud">▼</button>
       </div>
-      <div id="map-help" class="muted">ZQSD / clic : marcher · clic sur un monstre : l'attaquer · molette : zoom · glisser : déplacer la vue</div>
+      <div id="map-help" class="muted">ZQSD ou clic pour marcher, clic sur un monstre pour l'attaquer, molette pour zoomer</div>
       <div id="spectator-bar" class="hidden"></div>
     </section>
 
@@ -68,8 +66,8 @@
 
   <div id="login" class="overlay">
     <div class="login-box">
-      <h1>LE DONJON</h1>
-      <p class="tagline">Télé-réalité de donjon. Morts absurdes garanties.</p>
+      <h1>Le Donjon</h1>
+      <p class="tagline">Une télé-réalité dans un donjon. Le chat regarde, vote et parie sur ta mort.</p>
       <form id="login-form" autocomplete="off">
         <label for="pseudo">Ton pseudo (comme sur Twitch)</label>
         <input id="pseudo" maxlength="24" placeholder="pseudo" required />
@@ -87,7 +85,7 @@
     <div class="help-box card">
       <button class="close" title="Fermer">✕</button>
       <h2>Comment jouer</h2>
-      <p><b>Le but :</b> survivre, devenir riche et célèbre, descendre le plus bas possible. Chaque étage s'effondre au bout de 15 minutes : trouve la salle du boss, bats-le et prends l'escalier avant la fin du chrono.</p>
+      <p><b>Le but :</b> survivre, devenir riche et célèbre, descendre le plus bas possible. Chaque étage s'effondre au bout de 10 minutes (le premier en dure 20). L'escalier reste scellé pendant les 5 premières minutes : trouve la salle du boss, bats-le et descends avant la fin du chrono. Celui qui est encore sur l'étage quand il tombe est éliminé, mais le chat peut voter pour le ressusciter.</p>
       <p><b>Les tours :</b> toutes les 20 secondes, tout le monde agit en même temps. Tu envoies <b>une</b> commande par tour (la dernière compte). Si tu ne fais rien, tu continues d'attaquer ta cible, ou tu ripostes si on t'attaque. <b>Ordre du tour :</b> les potions et objets d'abord, puis les attaques (par initiative : d20 + Agilité), puis le reste. On peut donc boire avant d'être frappé, mais pas fuir avant.</p>
       <div class="help-grid">
         <div><code>!nord !sud !est !ouest</code> changer de salle<br><small>fuir un monstre demande un jet d'Agilité</small></div>
@@ -101,11 +99,13 @@
         <div><code>!descendre</code> prendre l'escalier, boss vaincu</div>
         <div><code>!vote 1</code> voter pour l'événement de la production</div>
         <div><code>!parle bonjour</code> discuter avec le marchand (safe room)</div>
+        <div><code>!forge arme</code> / <code>!forge armure</code> améliorer ton équipement chez le forgeron</div>
+        <div><code>!parie oui 10</code> / <code>!sponsor potion</code> miser ou aider un joueur avec tes points de faveur</div>
         <div><code>!bug ce qui cloche</code> signaler un souci · <code>!avis</code> donner ton avis</div>
       </div>
       <p><b>À savoir :</b> les safe rooms (bannière bleue) sont protégées. En arrivant ou en réapparaissant, tu es immunisé 3 min contre les autres joueurs, et tu ne peux pas les attaquer non plus. Attaquer un allié est une <b>trahison</b> : gros bonus, vol d'or, et tout le monde le saura. À ta mort, ton loot reste au sol et tu reviens 5 tours plus tard.</p>
       <p><b>Les dés :</b> chaque action = d20 + ta stat + la moitié de ton niveau. Un 20 naturel est un critique, un 1 naturel un gag. Tout s'affiche dans le journal.</p>
-      <p class="muted">Commandes à la souris et au clavier : ZQSD ou flèches (ou un clic au sol) pour marcher dans ta salle ; entre dans une porte pour changer de salle à la fin du tour ; clique sur un monstre pour l'attaquer. F fouiller, A attaquer, ? cette aide. Écris sans « ! » pour parler : ton message s'affiche en bulle.</p>
+      <p class="muted">Souris et clavier : ZQSD ou flèches (ou un clic au sol) pour marcher dans ta salle ; entre dans une porte pour changer de salle à la fin du tour ; clique sur un monstre pour l'attaquer. F fouiller, A attaquer, ? cette aide. Écris sans « ! » pour parler : ton message s'affiche en bulle.</p>
       <button class="close go">C'est parti !</button>
     </div>
   </div>

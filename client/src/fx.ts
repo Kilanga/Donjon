@@ -260,7 +260,7 @@ export class FxLayer {
       const [x, y] = toScreen(p.x, p.y);
       const scale = p.big ? (u < 0.12 ? 0.6 + (u / 0.12) * 0.6 : 1.2 - Math.min(0.2, (u - 0.12) * 0.5)) : 1;
       const fs = Math.round((p.big ? 20 : 13) * dpr * scale);
-      ctx.font = `700 ${fs}px 'Pixelify Sans', monospace`;
+      ctx.font = `800 ${fs}px 'Alegreya Sans', system-ui, sans-serif`;
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, u - 0.65) / 0.35);
       const yy = y - u * 24 * dpr;
       ctx.lineWidth = Math.max(2, 3 * dpr);

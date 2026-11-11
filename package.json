@@ -19,6 +19,9 @@
     "rapport": "tsx scripts/rapport.ts"
   },
   "dependencies": {
+    "@fontsource/alegreya": "^5.3.0",
+    "@fontsource/alegreya-sans": "^5.3.0",
+    "@fontsource/grenze-gotisch": "^5.3.0",
     "three": "^0.160.0",
     "tmi.js": "^1.8.5",
     "tsx": "^4.19.0",

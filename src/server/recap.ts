@@ -29,28 +29,28 @@ export function recapHtml(game: Game, turnSeconds: number, legends: Legend[] = [
 
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Le Donjon — bilan de la soirée</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@800&family=Alegreya:ital,wght@0,700;1,400&family=Alegreya+Sans:wght@400;700&display=swap">
 <style>
-body{margin:0;background:#0c0a12;color:#ece6f6;font:15px/1.5 Inter,system-ui,sans-serif;padding:32px 20px}
-main{max-width:980px;margin:0 auto}
-h1{font-family:'Pixelify Sans',monospace;color:#ffd65a;font-size:44px;margin:0;text-shadow:3px 3px 0 #000}
-h2{font-family:'Pixelify Sans',monospace;color:#ffd65a;margin:28px 0 10px}
-.sub{color:#9a90ad;margin-bottom:20px}
+body{margin:0;background:#e2ded3;color:#231d19;font:16px/1.5 'Alegreya Sans',system-ui,sans-serif;font-variant-numeric:lining-nums tabular-nums;padding:32px 20px}
+main{max-width:980px;margin:0 auto;background:#f4f2ec;border:1px solid #c4bdae;padding:28px 32px}
+h1{font-family:'Grenze Gotisch',serif;font-weight:800;color:#a3161b;font-size:64px;line-height:1;margin:0}
+h2{font-family:Alegreya,serif;font-weight:700;font-size:22px;margin:30px 0 10px;padding-bottom:4px;border-bottom:3px double #c4bdae}
+.sub{font-family:Alegreya,serif;font-style:italic;color:#4d453c;margin:6px 0 22px}
 .titles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.title{background:#171320;border:1px solid #2f2740;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
-.title small{color:#9a90ad;text-transform:uppercase;font-size:11px;letter-spacing:.5px}
-.title b{font-size:18px;color:#ffd65a}
-table{width:100%;border-collapse:collapse;background:#171320;border-radius:10px;overflow:hidden}
-th,td{padding:7px 10px;text-align:right;border-bottom:1px solid #241d31}
-th{color:#9a90ad;font-weight:600;font-size:12px;text-transform:uppercase}
+.title{background:#fffdf8;border:2px solid #231d19;border-radius:4px;padding:8px 12px;display:flex;flex-direction:column}
+.title small{color:#6c6458;font-size:13px}
+.title b{font-family:Alegreya,serif;font-size:20px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid #e0dbcf}
+th{color:#6c6458;font-weight:400;font-size:13px;border-bottom:1px solid #c4bdae}
 td:nth-child(2),th:nth-child(2){text-align:left}
-tr:first-child td{color:#ffd65a;font-weight:600}
-.m{background:#171320;border-left:3px solid #a77bff;padding:7px 12px;margin:6px 0;border-radius:0 8px 8px 0}
-.m small{color:#6f6884;margin-right:8px}
+tr:nth-child(2) td{color:#a3161b;font-weight:700}
+.m{border-left:3px solid #e0a826;padding:5px 12px;margin:6px 0;background:#fffdf8}
+.m small{color:#6c6458;margin-right:8px}
 .causes{display:flex;flex-wrap:wrap;gap:8px}
-.causes span{background:#2a1820;border:1px solid #5a2232;border-radius:999px;padding:3px 10px;font-size:13px}
+.causes span{background:#fbefec;border:1px solid #c99a94;color:#7a1014;border-radius:2px;padding:2px 9px;font-size:14px}
 </style></head><body><main>
-<h1>LE DONJON</h1>
+<h1>Le Donjon</h1>
 <div class="sub">Bilan de la soirée · ${st.turn} tours (~${minutes} min) · ${rows.length} crawlers · étage le plus profond : ${deepest} · ${deaths.length} morts</div>
 <div class="titles">
 ${top('deepest', 'Le plus profond', 'étages')}${top('level', 'Le plus fort', 'niveaux')}${top('kills', 'Boucher', 'kills')}
