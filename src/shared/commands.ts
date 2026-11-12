@@ -130,7 +130,7 @@ export const HELP_TEXT = [
   '!ally <player> / !leave — form or leave an alliance',
   '!levelup <str|dex|int|cha> — spend a stat point',
   '!resurrect <name> [gold|hp] — in the crypt, bring an eliminated player back (50 gold × floor, or half your current HP)',
-  '!descend — take the stairs (the boss must be dead, and the stairs stay sealed for the first minutes of each floor). Last floor: killing its boss ends the season',
+  '!descend — take the stairs (the boss must be dead, and the stairs stay sealed for the first minutes of each floor). Last floor: kill its boss within 15 min to walk out a Legend, or it is GAME OVER for all',
   '!vote <#> — vote for the production\'s event (or to bring back a dead player after a collapse: one vote per name)',
   '!bet <name> <amount> — big bet: who gets out first? · !bet yes|no <amount> — current flash bet',
   '!sponsor <name> potion|gold|monster — send a gift (or a dirty trick) with your favor points · !favor — your points',

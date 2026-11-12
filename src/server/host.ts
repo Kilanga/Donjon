@@ -94,8 +94,8 @@ export class Host {
         this.hall!.justClosed = null;
         const h = done.winner ? this.hall!.player(playerKey(done.winner)) : undefined;
         const facts = done.winner
-          ? `Season ${done.n} is over. Its winner: ${done.winner}, ${done.how === 'legend' ? 'who escaped through the last staircase' : `the deepest real contestant, floor ${done.floor}`}. That makes ${h?.wins ?? 1} season win${(h?.wins ?? 1) > 1 ? 's' : ''} for ${done.winner}.`
-          : `Season ${done.n} is over and nobody deserves the crown: the Dungeon wins this one.`;
+          ? `Season ${done.n} is over. Its winner: ${done.winner}, who walked out of the Dungeon a Legend. That makes ${h?.wins ?? 1} season win${(h?.wins ?? 1) > 1 ? 's' : ''} for ${done.winner}.`
+          : `Season ${done.n} is over and nobody walked out: GAME OVER for all, the Dungeon wins this one.`;
         const fallback = done.winner ? `Season ${done.n} goes to ${done.winner}. Win number ${h?.wins ?? 1}. The Dungeon will remember. So will I.` : `Season ${done.n}: no winner. The Dungeon keeps the crown, darlings.`;
         void this.narrator.announce(facts, fallback, { urgent: true, tone: 'grand finale, theatrical, acid' });
         return;
@@ -132,7 +132,7 @@ export class Host {
     // Les règles, une fois la partie lancée
     if (now - s.seasonStart > RULES_AFTER_MS && this.once(`rules:${s.seasonStart}`)) {
       void this.narrator.announce(
-        'The rules in a nutshell: every floor has its own countdown and collapses when it runs out; its stairs stay sealed for the first minutes and a boss guards them; whoever is still inside when it collapses is out; the chat can vote the dead back; on the last floor, killing the boss ends the season; type !help for the commands.',
+        `The rules in a nutshell: every floor has its own countdown and collapses when it runs out; its stairs stay sealed for the first minutes and a boss guards them; whoever is still inside when it collapses is out; the chat can vote the dead back; on the last floor, kill the boss within ${minutes(this.game.floorSpan(this.game.cfg.finalFloor))} minutes or it is game over for everyone; type !help for the commands.`,
         "The rules, darlings: every floor has a countdown. The stairs stay sealed for a few minutes, and a boss guards them. Still inside when it falls? You're out, unless the chat votes you back. Lost? Type !help.",
         { urgent: true, floor: 1, tone: 'crisp and theatrical, like the opening of a TV show' },
       );
@@ -150,7 +150,7 @@ export class Host {
         const effect = THEME_EFFECTS[f.theme];
         const final = f.n >= this.game.cfg.finalFloor;
         void this.narrator.announce(
-          `${list(here.map((p) => p.name))} reached floor ${f.n}${final ? ', THE FINAL FLOOR: when its boss falls, the season ends and everyone still standing walks out a Legend' : ''}. Its theme: ${theme}${effect ? ` (${effect})` : ''}. ${final ? '' : `It collapses in ${minutes(left)} minutes.`}`,
+          `${list(here.map((p) => p.name))} reached floor ${f.n}${final ? `, THE FINAL FLOOR: kill its boss within ${minutes(left)} minutes and everyone still standing walks out a Legend; otherwise it is GAME OVER for all` : ''}. Its theme: ${theme}${effect ? ` (${effect})` : ''}.${final ? '' : ` It collapses in ${minutes(left)} minutes.`}`,
           `Floor ${f.n}, everyone: ${theme}. ${list(here.map((p) => p.name))}, you have ${minutes(left)} minutes. Enjoy the view.`,
           { floor: f.n },
         );

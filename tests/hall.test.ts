@@ -8,20 +8,21 @@ const game = (players: { name: string; deepest: number; level?: number; bot?: bo
 const end = { seasonEnd: true, kind: 'systeme', text: 'END OF THE SEASON!' } as GameEvent;
 
 describe('palmarès des saisons', () => {
-  it('le vrai joueur le plus profond gagne la saison, les PNJ ne comptent pas', () => {
+  it('sans Légende, pas de gagnant (GAME OVER pour tous) ; l\'étage record est retenu ; les PNJ ne comptent pas', () => {
     const h = new Hall(null);
-    h.onEvents([], game([{ name: 'Kilak', deepest: 4 }, { name: 'Mia', deepest: 2 }, { name: 'Tobias', deepest: 7, bot: true }]));
+    h.onEvents([], game([{ name: 'Kilak', deepest: 8 }, { name: 'Mia', deepest: 2 }, { name: 'Tobias', deepest: 8, bot: true }]));
     h.onEvents([end], game([]));
-    expect(h.justClosed).toMatchObject({ n: 1, winner: 'Kilak', how: 'deepest', floor: 4, players: 2 });
-    expect(h.describe('kilak')).toContain('1 season win');
+    expect(h.justClosed).toMatchObject({ n: 1, winner: null, players: 2 });
+    expect(h.describe('kilak')).toContain('deepest floor 8');
+    expect(h.describe('kilak')).toContain('never won');
     expect(h.describe('tobias')).toBeNull();
   });
 
-  it('une Légende (sortie par le dernier escalier) bat le plus profond, et les victoires s\'additionnent', () => {
+  it('la première Légende gagne la saison, et les victoires s\'additionnent', () => {
     const h = new Hall(null);
     for (let i = 0; i < 2; i++) {
-      h.onEvents([], game([{ name: 'Kilak', deepest: 5 }]));
-      h.onEvents([end], game([]));
+      h.onEvents([], game([{ name: 'Kilak', deepest: 8 }]));
+      h.onEvents([{ victory: { name: 'Kilak', floor: 8, level: 9, bot: false } } as GameEvent, end], game([]));
     }
     h.onEvents([], game([{ name: 'Kilak', deepest: 8 }]));
     h.onEvents([{ victory: { name: 'Mia', floor: 8, level: 9, bot: false } } as GameEvent, end], game([]));
@@ -31,7 +32,7 @@ describe('palmarès des saisons', () => {
     expect(h.summary()).toContain('Reigning champion: Mia');
   });
 
-  it('personne au-delà du premier étage : pas de gagnant', () => {
+  it('personne au-delà du premier étage : pas de gagnant non plus', () => {
     const h = new Hall(null);
     h.onEvents([], game([{ name: 'Kilak', deepest: 1 }]));
     h.onEvents([end], game([]));

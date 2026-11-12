@@ -1,7 +1,7 @@
 // Palmarès : les saisons et leurs gagnants, gardés d'une partie à l'autre (data/palmares.json).
 // Victoria s'en sert : « Kilak revient avec trois couronnes… ». Seuls les vrais joueurs comptent (jamais les PNJ).
-// Gagnant d'une saison : le premier sorti par le dernier escalier (une Légende) ; sinon le vrai joueur allé le plus
-// profond (à partir de l'étage 2), puis le plus haut niveau.
+// Gagnant d'une saison : le premier vrai joueur sorti en Légende (boss du dernier étage abattu). Boss vivant au bout du
+// chrono : GAME OVER pour tous, pas de gagnant (l'étage record de chacun est quand même retenu).
 import type { GameEvent } from '../shared/types.js';
 import { playerKey, type Game } from './game/engine.js';
 import { readJsonSafe, writeAtomic } from './fsutil.js';
@@ -32,8 +32,6 @@ interface Entry {
   level: number;
   legend: boolean;
 }
-
-const MIN_WIN_FLOOR = 2;
 
 export class Hall {
   private data: HallData = { seasons: [], players: {} };
@@ -81,9 +79,7 @@ export class Hall {
     this.current.clear();
     if (!entries.length) return; // saison sans vrai joueur : rien à retenir
     const n = this.data.seasons.length + 1;
-    const legend = entries.find(([, c]) => c.legend);
-    const best = [...entries].sort(([, a], [, b]) => b.deepest - a.deepest || b.level - a.level)[0];
-    const win = legend ?? (best[1].deepest >= MIN_WIN_FLOOR ? best : undefined);
+    const win = entries.find(([, c]) => c.legend);
     for (const [key, c] of entries) {
       const h = (this.data.players[key] ??= { name: c.name, seasons: 0, wins: 0, legends: 0, bestFloor: 0, lastSeason: 0 });
       h.name = c.name;
@@ -97,7 +93,7 @@ export class Hall {
       n,
       date: new Date().toISOString(),
       winner: win ? win[1].name : null,
-      how: win ? (win[1].legend ? 'legend' : 'deepest') : null,
+      how: win ? 'legend' : null,
       floor: win ? win[1].deepest : 0,
       players: entries.length,
     };

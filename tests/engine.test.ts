@@ -234,6 +234,22 @@ describe('étages', () => {
     expect(g.state.champions.map((c) => c.name)).toEqual(['b', 'a']); // celui qui l'a abattu d'abord
   });
 
+  it('dernier étage : boss encore vivant au bout du chrono, GAME OVER pour tous et pas de Légende', () => {
+    const g = setup({ finalFloor: 2 });
+    g.submit('a', '!join', T0);
+    const f2 = g.freshFloor(2);
+    const p = g.player('a')!;
+    p.floor = 2;
+    p.roomId = f2.spawnRoom;
+    g.tick(T0 + 20_000);
+    f2.collapseAt = T0 + 30_000;
+    const ev = g.tick(T0 + 40_000);
+    expect(ev.some((e) => /boss is still standing.*GAME OVER for everyone left inside: a\./.test(e.text))).toBe(true);
+    expect(g.state.seasonOver).toBe(true);
+    expect(g.state.champions).toHaveLength(0);
+    expect(g.floorSpan(2)).toBe(15 * 60_000);
+  });
+
   it('on ne descend pas tant que le boss est vivant', () => {
     const g = setup();
     g.submit('a', '!join', T0);

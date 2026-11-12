@@ -8,12 +8,12 @@ export interface GameConfig {
   turnSeconds: number; // durée d'un tour
   // Chrono des étages, compté depuis l'ouverture de chaque étage (arrivée du premier crawler ; l'étage 1 : coup d'envoi).
   // Durée et verrou de l'escalier dégressifs, de l'étage 1 à l'avant-dernier ; le dernier étage n'a pas de chrono :
-  // la saison s'y termine quand son boss tombe (finalFloorMaxMinutes : filet de sécurité si personne n'y arrive).
+  // la saison s'y termine quand son boss tombe, ou au bout de finalFloorMaxMinutes (boss vivant : GAME OVER pour tous).
   firstFloorMinutes: number; // étage 1 : il s'effondre au bout de N minutes
   lastFloorMinutes: number; // avant-dernier étage : N minutes (les étages entre les deux : dégressif)
   firstLockMinutes: number; // étage 1 : l'escalier reste scellé les N premières minutes
   lastLockMinutes: number; // avant-dernier étage : scellé N minutes
-  finalFloorMaxMinutes: number; // dernier étage : effondrement (fin de saison) si le boss tient N minutes
+  finalFloorMaxMinutes: number; // dernier étage : N minutes pour tuer le boss, sinon GAME OVER pour tous (fin de saison)
   staggered: boolean;
   lobbySeconds: number; // inscriptions : le premier !join ouvre N secondes d'attente, puis la partie repart à zéro pour tous (0 = pas de salon) // tours décalés : les étages pairs jouent une demi-durée de tour après les impairs (une action toutes les turnSeconds/2 sur le stream)
   respawnTurns: number; // tours avant réapparition
@@ -42,7 +42,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   lastFloorMinutes: 15,
   firstLockMinutes: 10,
   lastLockMinutes: 5,
-  finalFloorMaxMinutes: 30,
+  finalFloorMaxMinutes: 15,
   staggered: true,
   lobbySeconds: 300,
   respawnTurns: 5,

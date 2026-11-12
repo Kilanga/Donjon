@@ -184,7 +184,7 @@ export class Game {
           f.monsters.push(ogre);
         }
       });
-      const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: when its boss falls, the season is over, and everyone still standing here walks out a Legend! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
+      const effect = (n >= this.cfg.finalFloor ? `FINAL FLOOR: kill its boss within ${Math.round(this.floorSpan(n) / 60_000)} minutes and everyone still standing here walks out a Legend. Otherwise, it is GAME OVER for all! ` : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out (${f.rooms.length} rooms, theme: ${THEME_LABEL[f.theme] ?? f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
@@ -1791,11 +1791,17 @@ export class Game {
     this.state.seasonOver = true;
     for (const [key, x] of Object.entries(this.state.grandBet.stakes)) if (this.state.wallets[key]) this.state.wallets[key].pts += x.amount; // personne n'est sorti : remboursé
     this.state.grandBet.stakes = {};
-    const stuck = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive).map((p) => p.name);
+    const stuck = Object.values(this.state.players).filter((p) => p.floor === f.n && p.alive);
+    const final = why === 'collapse' && f.n >= this.cfg.finalFloor;
+    // Dernier étage effondré avec son boss vivant : GAME OVER pour tous ceux qui y sont
+    for (const p of final ? stuck : []) {
+      p.alive = false;
+      p.pending = null;
+    }
     const champs = this.state.champions.map((c) => c.name);
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: 200, seasonEnd: true,
-      text: `END OF THE SEASON! ${why === 'boss' ? `The boss of floor ${f.n} is dead, and the Dungeon opens its doors one last time.` : emptied ? 'Nobody is left alive in the Dungeon, and the gates are sealed.' : `Floor ${f.n} collapses and the Dungeon shuts its doors.`}${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
+      text: `END OF THE SEASON! ${why === 'boss' ? `The boss of floor ${f.n} is dead, and the Dungeon opens its doors one last time.` : emptied ? 'Nobody is left alive in the Dungeon, and the gates are sealed.' : `${final ? `Time is up on floor ${f.n} and its boss is still standing: the floor collapses` : `Floor ${f.n} collapses`} and the Dungeon shuts its doors.`}${stuck.length ? final ? ` GAME OVER for everyone left inside: ${stuck.map((p) => p.name).join(', ')}.` : ` ${stuck.map((p) => p.name).join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
     });
   }
 

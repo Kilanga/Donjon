@@ -125,7 +125,7 @@ describe('Victoria anime l\'émission', () => {
     const g = started();
     const hall = new Hall(null);
     hall.onEvents([], { state: { players: { mia: { key: 'mia', name: 'Mia', deepest: 5, floor: 5, level: 6, bot: false } } } } as never);
-    hall.onEvents([{ seasonEnd: true } as GameEvent], { state: { players: {} } } as never);
+    hall.onEvents([{ victory: { name: 'Mia', floor: 8, level: 9, bot: false } } as unknown as GameEvent, { seasonEnd: true } as GameEvent], { state: { players: {} } } as never);
     const { n, said, asNarrator } = fakeNarrator();
     const h = new Host(g, asNarrator, () => 0, hall);
     h.tick();

@@ -126,7 +126,7 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | `lastFloorMinutes` | 15 | Avant-dernier étage (le 7e) : N minutes ; les étages entre les deux sont dégressifs |
 | `firstLockMinutes` | 10 | Étage 1 : escalier scellé les N premières minutes |
 | `lastLockMinutes` | 5 | Avant-dernier étage : escalier scellé N minutes (dégressif entre les deux) |
-| `finalFloorMaxMinutes` | 30 | Dernier étage : pas d'escalier, la saison finit quand son boss tombe ; filet de sécurité au bout de N minutes |
+| `finalFloorMaxMinutes` | 15 | Dernier étage : N minutes pour tuer le boss (ceux qui sont debout sortent en Légendes) ; sinon GAME OVER pour tous |
 | `respawnTurns` | 5 | Tours avant réapparition |
 | `immunitySeconds` | 180 | Immunité JvJ après arrivée ou réapparition (s) |
 | `roomsPerPlayer` / `minRooms` | 2 / 20 | Taille des étages |
@@ -199,11 +199,11 @@ profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dan
 
    | Étage | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
    | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-   | Durée | 25 min | 23 min 30 | 21 min 30 | 20 min | 18 min 30 | 16 min 30 | 15 min | jusqu'à la mort du boss |
+   | Durée | 25 min | 23 min 30 | 21 min 30 | 20 min | 18 min 30 | 16 min 30 | 15 min | 15 min |
    | Escalier scellé | 10 min | 9 min | 8 min 30 | 7 min 30 | 6 min 30 | 6 min | 5 min | pas d'escalier |
 
-   **Dernier étage** : quand son boss tombe, la saison est finie et tous ceux qui y sont encore debout sortent en
-   Légendes (celui qui l'a abattu en premier). Filet de sécurité : effondrement au bout de 30 min.
+   **Dernier étage** : 15 min pour tuer son boss. S'il tombe, la saison est finie et tous ceux qui y sont encore debout
+   sortent en Légendes (celui qui l'a abattu en premier). S'il est encore vivant au bout du chrono : GAME OVER pour tous.
 4. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
    Seuls les retardataires, l'équipe de fermeture, tombent à l'étage suivant.
 
@@ -423,7 +423,7 @@ Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voi
   Elle remercie les abonnements, cadeaux, bits et raids Twitch (le pseudo et le nombre, jamais le message).
   Elle ne parle jamais par-dessus elle-même et pas plus d'un tiers du temps (hors annonces urgentes).
 - **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute », le volume de sa voix et « Talkative »
-  (calme / normale / bavarde). En « normale », elle reprend la parole après 25 s de silence (une réplique toutes les 40 s environ, soit tous les deux tours) : surtout l'action en direct, joueurs ou PNJ, et une rubrique de temps en temps. Elle reconnaît les habitués grâce au palmarès (`data/palmares.json` : saisons jouées, victoires, étage record) et annonce le gagnant de chaque saison. Gagnant : le premier sorti par le dernier escalier, sinon le vrai joueur allé le plus profond (dès l'étage 2).
+  (calme / normale / bavarde). En « normale », elle reprend la parole après 25 s de silence (une réplique toutes les 40 s environ, soit tous les deux tours) : surtout l'action en direct, joueurs ou PNJ, et une rubrique de temps en temps. Elle reconnaît les habitués grâce au palmarès (`data/palmares.json` : saisons jouées, victoires, étage record) et annonce le gagnant de chaque saison. Gagnant : le premier vrai joueur sorti en Légende (boss de l'étage 8 abattu) ; boss vivant au bout du chrono : pas de gagnant.
   La régie affiche combien de répliques l'IA a écrites et combien de phrases toutes faites sont parties, avec la
   dernière erreur de l'IA ; la console les montre aussi (`[victoria] IA : …` ou `[victoria] phrase toute faite : …`).
 
