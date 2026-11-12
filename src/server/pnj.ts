@@ -217,7 +217,7 @@ export class NpcSociety {
     this.lastReply.set(pnj.key, now);
     const m = this.memory(pnj.name, player);
     const fallback = () => this.say(pnj.name, this.writtenLine(pnj, player, m, message));
-    if (!this.ai.enabled || !this.ai.canCall(Date.now(), 8)) return fallback(); // on garde de la marge pour Victoria
+    if (!this.ai.enabled || !this.ai.canCall(Date.now(), 12)) return fallback(); // on garde de la marge pour Victoria
     const persona = this.persona(pnj.name);
     const room = this.game.room(pnj);
     const feel = m.mood >= 4 ? 'you like them a lot' : m.mood >= 1 ? 'you rather like them' : m.mood <= -4 ? 'you hold a huge grudge against them' : m.mood <= -1 ? 'you don\'t trust them' : 'you have no opinion yet';

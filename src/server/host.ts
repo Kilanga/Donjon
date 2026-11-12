@@ -20,9 +20,13 @@ const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const list = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
 
-type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat';
+type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat' | 'pitch' | 'howto';
 const SEGMENTS: Segment[] = ['leaderboard', 'chat', 'race', 'spotlight', 'join', 'stakes', 'chat', 'story'];
-const LOBBY_SEGMENTS: Segment[] = ['join', 'chat', 'roster'];
+// Avant la partie : elle fait venir les joueurs (présenter l'émission, comment jouer, inscrits, questions au chat)
+const LOBBY_SEGMENTS: Segment[] = ['pitch', 'join', 'chat', 'howto', 'roster', 'pitch', 'chat', 'join'];
+/** Avant la partie, elle parle plus souvent : le silence avant une rubrique est divisé par 2,5, et elle peut occuper l'antenne à 55 %. */
+const LOBBY_QUIET_FACTOR = 0.4;
+const LOBBY_AIR_MAX = 0.55;
 
 // Questions lancées au chat quand il est calme (Victoria les reformule)
 const CHAT_QUESTIONS = [
@@ -44,6 +48,7 @@ export class Host {
   private lastSegmentAt = 0;
   private spotlit: string[] = [];
   private question = 0;
+  private pitch = 0;
   private notes: string[] = []; // les petites histoires de la soirée (trahisons, morts, boss)
   private lastTwitch = new Map<string, { at: number }>();
 
@@ -154,7 +159,7 @@ export class Host {
 
   /** Antenne trop calme : une rubrique, jamais la même deux fois de suite. */
   private deadAir(now: number, lobby: boolean) {
-    const quiet = CHATTY[this.narrator.chatty].quietMs;
+    const quiet = CHATTY[this.narrator.chatty].quietMs * (lobby ? LOBBY_QUIET_FACTOR : 1);
     if (now - this.narrator.lastSpokeAt < quiet || now - this.lastSegmentAt < quiet || this.narrator.busy(now)) return;
     const pool = lobby ? LOBBY_SEGMENTS : SEGMENTS;
     for (let tries = 0; tries < pool.length; tries++) {
@@ -162,7 +167,12 @@ export class Host {
       const text = this.segmentText(seg, now);
       if (!text) continue;
       this.lastSegmentAt = now;
-      void this.narrator.announce(text[0], text[1], { tone: 'relaxed host filling the airtime, witty', context: this.notes.slice(-2).join(' '), withChat: true });
+      void this.narrator.announce(text[0], text[1], {
+        tone: lobby ? 'warm-up host before the show, magnetic, makes people want to play' : 'relaxed host filling the airtime, witty',
+        context: this.notes.slice(-2).join(' '),
+        withChat: true,
+        maxAir: lobby ? LOBBY_AIR_MAX : undefined,
+      });
       return;
     }
   }
@@ -214,6 +224,22 @@ export class Host {
         return [
           this.narrator.chatSummary(now) ? 'Talk with the chat: react to one of the messages below, by name, then throw a question back at them.' : q,
           fallbacks[this.question % fallbacks.length],
+        ];
+      }
+      case 'pitch': {
+        const pitches: [string, string][] = [
+          ['Pitch the show to viewers who just arrived: The Dungeon is a game played entirely from the Twitch chat. Each viewer controls a crawler, explores floors that collapse on a timer, fights monsters and a boss on every floor, and the deepest crawler wins the season. Type !join to enter.', 'Just arrived? This is The Dungeon: you play it from the chat. Your crawler, your floors, a boss on each, and the floors collapse on a timer. Type !join, darling.'],
+          ['Tease what is waiting below: eight floors, each with its own theme, merchants and a blacksmith, a crypt where the dead can be brought back, strange rooms with altars and wishing wells, and a boss guarding every staircase. Only the bold should type !join.', 'Eight floors, a boss on each, wishing wells, a crypt, a merchant who smiles too much. Type !join if you dare.'],
+          ['Tell lurkers they can play too, even without a Twitch account: the link at the bottom left of the stream opens the game in a browser. Or type !join in the chat.', 'Lurkers, I see you. No excuses: type !join, or open the link at the bottom left of the stream.'],
+          ['Say that even viewers who do not play take part: they bet on who falls first with !bet, sponsor a contestant with !sponsor, and vote to bring the dead back.', 'Not playing? You still matter: bet with !bet, sponsor with !sponsor, and vote the dead back in.'],
+        ];
+        return pitches[this.pitch++ % pitches.length];
+      }
+      case 'howto': {
+        if (s.joinsClosed) return null;
+        return [
+          'Explain in a few words how to play: !join to enter (pick a class: barbarian, knight, rogue or mage), then !north, !south, !east, !west to move, !attack to fight, !search to loot, and !help for every command.',
+          'How to play: !join, pick a class, then move with !north, !south, !east, !west, fight with !attack, loot with !search. !help for the rest.',
         ];
       }
       case 'roster': {

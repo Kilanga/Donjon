@@ -154,15 +154,25 @@ export class DungeonAI {
   }
 
   /** Reste-t-il de la place dans la limite de débit ? (sans consommer) */
-  canCall(now = Date.now(), reserve = 0): boolean {
+  /** reserve : appels laissés aux autres (PNJ, marchand : 12 pour Victoria). priority : Victoria peut dépasser un peu le plafond. */
+  canCall(now = Date.now(), reserve = 0, priority = false): boolean {
     this.calls = this.calls.filter((t) => now - t < 60_000);
-    return this.enabled && this.calls.length < this.cfg.maxPerMinute - reserve && this.busy < 4;
+    const cap = priority ? this.cfg.maxPerMinute + 12 : this.cfg.maxPerMinute - reserve;
+    return this.enabled && this.calls.length < cap && this.busy < (priority ? 6 : 4);
   }
 
   /** Demande une réponse courte. Renvoie null si l'IA est désactivée, saturée, lente ou en erreur. */
-  async ask(system: string, prompt: string): Promise<string | null> {
+  /** Appels de la dernière minute (affiché quand l'IA sature). */
+  get perMinute(): number {
+    return this.calls.length;
+  }
+
+  async ask(system: string, prompt: string, priority = false): Promise<string | null> {
     const now = Date.now();
-    if (!this.canCall(now)) return null;
+    if (!this.canCall(now, 0, priority)) {
+      this.lastError = `too many AI calls (${this.calls.length} in the last minute)`;
+      return null;
+    }
     this.calls.push(now);
     this.busy++;
     const ctrl = new AbortController();
@@ -171,6 +181,7 @@ export class DungeonAI {
       const raw = this.cfg.provider === 'ollama' ? await this.ollama(system, prompt, ctrl.signal) : await this.anthropic(system, prompt, ctrl.signal);
       const out = clean(raw);
       this.lastError = out ? null : 'empty or filtered answer';
+      if (!out) console.warn(`[ai] answer refused by the filter or empty: "${raw.replace(/\s+/g, ' ').slice(0, 140)}"`);
       return out;
     } catch (e) {
       const msg = (e as Error)?.name === 'AbortError' ? `timed out (${this.cfg.timeoutMs} ms)` : String((e as Error)?.message ?? e).slice(0, 160);
