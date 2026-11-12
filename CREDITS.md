@@ -19,6 +19,12 @@
   Victoria's voice is an original voice designed with Qwen3-TTS VoiceDesign from a text description
   (`voix/victoria_ref.wav`): it imitates no real person.
 
+## Music
+
+- The soundtrack (`client/public/music/`) was generated for this game with **ACE-Step 1.5** —
+  <https://github.com/ace-step/ACE-Step-1.5> — MIT licence. Original instrumental pieces from text prompts only
+  (medieval folktronica: lute, fiddle, hurdy-gurdy, frame drums, soft electronic pulse); no existing song or artist imitated.
+
 ## Fonts
 
 - Alegreya, Alegreya Sans and Grenze Gotisch (SIL Open Font License), served from the game itself (@fontsource).

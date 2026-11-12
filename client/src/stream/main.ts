@@ -1,4 +1,5 @@
 import { sfx } from '../sfx';
+import { Music, pickMood } from './music';
 // Page « stream 3D » : la partie en cours rendue avec les modèles KayKit, pour OBS ou un partage d'écran.
 // Adresse : /stream.html?cle=<clé de la régie>
 import type { ClientMsg, GameEvent, PlayerViewMsg, ServerMsg } from '../../../src/shared/types';
@@ -234,7 +235,8 @@ function heatFloor(e: GameEvent) {
 let cardTimer = 0;
 // ------------------------------------------------------------------ son
 // Le stream a sa bande-son : les effets de ce qui est à l'image, les grands moments, une ambiance discrète.
-// ?muet : aucun son ; ?sansambiance : effets seulement ; ?volume=0.5 : volume général (0 à 1).
+// ?muet : aucun son ; ?sansambiance : effets seulement ; ?volume=0.5 : volume général (0 à 1) ;
+// ?sansmusique : pas de musique ; ?musique=0.5 : volume de la musique (0 à 1).
 const FX_SOUND: Record<string, Parameters<typeof sfx.play>[0]> = {
   hit: 'hit', crit: 'crit', miss: 'miss', gag: 'gag', death: 'death', kill: 'kill', loot: 'coin', levelup: 'levelup', trap: 'trap', heal: 'heal', forge: 'forge', rumble: 'rumble',
 };
@@ -245,10 +247,21 @@ function initSound() {
   sfx.setVolume(Number.isFinite(vol) && vol > 0 ? Math.min(1, vol) * 0.45 : 0.45);
   sfx.setMuted(false);
   // OBS / Streamlabs autorisent le son sans clic ; dans un navigateur ordinaire, il démarre au premier clic
+  const mv = Number(params.get('musique'));
+  const music = params.has('sansmusique') ? null : new Music(Number.isFinite(mv) && mv > 0 ? Math.min(1, mv) : 0.5);
+  const loaded = music?.load();
   const start = () => {
     sfx.unlock();
-    if (sfx.running && !params.has('sansambiance')) sfx.ambience(true, 0.8);
+    if (sfx.running && !params.has('sansambiance')) sfx.ambience(true, music ? 0.45 : 0.8); // sous la musique, l'ambiance se fait discrète
   };
+  // Musique adaptative : ce que montre la caméra décide de l'ambiance
+  if (music)
+    void loaded?.then(() =>
+      setInterval(() => {
+        const w = worlds[visible];
+        if (w) music.set(pickMood({ seasonOver: state?.seasonOver, floor: w.floor, room: w.shotRoom }));
+      }, 1000),
+    );
   start();
   const retry = setInterval(() => {
     start();

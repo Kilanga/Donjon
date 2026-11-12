@@ -6,6 +6,8 @@ type SoundName = 'hit' | 'crit' | 'miss' | 'death' | 'kill' | 'levelup' | 'coin'
 class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private duck: GainNode | null = null; // effets + musique passent par ici : baissés pendant que Victoria parle
+  private music: GainNode | null = null;
   muted = (() => {
     try {
       return localStorage.getItem('donjon-son') === 'off';
@@ -24,9 +26,13 @@ class Sfx {
     }
     try {
       this.ctx = new AudioContext();
+      this.duck = this.ctx.createGain();
+      this.duck.connect(this.ctx.destination);
       this.master = this.ctx.createGain();
       this.master.gain.value = this.volume;
-      this.master.connect(this.ctx.destination);
+      this.master.connect(this.duck);
+      this.music = this.ctx.createGain();
+      this.music.connect(this.duck);
     } catch {
       this.ctx = null;
     }
@@ -286,14 +292,15 @@ class Sfx {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(hp).connect(presence).connect(comp).connect(g).connect(ctx.destination);
-    master.gain.cancelScheduledValues(ctx.currentTime);
-    master.gain.setTargetAtTime(this.volume * 0.3, ctx.currentTime, 0.08); // le reste baisse
+    const duck = this.duck ?? master;
+    duck.gain.cancelScheduledValues(ctx.currentTime);
+    duck.gain.setTargetAtTime(0.3, ctx.currentTime, 0.08); // effets et musique baissent
     this.voiceSrc = src;
     return new Promise((resolve) => {
       src.onended = () => {
         if (this.voiceSrc === src) {
           this.voiceSrc = null;
-          master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.5);
+          duck.gain.setTargetAtTime(1, ctx.currentTime, 0.5);
         }
         resolve();
       };
@@ -308,6 +315,11 @@ class Sfx {
     } catch {
       /* déjà arrêtée */
     }
+  }
+
+  /** Le contexte audio et la sortie musique (baissée avec le reste quand Victoria parle). */
+  get audio(): { ctx: AudioContext; out: GainNode } | null {
+    return this.ctx && this.music ? { ctx: this.ctx, out: this.music } : null;
   }
 
   get running() {

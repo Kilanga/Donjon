@@ -372,6 +372,26 @@ l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable av
 Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
 Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
 
+## Musique
+
+Une bande-son originale, générée pour le jeu avec ACE-Step 1.5 (licence MIT, gratuit) : de la folktronica médiévale
+épique (luth, violon, vielle à roue, tambours sur cadre, pulsation électronique douce). Elle suit ce que montre la caméra :
+
+| Ambiance | Quand | Morceaux |
+|---|---|---|
+| Exploration | le reste du temps | 8 morceaux, environ 19 min, joués dans un ordre mélangé sans jamais en répéter un avant d'avoir tout joué |
+| Tension | dernière minute et demie avant l'effondrement, ou escalier ouvert à moins de 4 min de la fin | 1 |
+| Boss | la caméra filme un combat contre le boss | 1 |
+| Refuge | boutique ou forge | 1 |
+| Crypte | la crypte | 1 |
+| Inscriptions | salon d'attente, pas de partie en cours | 1 |
+| Finale | fin de saison | 1 |
+
+Fondus enchaînés de 3,5 s, une ambiance calme dure au moins 20 s, et la musique baisse quand Victoria parle.
+Après le boss, l'exploration reprend là où elle en était. `?sansmusique` sur l'adresse du stream la coupe,
+`?musique=0.3` règle son volume (0 à 1, 0,5 par défaut). Ajouter un morceau : le déposer dans `client/public/music/`
+et l'inscrire dans `manifest.json`.
+
 ## Victoria Steele, l'animatrice (voix)
 
 L'IA du donjon a un visage et une voix : **Victoria Steele**, animatrice glamour et sadique du jeu télé.

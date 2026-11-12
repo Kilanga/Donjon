@@ -254,6 +254,11 @@ export class World {
 
   // ---------------------------------------------------------------- décor
 
+  /** La salle que la caméra cadre en ce moment (musique adaptative). */
+  get shotRoom(): RoomView | undefined {
+    return this.shot.roomId !== null ? this.floor?.rooms.find((r) => r.id === this.shot.roomId) : undefined;
+  }
+
   setFloor(f: FloorView) {
     const changed = !this.floor || this.floor.n !== f.n || this.floor.uid !== f.uid || this.floor.rooms.length !== f.rooms.length;
     this.floor = f;

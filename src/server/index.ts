@@ -116,7 +116,7 @@ journal.write('start', {
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg',
 };
 /** Adresse du visiteur : derrière le tunnel (connexion locale de cloudflared), la vraie IP est dans CF-Connecting-IP. */
 const isLoopback = (ip: string) => ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
@@ -186,7 +186,24 @@ const server = http.createServer((req, res) => {
     }
     file = path.join(staticDir, 'index.html');
   }
-  res.writeHead(200, { 'content-type': MIME[path.extname(file)] ?? 'application/octet-stream' });
+  const type = MIME[path.extname(file)] ?? 'application/octet-stream';
+  // Musique : lecture en flux par morceaux (requêtes Range), comme un vrai serveur de fichiers
+  const range = type.startsWith('audio/') ? /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? '')) : null;
+  if (range) {
+    const size = fs.statSync(file).size;
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2] || 0));
+    const end = range[1] && range[2] ? Math.min(size - 1, Number(range[2])) : size - 1;
+    if (!(start <= end && start < size)) {
+      res.writeHead(416, { 'content-range': `bytes */${size}` }).end();
+      return;
+    }
+    res.writeHead(206, { 'content-type': type, 'accept-ranges': 'bytes', 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+    const part = fs.createReadStream(file, { start, end });
+    part.on('error', () => res.destroy());
+    part.pipe(res);
+    return;
+  }
+  res.writeHead(200, { 'content-type': type, ...(type.startsWith('audio/') ? { 'accept-ranges': 'bytes', 'content-length': fs.statSync(file).size } : {}) });
   const rs = fs.createReadStream(file);
   rs.on('error', () => res.destroy());
   rs.pipe(res);

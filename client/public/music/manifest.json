@@ -1,0 +1,30 @@
+{
+ "boss": [
+  "boss01.ogg"
+ ],
+ "crypt": [
+  "crypt01.ogg"
+ ],
+ "explore": [
+  "explore01.ogg",
+  "explore02.ogg",
+  "explore03.ogg",
+  "explore04.ogg",
+  "explore05.ogg",
+  "explore06.ogg",
+  "explore07.ogg",
+  "explore08.ogg"
+ ],
+ "finale": [
+  "finale01.ogg"
+ ],
+ "lobby": [
+  "lobby01.ogg"
+ ],
+ "safe": [
+  "safe01.ogg"
+ ],
+ "tension": [
+  "tension01.ogg"
+ ]
+}
