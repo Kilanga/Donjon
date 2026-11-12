@@ -2,8 +2,9 @@
 // nouveaux, rubriques quand l'antenne est trop calme, et réactions aux événements Twitch (abonnements, bits, raids).
 // Les grands moments eux-mêmes (morts, trahisons, effondrements…) restent commentés par Narrator.onTurn.
 import type { GameEvent } from '../shared/types.js';
+import type { Hall } from './hall.js';
 import { THEME_LABEL, THEME_EFFECTS } from '../shared/themes.js';
-import type { Game } from './game/engine.js';
+import { playerKey, type Game } from './game/engine.js';
 import { CHATTY, type Narrator } from './narrator.js';
 
 export type TwitchEvent =
@@ -20,13 +21,16 @@ const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const list = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
 
-type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat' | 'pitch' | 'howto';
+type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat' | 'pitch' | 'howto' | 'legends';
 const SEGMENTS: Segment[] = ['leaderboard', 'chat', 'race', 'spotlight', 'join', 'stakes', 'chat', 'story'];
 // Avant la partie : elle fait venir les joueurs (présenter l'émission, comment jouer, inscrits, questions au chat)
-const LOBBY_SEGMENTS: Segment[] = ['pitch', 'join', 'chat', 'howto', 'roster', 'pitch', 'chat', 'join'];
-/** Avant la partie, elle parle plus souvent : le silence avant une rubrique est divisé par 2,5, et elle peut occuper l'antenne à 55 %. */
-const LOBBY_QUIET_FACTOR = 0.4;
-const LOBBY_AIR_MAX = 0.55;
+const LOBBY_SEGMENTS: Segment[] = ['pitch', 'join', 'legends', 'chat', 'howto', 'roster', 'pitch', 'chat', 'join'];
+// Saison finie : le palmarès, les histoires de la soirée, le chat
+const OVER_SEGMENTS: Segment[] = ['legends', 'chat', 'story'];
+/** Avant la partie, elle peut occuper l'antenne à 55 % au moins (elle fait venir les joueurs). */
+const LOBBY_AIR_MIN = 0.55;
+const PLAY_FRESH_MS = 45_000; // une action de jeu se commente tant qu'elle date de moins de 45 s
+const PLAY_KINDS = new Set(['combat', 'mort', 'loot', 'piege', 'niveau', 'drole', 'trahison', 'alliance']);
 
 // Questions lancées au chat quand il est calme (Victoria les reformule)
 const CHAT_QUESTIONS = [
@@ -48,6 +52,8 @@ export class Host {
   private lastSegmentAt = 0;
   private spotlit: string[] = [];
   private question = 0;
+  private beat = 0;
+  private plays: { e: GameEvent; at: number }[] = [];
   private pitch = 0;
   private notes: string[] = []; // les petites histoires de la soirée (trahisons, morts, boss)
   private lastTwitch = new Map<string, { at: number }>();
@@ -56,6 +62,7 @@ export class Host {
     private game: Game,
     private narrator: Narrator,
     private rand: () => number = Math.random,
+    private hall: Hall | null = null,
   ) {}
 
   private once(key: string): boolean {
@@ -80,7 +87,21 @@ export class Host {
       if (this.started && (lobby || (s.seasonStart !== null && now - s.seasonStart > RULES_AFTER_MS))) this.welcome.push(p.name);
     }
     this.started = true;
-    if (s.seasonOver) return; // la fin de saison est commentée par onTurn (Légendes, vainqueurs)
+    if (s.seasonOver) {
+      // Le palmarès : le gagnant de la saison (et son total), puis elle meuble jusqu'à la prochaine
+      const done = this.hall?.justClosed;
+      if (done && !this.narrator.busy(now)) {
+        this.hall!.justClosed = null;
+        const h = done.winner ? this.hall!.player(playerKey(done.winner)) : undefined;
+        const facts = done.winner
+          ? `Season ${done.n} is over. Its winner: ${done.winner}, ${done.how === 'legend' ? 'who escaped through the last staircase' : `the deepest real contestant, floor ${done.floor}`}. That makes ${h?.wins ?? 1} season win${(h?.wins ?? 1) > 1 ? 's' : ''} for ${done.winner}.`
+          : `Season ${done.n} is over and nobody deserves the crown: the Dungeon wins this one.`;
+        const fallback = done.winner ? `Season ${done.n} goes to ${done.winner}. Win number ${h?.wins ?? 1}. The Dungeon will remember. So will I.` : `Season ${done.n}: no winner. The Dungeon keeps the crown, darlings.`;
+        void this.narrator.announce(facts, fallback, { urgent: true, tone: 'grand finale, theatrical, acid' });
+        return;
+      }
+      return this.deadAir(now, 'over');
+    }
 
     // Inscriptions ouvertes (salon d'attente)
     if (s.lobbyUntil && now < s.lobbyUntil && this.once(`lobby:${s.lobbyUntil}`)) {
@@ -95,21 +116,24 @@ export class Host {
     if (this.welcome.length && now - this.lastWelcome > WELCOME_EVERY_MS && !this.narrator.busy(now)) {
       const names = this.welcome.splice(0, 6);
       this.lastWelcome = now;
+      // Les habitués : Victoria connaît leur palmarès (« trois couronnes, et ça revient… »)
+      const known = names.map((n) => [n, this.hall?.describe(playerKey(n))] as const).filter(([, d]) => d);
+      const history = known.length ? ` Returning contestants, use their record: ${known.map(([n, d]) => `${n} (${d})`).join('; ')}. The others are first-timers.` : '';
       void this.narrator.announce(
-        `Welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}: ${list(names)}.`,
+        `Welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}: ${list(names)}.${history}`,
         `A warm welcome to our new ${names.length > 1 ? 'contestants' : 'contestant'}, ${list(names)}. Make yourselves at home. While it lasts.`,
       ).then((ok) => {
         if (!ok) this.welcome.unshift(...names); // elle parlait : ce sera pour la prochaine fois
       });
     }
 
-    if (s.seasonStart === null) return this.deadAir(now, true);
+    if (s.seasonStart === null) return this.deadAir(now, 'lobby');
 
     // Les règles, une fois la partie lancée
     if (now - s.seasonStart > RULES_AFTER_MS && this.once(`rules:${s.seasonStart}`)) {
       void this.narrator.announce(
-        'The rules in a nutshell: every floor collapses at a fixed time; its stairs only unseal in the last minutes, and a boss guards them; whoever is still inside when it collapses is out; the chat can vote the dead back; type !help for the commands.',
-        "The rules, darlings: every floor collapses on schedule. The stairs only unseal in the last minutes, and a boss guards them. Still inside when it falls? You're out, unless the chat votes you back. Lost? Type !help.",
+        'The rules in a nutshell: every floor collapses at a fixed time; a boss guards its stairs, which unseal ninety seconds after the boss falls, or in the last minutes anyway; whoever is still inside when it collapses is out; the chat can vote the dead back; type !help for the commands.',
+        "The rules, darlings: every floor collapses on schedule. A boss guards the stairs: kill it and they open ninety seconds later. Still inside when it falls? You're out, unless the chat votes you back. Lost? Type !help.",
         { urgent: true, floor: 1, tone: 'crisp and theatrical, like the opening of a TV show' },
       );
     }
@@ -154,14 +178,18 @@ export class Host {
       }
     }
 
-    this.deadAir(now, false);
+    this.deadAir(now, 'game');
   }
 
   /** Antenne trop calme : une rubrique, jamais la même deux fois de suite. */
-  private deadAir(now: number, lobby: boolean) {
-    const quiet = CHATTY[this.narrator.chatty].quietMs * (lobby ? LOBBY_QUIET_FACTOR : 1);
+  private deadAir(now: number, phase: 'lobby' | 'game' | 'over') {
+    const lobby = phase !== 'game';
+    const set = CHATTY[this.narrator.chatty];
+    const quiet = set.quietMs;
     if (now - this.narrator.lastSpokeAt < quiet || now - this.lastSegmentAt < quiet || this.narrator.busy(now)) return;
-    const pool = lobby ? LOBBY_SEGMENTS : SEGMENTS;
+    // En partie : surtout de l'action en direct (joueurs ou PNJ), une rubrique de temps en temps
+    if (!lobby && this.beat++ % 3 !== 2 && this.playByPlay(now)) return;
+    const pool = phase === 'over' ? OVER_SEGMENTS : lobby ? LOBBY_SEGMENTS : SEGMENTS;
     for (let tries = 0; tries < pool.length; tries++) {
       const seg = pool[this.segment++ % pool.length];
       const text = this.segmentText(seg, now);
@@ -171,7 +199,7 @@ export class Host {
         tone: lobby ? 'warm-up host before the show, magnetic, makes people want to play' : 'relaxed host filling the airtime, witty',
         context: this.notes.slice(-2).join(' '),
         withChat: true,
-        maxAir: lobby ? LOBBY_AIR_MAX : undefined,
+        maxAir: lobby ? Math.max(LOBBY_AIR_MIN, set.air) : undefined,
       });
       return;
     }
@@ -226,6 +254,11 @@ export class Host {
           fallbacks[this.question % fallbacks.length],
         ];
       }
+      case 'legends': {
+        const sum = this.hall?.summary();
+        if (!sum) return null;
+        return [`Talk about the hall of fame and dare someone to dethrone the champions. ${sum}`, `${sum} Who dares to take the crown?`];
+      }
       case 'pitch': {
         const pitches: [string, string][] = [
           ['Pitch the show to viewers who just arrived: The Dungeon is a game played entirely from the Twitch chat. Each viewer controls a crawler, explores floors that collapse on a timer, fights monsters and a boss on every floor, and the deepest crawler wins the season. Type !join to enter.', 'Just arrived? This is The Dungeon: you play it from the chat. Your crawler, your floors, a boss on each, and the floors collapse on a timer. Type !join, darling.'],
@@ -263,13 +296,31 @@ export class Host {
   }
 
   /** Les petites histoires de la soirée, pour y revenir pendant les rubriques. */
+  /** Commentaire en direct de l'action la plus forte des 45 dernières secondes (joueurs ou PNJ). */
+  private playByPlay(now: number): boolean {
+    this.plays = this.plays.filter((p) => now - p.at < PLAY_FRESH_MS);
+    const best = [...this.plays].sort((a, b) => b.e.drama - a.e.drama || b.at - a.at)[0];
+    if (!best) return false;
+    this.plays = this.plays.filter((p) => p !== best && p.e.floor !== best.e.floor); // pas deux fois la même scène
+    this.lastSegmentAt = now;
+    void this.narrator.announce(
+      `Live play-by-play, it just happened on floor ${best.e.floor}: ${best.e.text}`,
+      '',
+      { tone: 'live commentator rooting for the Dungeon: acid, gleeful, quick', context: this.notes.slice(-2).join(' '), floor: best.e.floor, aiOnly: true },
+    );
+    return true;
+  }
+
   onEvents(events: GameEvent[]) {
+    const now = Date.now();
     for (const e of events) {
       if (e.narrator || e.scope === 'prive') continue;
+      if (PLAY_KINDS.has(e.kind) && e.drama >= 5 && e.text.length < 400) this.plays.push({ e, at: now });
       if ((e.kind === 'trahison' || e.kind === 'mort') && e.drama >= 40) this.notes.push(e.text.slice(0, 160));
       else if (e.kind === 'systeme' && / is defeated by /.test(e.text)) this.notes.push(e.text.split('!')[0].slice(0, 120) + '.');
     }
     this.notes = this.notes.slice(-10);
+    this.plays = this.plays.slice(-30);
   }
 
   /** Abonnements, bits, raids : jamais le message de l'abonné, seulement qui et combien. */

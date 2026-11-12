@@ -15,6 +15,7 @@ import { recapHtml } from './recap.js';
 import { DungeonAI } from './ai.js';
 import { Narrator } from './narrator.js';
 import { Voice } from './voice.js';
+import { Hall } from './hall.js';
 import { Host } from './host.js';
 import { BotManager } from './bots.js';
 import { maskPlayerText, nameAllowed } from './moderation.js';
@@ -390,7 +391,10 @@ const voice = new Voice(cfg.voice, (clip) => {
 });
 const narrator = new Narrator(game, ai, (evs) => deliver(evs), voice);
 // …et elle anime l'émission : déroulé, accueil, rubriques, Twitch
-const host = new Host(game, narrator);
+// Le palmarès des saisons (data/palmares.json) : Victoria reconnaît les habitués et leurs couronnes
+const hall = new Hall(path.join(root, 'data', 'palmares.json'));
+narrator.hall = hall;
+const host = new Host(game, narrator, Math.random, hall);
 setInterval(() => {
   try {
     host.tick();
@@ -774,6 +778,7 @@ function runTurn() {
   journal.write('turn', { ms, late, events: events.length, players: all.length, alive: all.filter((p) => p.alive).length, bots: all.filter((p) => p.bot).length, online: clients.size, floors });
   if (game.state.turn % 10 === 0) journal.write('snapshot', { leaderboard: game.leaderboard() });
   deliver(events);
+  hall.onEvents(events, game);
   narrator.onTurn(events);
   host.onEvents(events);
   // Les PNJ figurants s'ajustent, se souviennent, saluent, et choisissent leur action du prochain tour

@@ -214,6 +214,21 @@ describe('étages', () => {
     expect(p.stunned).toBe(true);
   });
 
+  it('boss vaincu : l\'escalier se descelle 90 s plus tard, sans attendre la fin de l\'étage', () => {
+    const g = setup();
+    g.submit('a', '!join', T0);
+    g.tick(T0 + 20_000);
+    const f = g.floor(1)!;
+    expect(g.stairsInMs(f)).toBeGreaterThan(5 * 60_000);
+    const boss = f.monsters.find((m) => m.boss)!;
+    boss.hp = 1;
+    (g as unknown as { killMonster: (m: unknown, n: number, k: null) => void }).killMonster(boss, 1, null);
+    expect(f.bossDownAt).toBeDefined();
+    expect(Math.round(g.stairsInMs(f)! / 1000)).toBe(90);
+    const ev = g.tick(T0 + 20_000 + 91_000);
+    expect(ev.some((e) => /UNSEALED/.test(e.text))).toBe(true);
+  });
+
   it('on ne descend pas tant que le boss est vivant', () => {
     const g = setup();
     g.submit('a', '!join', T0);

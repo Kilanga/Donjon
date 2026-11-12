@@ -36,6 +36,9 @@ function fmtWait(ms: number): string {
   return m ? `${m} min${s % 60 ? ` ${s % 60} s` : ''}` : `${s} s`;
 }
 
+/** Boss vaincu : l'escalier se descelle 90 s plus tard (le temps de ramasser son butin). */
+const BOSS_TO_STAIRS_MS = 90_000;
+
 export class Game {
   state: GameState;
   cfg: GameConfig;
@@ -160,7 +163,7 @@ export class Game {
     if (!f) {
       const players = Object.keys(this.state.players).length;
       const rooms = Math.max(this.cfg.minRooms, this.cfg.roomsPerPlayer * players);
-      f = generateFloor(n, rooms, this.rng, this.nextId);
+      f = generateFloor(n, rooms, this.rng, this.nextId, this.state.floors[n - 1]?.theme);
       this.state.floors[n] = f;
       // La crypte : une salle ordinaire loin de l'entrée, où reposent les éliminés des étages du dessus
       const crypt = this.rng.shuffle(f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom))[0];
@@ -263,7 +266,8 @@ export class Game {
     return !this.cfg.staggered || (floorN + turn) % 2 === 0;
   }
 
-  /** L'escalier n'est descellé que pendant les dernières minutes de l'étage (et jamais avant le début de la saison). */
+  /** L'escalier se descelle pendant les dernières minutes de l'étage, ou 90 s après la chute du boss si c'est plus tôt
+   *  (jamais avant le début de la saison) : plus de longue attente devant un escalier scellé, boss mort. */
   stairsOpen(f: FloorState): boolean {
     return this.stairsInMs(f) === 0;
   }
@@ -273,7 +277,9 @@ export class Game {
     if (f.collapseAt === null) return null;
     if (f.stairsOpened) return 0; // annoncé ouvert : il le reste (même si un vote rallonge l'étage)
     const open = this.cfg.stairsOpenMinutes * 60_000 * (f.n === 1 ? this.cfg.firstFloorFactor : 1); // l'étage 1, plus long, s'ouvre aussi plus longtemps
-    return Math.max(0, f.collapseAt - open - this.now);
+    const scheduled = f.collapseAt - open;
+    const afterBoss = f.bossDownAt !== undefined ? f.bossDownAt + BOSS_TO_STAIRS_MS : Infinity;
+    return Math.max(0, Math.min(scheduled, afterBoss) - this.now);
   }
 
   /** L'étage le moins profond encore debout : là où arrivent les nouveaux. */
@@ -853,6 +859,7 @@ export class Game {
     const f = this.state.floors[floorN];
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
+    if (m.boss) f.bossDownAt ??= this.now;
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
     if (!m.boss && m.kind !== 'mimique' && m.kind !== 'ogre_dormeur') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
     // Un boss lâche toujours un objet, au moins rare, au sol de sa salle : premier arrivé (!pickup), premier servi

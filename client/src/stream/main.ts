@@ -81,6 +81,7 @@ setInterval(() => {
 const voiceOn = soundOnParam() && !params.has('sansvoix');
 const voiceQueue: { id: string | null; text: string; ms: number; volume: number }[] = [];
 let voicePlaying = false;
+const voiceTexts: string[] = []; // répliques déjà arrivées par la voix : leur sous-titre suit la parole
 function soundOnParam() {
   return !params.has('muet');
 }
@@ -114,6 +115,8 @@ function onMessage(m: ServerMsg) {
   if (m.type === 'voice') {
     if (replay) return;
     voiceQueue.push(m);
+    voiceTexts.push(m.text);
+    while (voiceTexts.length > 6) voiceTexts.shift();
     while (voiceQueue.length > 2) voiceQueue.shift();
     void playVoice();
     return;
@@ -169,7 +172,7 @@ function onMessage(m: ServerMsg) {
       const sum = state.floors ?? [];
       const humansThere = sum.find((f) => f.n === top.floor)?.humans ?? 0;
       const humansHere = sum.find((f) => f.n === slotFloor[visible])?.humans ?? 0;
-      if (humansThere > 0 || humansHere === 0 || top.score + top.floor >= 20) switchTo(other); // vrais joueurs d'abord, sauf gros moment ailleurs
+      if (humansThere > 0 || (humansHere === 0 && top.floor >= (slotFloor[visible] ?? 0)) || top.score + top.floor >= 20) switchTo(other); // vrais joueurs d'abord, puis vers le bas, sauf gros moment ailleurs
     }
     if (state) pickFloor(state);
   } else if (m.type === 'chat' && m.cmd && m.ok !== undefined) {
@@ -298,8 +301,11 @@ function pickFloor(s: PlayerViewMsg) {
   const occupied = floors.filter((f) => f.humans + f.bots > 0);
   if (!occupied.length) return;
   const now = performance.now();
-  // Les vrais joueurs comptent, sans coller la caméra à leur étage ; chaque étage plus profond vaut +1
-  const score = (f: { n: number; humans: number; bots: number }) => f.humans * 6 + f.bots * 2 + heatOf(f.n, now) + f.n;
+  // Les vrais joueurs d'abord ; puis la course en tête : chaque étage plus profond vaut +2, le front (l'étage le plus
+  // profond occupé) +6. Le nombre de PNJ compte peu (les retardataires qui meurent en boucle en haut ne volent plus la caméra).
+  const front = Math.max(...occupied.map((f) => f.n));
+  const score = (f: { n: number; humans: number; bots: number }) =>
+    f.humans * 8 + Math.min(f.bots, 4) * 1.5 + Math.min(heatOf(f.n, now), 30) * 0.5 + (f.n - 1) * 2 + (f.n === front ? 6 : 0);
   const ranked = [...occupied].sort((a, b) => score(b) - score(a)).slice(0, 2).map((f) => f.n);
   let changed = false;
   // On garde les scènes déjà chargées sur un étage voulu ; on recharge la scène cachée en priorité
@@ -424,7 +430,7 @@ let ltTimer = 0;
 let iaTimer = 0;
 function onEvent(e: GameEvent) {
   const isIa = !!(e as GameEvent & { narrator?: boolean }).narrator;
-  if (isIa && !voicePlaying) {
+  if (isIa && !voicePlaying && !voiceTexts.includes(e.text)) {
     $('ia-text').textContent = e.text;
     $('ia').classList.remove('hidden');
     clearTimeout(iaTimer);

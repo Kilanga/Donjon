@@ -10,7 +10,7 @@ export const DELTA: Record<Dir, [number, number]> = { n: [0, -1], s: [0, 1], e: 
 export const OPPOSITE: Record<Dir, Dir> = { n: 's', s: 'n', e: 'o', o: 'e' };
 export const DIR_LABEL: Record<Dir, string> = { n: 'north', s: 'south', e: 'east', o: 'west' };
 
-export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: () => string): FloorState {
+export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: () => string, avoidTheme?: string): FloorState {
   const count = Math.max(4, roomCount);
   const W = Math.ceil(Math.sqrt(count * 1.6));
   const H = Math.ceil((count * 1.6) / W);
@@ -87,8 +87,9 @@ export function generateFloor(n: number, roomCount: number, rng: Rng, nextId: ()
     r.trapArmed = true;
   }
 
+  // Le thème : jamais deux fois le même de suite
   const floor: FloorState = {
-    n, uid: `f${n}-${nextId()}`, theme: n === 1 ? 'classique' : rng.pick(THEMES.slice(1)), rooms, monsters: [], spawnRoom: spawn.id, bossRoom: boss.id,
+    n, uid: `f${n}-${nextId()}`, theme: n === 1 ? 'classique' : rng.pick(THEMES.slice(1).filter((t) => t !== avoidTheme)), rooms, monsters: [], spawnRoom: spawn.id, bossRoom: boss.id,
     startedAt: null, collapseAt: null, collapsed: false,
   };
 

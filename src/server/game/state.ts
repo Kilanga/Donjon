@@ -105,6 +105,7 @@ export interface FloorState {
   warned5?: boolean;
   warned1?: boolean;
   stairsOpened?: boolean;
+  bossDownAt?: number; // boss vaincu : l'escalier se descelle peu après (au lieu d'attendre la fin de l'étage)
   respawns?: { turn: number; kind: string; roomId?: number }[]; // monstres tués, qui reviennent au tour indiqué // l'annonce « l'escalier se descelle » a été faite
   bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
   cryptRoom?: number; // la crypte : les tombes des éliminés y attendent qu'un crawler les ressuscite

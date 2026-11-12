@@ -122,8 +122,9 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | Réglage | Défaut | Rôle |
 | --- | --- | --- |
 | `turnSeconds` | 20 | Durée d'un tour (s) ; modifiable aussi depuis la régie |
-| `floorMinutes` | 20 | L'étage n s'effondre n × floorMinutes après le début de la saison (min) |
-| `stairsOpenMinutes` | 10 | L'escalier n'est descellé que pendant ces dernières minutes de l'étage |
+| `floorMinutes` | 15 | Durée d'un étage (min) : l'étage n s'effondre (n + firstFloorFactor − 1) × floorMinutes après le coup d'envoi |
+| `firstFloorFactor` | 2 | L'étage 1 dure N fois plus longtemps (30 min par défaut) |
+| `stairsOpenMinutes` | 7.5 | L'escalier se descelle au plus tard ces dernières minutes de l'étage (étage 1 : × firstFloorFactor), ou 90 s après la chute du boss |
 | `respawnTurns` | 5 | Tours avant réapparition |
 | `immunitySeconds` | 180 | Immunité JvJ après arrivée ou réapparition (s) |
 | `roomsPerPlayer` / `minRooms` | 2 / 20 | Taille des étages |
@@ -191,9 +192,10 @@ profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dan
 2. **Salon d'attente** : le premier `!join` ouvre **5 min d'inscriptions** (décompte sur le stream et la page ; rappel à 1 min).
    On peut déjà jouer, mais c'est un échauffement : au coup d'envoi, **tout repart à zéro** (donjon neuf, niveau 1 pour
    tout le monde, PNJ compris, chacun garde sa classe). Réglage `lobbySeconds` (0 = pas de salon).
-3. **La saison** démarre au coup d'envoi, à heure fixe : **l'étage 1 dure 20 min** (le double, `firstFloorFactor`), les
-   suivants 10 min (`floorMinutes`), donc fin de saison à 90 min. Sur chaque étage, l'escalier est scellé la première
-   moitié, descellé la seconde (il faut aussi battre le boss).
+3. **La saison** démarre au coup d'envoi, à heure fixe : **l'étage 1 dure 30 min** (le double, `firstFloorFactor`), puis
+   chaque étage tombe **15 min** après le précédent (`floorMinutes`) : fin de saison (étage 8) à 2 h 15. Sur chaque étage,
+   un boss garde l'escalier ; il se descelle **90 s après la chute du boss**, ou au plus tard pendant la seconde moitié
+   de l'étage (les 7 min 30 de la fin, 15 min pour l'étage 1).
 4. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
    Seuls les retardataires, l'équipe de fermeture, tombent à l'étage suivant.
 
@@ -413,7 +415,7 @@ Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voi
   Elle remercie les abonnements, cadeaux, bits et raids Twitch (le pseudo et le nombre, jamais le message).
   Elle ne parle jamais par-dessus elle-même et pas plus d'un tiers du temps (hors annonces urgentes).
 - **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute », le volume de sa voix et « Talkative »
-  (calme / normale / bavarde : réponses au chat, commentaires, rubriques après 3 min, 1 min 30 ou 45 s de silence).
+  (calme / normale / bavarde). En « normale », elle reprend la parole après 25 s de silence (une réplique toutes les 40 s environ, soit tous les deux tours) : surtout l'action en direct, joueurs ou PNJ, et une rubrique de temps en temps. Elle reconnaît les habitués grâce au palmarès (`data/palmares.json` : saisons jouées, victoires, étage record) et annonce le gagnant de chaque saison. Gagnant : le premier sorti par le dernier escalier, sinon le vrai joueur allé le plus profond (dès l'étage 2).
   La régie affiche combien de répliques l'IA a écrites et combien de phrases toutes faites sont parties, avec la
   dernière erreur de l'IA ; la console les montre aussi (`[victoria] IA : …` ou `[victoria] phrase toute faite : …`).
 

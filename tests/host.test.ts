@@ -3,6 +3,8 @@ import { DEFAULT_CONFIG } from '../src/server/config.js';
 import { Game } from '../src/server/game/engine.js';
 import { Host } from '../src/server/host.js';
 import type { Narrator } from '../src/server/narrator.js';
+import { Hall } from '../src/server/hall.js';
+import type { GameEvent } from '../src/shared/types.js';
 
 /** Une fausse Victoria : note ce qu'on lui fait annoncer. */
 function fakeNarrator() {
@@ -105,5 +107,34 @@ describe('Victoria anime l\'émission', () => {
     h.onTwitch({ kind: 'raid', user: 'BigStreamer', viewers: 42 }, t + 2000);
     expect(said.map((s) => s.facts)).toEqual([expect.stringMatching(/Bob gifted 5 subscriptions/), expect.stringMatching(/BigStreamer is raiding the channel with 42 viewers/)]);
     expect(said[1].urgent).toBe(true);
+  });
+
+  it('en partie, elle commente l\'action en direct (même celle des PNJ) quand ça se calme', () => {
+    const g = started();
+    const { n, said, asNarrator } = fakeNarrator();
+    const h = new Host(g, asNarrator, () => 0);
+    g.state.seasonStart = Date.now() - 10 * 60_000;
+    h.tick(); // les règles d'abord
+    h.onEvents([{ kind: 'combat', scope: 'etage', floor: 2, drama: 30, text: 'Brunhilde cleaves a goblin in two.' } as unknown as GameEvent]);
+    n.lastSpokeAt = Date.now() - 60_000;
+    h.tick();
+    expect(said.some((s) => /play-by-play.*Brunhilde cleaves/.test(s.facts))).toBe(true);
+  });
+
+  it('elle reconnaît les habitués et leur palmarès', () => {
+    const g = started();
+    const hall = new Hall(null);
+    hall.onEvents([], { state: { players: { mia: { key: 'mia', name: 'Mia', deepest: 5, floor: 5, level: 6, bot: false } } } } as never);
+    hall.onEvents([{ seasonEnd: true } as GameEvent], { state: { players: {} } } as never);
+    const { n, said, asNarrator } = fakeNarrator();
+    const h = new Host(g, asNarrator, () => 0, hall);
+    h.tick();
+    g.state.lobbyUntil = Date.now() + 120_000;
+    g.submit('Mia', '!join mage', Date.now());
+    g.tick(Date.now());
+    n.lastSpokeAt = Date.now();
+    h.tick();
+    h.tick(Date.now() + 60_000);
+    expect(said.some((s) => /Mia \(1 season win/.test(s.facts))).toBe(true);
   });
 });

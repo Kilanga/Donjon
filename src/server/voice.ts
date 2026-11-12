@@ -117,8 +117,11 @@ export class Voice {
     const line = capWords(text.replace(/\s+/g, ' ').trim());
     if (!line) return;
     const now = Date.now();
-    if (!urgent && this.busy(now)) return; // jamais deux répliques l'une sur l'autre
     const estimate = Math.min(MAX_MS, 1500 + line.split(' ').length * 380);
+    if (!urgent && this.busy(now)) {
+      this.broadcast({ id: null, text: line, ms: estimate }); // jamais deux répliques l'une sur l'autre : celle-ci en sous-titre, après
+      return;
+    }
     if (this.muted || !this.cfg.enabled || !this.ready) {
       this.busyUntil = now + estimate;
       this.broadcast({ id: null, text: line, ms: estimate });
