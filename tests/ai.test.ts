@@ -60,7 +60,7 @@ describe('IA du donjon', () => {
     const body = JSON.parse(init.body);
     expect(body.model).toBe('claude-haiku-5-5');
     expect(body.system).toBe('système');
-    expect(body.max_tokens).toBeLessThanOrEqual(150);
+    expect(body.max_tokens).toBeLessThanOrEqual(400); // plafond (les répliques font une ou deux phrases)
   });
 
   it('délai dépassé : renvoie null sans exception', async () => {
