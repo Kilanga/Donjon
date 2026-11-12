@@ -79,6 +79,7 @@ export class DungeonAI {
   private busy = 0;
   /** Dernière erreur de l'IA (null si le dernier appel a abouti) : affichée en régie. */
   lastError: string | null = null;
+  private plainRequest = false; // le modèle refuse les réglages de réflexion : requête simple
 
   constructor(cfg: AiConfig, apiKey = '') {
     this.cfg = cfg;
@@ -216,18 +217,34 @@ export class DungeonAI {
   }
 
   private async anthropic(system: string, prompt: string, signal: AbortSignal): Promise<string> {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: this.cfg.anthropicModel, max_tokens: 120, system, messages: [{ role: 'user', content: prompt }] }),
-      signal,
-    });
+    // Les modèles récents (Sonnet 5.5…) réfléchissent par défaut avant de répondre : cette réflexion mange le budget de
+    // jetons et la réplique revient vide. Pour une phrase d'animatrice, pas de réflexion préalable, effort bas (plus rapide).
+    const base = { model: this.cfg.anthropicModel, max_tokens: 400, system, messages: [{ role: 'user', content: prompt }] };
+    const post = (body: object) =>
+      fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify(body),
+        signal,
+      });
+    let res = await post(this.plainRequest ? base : { ...base, thinking: { type: 'between_tools' }, output_config: { effort: 'low' } });
+    if (res.status === 400 && !this.plainRequest) {
+      // Modèle qui ne connaît pas ces réglages : on retient de ne plus les envoyer
+      const msg = ((await res.clone().json().catch(() => ({}))) as { error?: { message?: string } }).error?.message ?? '';
+      if (/thinking|effort|output_config|between_tools/i.test(msg)) {
+        this.plainRequest = true;
+        console.warn(`[ai] ${this.cfg.anthropicModel}: no thinking settings for this model (${msg.slice(0, 80)})`);
+        res = await post(base);
+      }
+    }
     if (!res.ok) {
       const err = ((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error;
       throw new Error(`Claude API HTTP ${res.status}${err?.message ? `: ${err.message.slice(0, 120)}` : ''}`);
     }
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    return (data.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join(' ');
+    const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
+    const text = (data.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join(' ');
+    if (!text.trim()) console.warn(`[ai] empty answer from Claude (stop: ${data.stop_reason ?? '?'}, blocks: ${(data.content ?? []).map((c) => c.type).join(',') || 'none'})`);
+    return text;
   }
 }
 
