@@ -314,7 +314,7 @@ function sendState(c: Client) {
   if (c.spectator) {
     const shown = game.spectatorView(c.floor, now);
     const standby = c.standby != null && c.standby !== shown?.n ? game.liveFloorView(c.standby, now) : null;
-    send(c, { ...base, voice: { status: voice.describe(), muted: voice.muted, volume: voice.volume, chatty: narrator.chatty }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
+    send(c, { ...base, voice: { status: `${voice.describe()}; lines by AI: ${narrator.stats.ai}, canned: ${narrator.stats.canned}${ai.enabled ? '' : ' (AI off)'}${ai.lastError ? `; last AI error: ${ai.lastError}` : ''}`, muted: voice.muted, volume: voice.volume, chatty: narrator.chatty }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
   } else if (c.name) {
     const v = game.viewFor(c.name, now);
     send(c, { ...base, ...v, spectator: false });

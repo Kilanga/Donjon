@@ -380,7 +380,9 @@ Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voi
 
 - **Quand elle parle :** à la fin d'un tour, sur le moment le plus fort (mort, trahison, boss tué, effondrement…),
   une réplique de 15 s au plus. Avec l'IA éteinte, elle garde des répliques écrites pour les très grands moments.
-- **Le chat :** elle répond parfois à un message (environ 1 sur 8, au plus une fois toutes les 2 min). Jamais aux
+- **Le chat :** quand on l'interpelle (« Victoria », « Steele »), elle répond toujours (au plus toutes les 12 s) ;
+  sinon environ un message sur trois (une question deux fois plus souvent), au plus toutes les 40 s. Si elle parlait,
+  la réponse attend qu'elle ait fini. Dans ses rubriques, elle rebondit sur ce que dit le chat et lui pose des questions. Jamais aux
   commandes (`!…`), aux bots (Streamlabs, WZBot, Nightbot…) ni aux PNJ. Elle ne lit **jamais** un message :
   une réplique qui en recopie un morceau est jetée, et les pseudos refusés par la modération deviennent « a contestant ».
 - **Le son :** les effets et l'ambiance baissent pendant qu'elle parle. `?sansvoix` sur l'adresse du stream la coupe
@@ -391,7 +393,9 @@ Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voi
   Elle remercie les abonnements, cadeaux, bits et raids Twitch (le pseudo et le nombre, jamais le message).
   Elle ne parle jamais par-dessus elle-même et pas plus d'un tiers du temps (hors annonces urgentes).
 - **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute », le volume de sa voix et « Talkative »
-  (calme / normale / bavarde : réponses au chat, commentaires, rubriques toutes les 4, 2 ou 1 min de silence).
+  (calme / normale / bavarde : réponses au chat, commentaires, rubriques après 3 min, 1 min 30 ou 45 s de silence).
+  La régie affiche combien de répliques l'IA a écrites et combien de phrases toutes faites sont parties, avec la
+  dernière erreur de l'IA ; la console les montre aussi (`[victoria] IA : …` ou `[victoria] phrase toute faite : …`).
 
 **Installation (une fois) :** double-clic sur `voix\installer-voix.bat`. Il installe un Python à part avec PyTorch
 (environ 3 Go) et le modèle de voix (environ 4,5 Go) dans `D:\DonjonVoix`. Ensuite, « Le Donjon » la lance tout seul,

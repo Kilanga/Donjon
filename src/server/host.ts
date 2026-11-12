@@ -20,9 +20,19 @@ const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const list = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
 
-type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster';
-const SEGMENTS: Segment[] = ['leaderboard', 'join', 'race', 'spotlight', 'stakes', 'story'];
-const LOBBY_SEGMENTS: Segment[] = ['join', 'roster'];
+type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat';
+const SEGMENTS: Segment[] = ['leaderboard', 'chat', 'race', 'spotlight', 'join', 'stakes', 'chat', 'story'];
+const LOBBY_SEGMENTS: Segment[] = ['join', 'chat', 'roster'];
+
+// Questions lancées au chat quand il est calme (Victoria les reformule)
+const CHAT_QUESTIONS = [
+  'Ask the chat who they think will survive this floor, and to say it in the chat.',
+  'Ask the chat which contestant they would bet against tonight.',
+  'Ask the chat what they would do with a pile of cursed gold.',
+  'Ask the chat to pick a villain of the night.',
+  'Ask the chat whether they would trust a smiling merchant in a dungeon.',
+  'Ask the chat which monster scares them the most.',
+];
 
 export class Host {
   private said = new Set<string>();
@@ -33,6 +43,7 @@ export class Host {
   private segment = 0;
   private lastSegmentAt = 0;
   private spotlit: string[] = [];
+  private question = 0;
   private notes: string[] = []; // les petites histoires de la soirée (trahisons, morts, boss)
   private lastTwitch = new Map<string, { at: number }>();
 
@@ -55,6 +66,7 @@ export class Host {
   /** À chaque seconde : le déroulé de l'émission. */
   tick(now = Date.now()) {
     const s = this.game.state;
+    this.narrator.tickChat(now);
     // Les présents au démarrage du serveur ne sont pas « nouveaux »
     for (const p of Object.values(s.players)) {
       if (p.bot || this.seen.has(p.key)) continue;
@@ -150,7 +162,7 @@ export class Host {
       const text = this.segmentText(seg, now);
       if (!text) continue;
       this.lastSegmentAt = now;
-      void this.narrator.announce(text[0], text[1], { tone: 'relaxed host filling the airtime, witty' });
+      void this.narrator.announce(text[0], text[1], { tone: 'relaxed host filling the airtime, witty', context: this.notes.slice(-2).join(' '), withChat: true });
       return;
     }
   }
@@ -195,6 +207,14 @@ export class Host {
         const left = s.lobbyUntil ? s.lobbyUntil - now : f1?.collapseAt ? f1.collapseAt - now : null;
         const until = left && left > 0 ? ` Sign-ups close in ${minutes(left)} minutes.` : '';
         return [`Viewers can still join: type !join in the chat, or open the link at the bottom left of the stream.${until}`, `Want in? Type !join in the chat, or use the link at the bottom left.${until}`];
+      }
+      case 'chat': {
+        const q = CHAT_QUESTIONS[this.question++ % CHAT_QUESTIONS.length];
+        const fallbacks = ['Chat, talk to me: who survives this floor? I want names.', 'Tell me in the chat, darlings: who is the villain of the night?', 'Chat, a question: would you trust a smiling merchant in a dungeon? Thought not.'];
+        return [
+          this.narrator.chatSummary(now) ? 'Talk with the chat: react to one of the messages below, by name, then throw a question back at them.' : q,
+          fallbacks[this.question % fallbacks.length],
+        ];
       }
       case 'roster': {
         const names = Object.values(s.players).filter((p) => !p.bot).map((p) => p.name);

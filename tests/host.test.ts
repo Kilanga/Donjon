@@ -12,6 +12,8 @@ function fakeNarrator() {
     lastSpokeAt: 0,
     talking: false,
     busy: () => n.talking,
+    tickChat: () => {},
+    chatSummary: () => '',
     announce: async (facts: string, _fallback: string, opts: { urgent?: boolean } = {}) => {
       if (!opts.urgent && n.talking) return false;
       said.push({ facts, urgent: !!opts.urgent });

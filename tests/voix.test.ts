@@ -116,6 +116,38 @@ describe('Victoria et le chat', () => {
     expect(out2.filter((e) => e.narrator).map((e) => e.text)).toEqual(['Kilak, your optimism is adorable. Truly.']);
   });
 
+  it('interpellée par son nom, elle répond toujours ; sinon pas à chaque message', async () => {
+    const g = new Game({ ...DEFAULT_CONFIG, lobbySeconds: 0, seed: 3 });
+    const ai = new DungeonAI({ ...DEFAULT_AI, provider: 'ollama' });
+    const ask = vi.spyOn(ai, 'ask').mockResolvedValue('Darling, of course I am watching you.');
+    const out: GameEvent[] = [];
+    const n = new Narrator(g, ai, (evs) => out.push(...evs), null, () => 0.99); // le hasard dit toujours non
+    n.onChat('Zorg', 'nice stream tonight everyone', 1_000_000);
+    expect(ask).not.toHaveBeenCalled();
+    n.onChat('Zorg', 'Victoria are you watching me?', 1_000_100);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(out.filter((e) => e.narrator).map((e) => e.text)).toEqual(['Zorg, darling, of course I am watching you.']); // elle s'adresse à lui
+  });
+
+  it('elle parlait : la réponse attend la fin de sa réplique au lieu de se perdre', async () => {
+    const g = new Game({ ...DEFAULT_CONFIG, lobbySeconds: 0, seed: 3 });
+    const ai = new DungeonAI({ ...DEFAULT_AI, provider: 'ollama' });
+    let release: (v: string) => void = () => {};
+    const ask = vi.spyOn(ai, 'ask').mockImplementationOnce(() => new Promise((r) => (release = r))).mockResolvedValue('Mia, patience is a virtue.');
+    const out: GameEvent[] = [];
+    const n = new Narrator(g, ai, (evs) => out.push(...evs), null, () => 0);
+    n.onChat('Kilak', 'victoria who is winning?', 1_000_000);
+    n.onChat('Mia', 'victoria when does it start?', 1_013_000); // elle écrit encore la réponse à Kilak
+    expect(ask).toHaveBeenCalledTimes(1);
+    release('Kilak, nobody yet, darling.');
+    await new Promise((r) => setTimeout(r, 10));
+    n.tickChat(1_014_000);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(out.filter((e) => e.narrator).map((e) => e.text)).toEqual(['Kilak, nobody yet, darling.', 'Mia, patience is a virtue.']);
+  });
+
   it('la régie fait parler Victoria, sauf pour un texte refusé', () => {
     const { out, n } = setup(null);
     expect(n.controlRoomSay('Ladies and gentlemen, the final floor is open!').ok).toBe(true);
