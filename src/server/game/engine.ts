@@ -36,8 +36,6 @@ function fmtWait(ms: number): string {
   return m ? `${m} min${s % 60 ? ` ${s % 60} s` : ''}` : `${s} s`;
 }
 
-/** Boss vaincu : l'escalier se descelle 90 s plus tard (le temps de ramasser son butin). */
-const BOSS_TO_STAIRS_MS = 90_000;
 
 export class Game {
   state: GameState;
@@ -52,7 +50,7 @@ export class Game {
     this.rng = new Rng(this.state.rng);
     if (this.state.seasonStart === null) {
       const timed = Object.values(this.state.floors).filter((f) => f.collapseAt !== null);
-      if (timed.length) this.state.seasonStart = Math.min(...timed.map((f) => f.collapseAt! - (f.n + (cfg.firstFloorFactor ?? 1) - 1) * cfg.floorMinutes * 60_000));
+      if (timed.length) this.state.seasonStart = Math.min(...timed.map((f) => f.startedAt ?? f.collapseAt!));
     }
   }
 
@@ -186,15 +184,15 @@ export class Game {
           f.monsters.push(ogre);
         }
       });
-      const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: beat the boss and take the exit to become a Legend. When it collapses, the season is over! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
+      const effect = (n >= this.cfg.finalFloor ? 'FINAL FLOOR: when its boss falls, the season is over, and everyone still standing here walks out a Legend! ' : '') + (THEME_EFFECTS[f.theme] ?? '');
       this.emit({ floor: n, kind: 'systeme', text: `Floor ${n} has been dug out (${f.rooms.length} rooms, theme: ${THEME_LABEL[f.theme] ?? f.theme}).${effect ? ` ${effect}` : ''}`, scope: 'global', drama: effect ? 15 : 5 });
     }
     return f;
   }
 
   /** Arme le chrono d'un étage. La saison démarre à l'arrivée du premier vrai joueur (les PNJ figurants ne la lancent pas) ;
-   *  ensuite l'étage n tombe à heure fixe, seasonStart + n × floorMinutes, quel que soit le rythme des joueurs
-   *  (un étage recreusé pour les retardataires garde au moins floorMinutes de vie). */
+   *  chaque étage a ensuite son propre chrono, compté depuis son ouverture (premier arrivé) : effondrement au bout de
+   *  floorSpan(n), escalier scellé les lockMs(n) premières minutes. */
   private startTimer(f: FloorState, p?: PlayerState) {
     if (this.state.seasonStart === null) {
       if (p?.bot) return; // les PNJ ne lancent rien
@@ -206,18 +204,33 @@ export class Game {
     }
     if (f.startedAt === null) {
       f.startedAt = this.now;
-      f.collapseAt = Math.max(this.waveEnd(f.n), this.now + this.floorSpan(f.n));
+      f.collapseAt = this.now + this.floorSpan(f.n);
     }
   }
 
-  /** Durée de vie d'un étage (l'étage 1 dure plus longtemps : le temps que tout le monde arrive). */
+  /** Durée de vie d'un étage : dégressive de l'étage 1 (firstFloorMinutes) à l'avant-dernier (lastFloorMinutes) ;
+   *  le dernier étage finit quand son boss tombe (finalFloorMaxMinutes : filet de sécurité). */
   floorSpan(n: number): number {
-    return this.cfg.floorMinutes * 60_000 * (n === 1 ? this.cfg.firstFloorFactor : 1);
+    if (n >= this.cfg.finalFloor && n > 1) return this.cfg.finalFloorMaxMinutes * 60_000;
+    return this.ramp(this.cfg.firstFloorMinutes, this.cfg.lastFloorMinutes, n) * 60_000;
   }
 
-  /** Effondrement de l'étage n pour la vague principale : heure fixe depuis le début de la saison. */
-  waveEnd(n: number): number {
-    return (this.state.seasonStart ?? this.now) + this.cfg.floorMinutes * 60_000 * (n + this.cfg.firstFloorFactor - 1);
+  /** Verrou de l'escalier : scellé les N premières minutes de l'étage (dégressif aussi) ; aucun au dernier étage. */
+  lockMs(n: number): number {
+    if (n >= this.cfg.finalFloor && n > 1) return 0;
+    return this.ramp(this.cfg.firstLockMinutes, this.cfg.lastLockMinutes, n) * 60_000;
+  }
+
+  /** De `first` (étage 1) à `last` (avant-dernier étage), en ligne droite, arrondi à 30 s. */
+  private ramp(first: number, last: number, n: number): number {
+    const span = this.cfg.finalFloor - 2;
+    const t = span <= 0 ? 0 : Math.min(1, Math.max(0, (n - 1) / span));
+    return Math.round((first + (last - first) * t) * 2) / 2;
+  }
+
+  /** Fin de saison au plus tard (effondrement du dernier étage, s'il est ouvert). */
+  seasonEndsAt(): number | null {
+    return this.state.floors[this.cfg.finalFloor]?.collapseAt ?? null;
   }
 
   // ----------------------------------------------------------- salon d'attente
@@ -266,8 +279,7 @@ export class Game {
     return !this.cfg.staggered || (floorN + turn) % 2 === 0;
   }
 
-  /** L'escalier se descelle pendant les dernières minutes de l'étage, ou 90 s après la chute du boss si c'est plus tôt
-   *  (jamais avant le début de la saison) : plus de longue attente devant un escalier scellé, boss mort. */
+  /** L'escalier est scellé les premières minutes de l'étage (lockMs), puis ouvert (il faut aussi battre le boss). */
   stairsOpen(f: FloorState): boolean {
     return this.stairsInMs(f) === 0;
   }
@@ -276,10 +288,8 @@ export class Game {
   stairsInMs(f: FloorState): number | null {
     if (f.collapseAt === null) return null;
     if (f.stairsOpened) return 0; // annoncé ouvert : il le reste (même si un vote rallonge l'étage)
-    const open = this.cfg.stairsOpenMinutes * 60_000 * (f.n === 1 ? this.cfg.firstFloorFactor : 1); // l'étage 1, plus long, s'ouvre aussi plus longtemps
-    const scheduled = f.collapseAt - open;
-    const afterBoss = f.bossDownAt !== undefined ? f.bossDownAt + BOSS_TO_STAIRS_MS : Infinity;
-    return Math.max(0, Math.min(scheduled, afterBoss) - this.now);
+    const start = f.startedAt ?? f.collapseAt - this.floorSpan(f.n);
+    return Math.max(0, start + this.lockMs(f.n) - this.now);
   }
 
   /** L'étage le moins profond encore debout : là où arrivent les nouveaux. */
@@ -635,7 +645,7 @@ export class Game {
     const st = this.state;
     if (st.joinsClosed && !st.seasonOver && !st.resurrection && !Object.keys(st.players).length) {
       const deepest = Object.values(st.floors).filter((x) => !x.collapsed).sort((a, b) => b.n - a.n)[0];
-      this.endSeason(deepest ?? ({ n: 1 } as FloorState), true);
+      this.endSeason(deepest ?? ({ n: 1 } as FloorState), 'emptied');
     }
     this.sync();
     return this.out;
@@ -859,7 +869,10 @@ export class Game {
     const f = this.state.floors[floorN];
     m.hp = 0;
     f.monsters = f.monsters.filter((x) => x !== m);
-    if (m.boss) f.bossDownAt ??= this.now;
+    if (m.boss) {
+      f.bossDownAt ??= this.now;
+      if (killer) f.bossKiller ??= killer.key;
+    }
     // Les monstres ordinaires reviennent 3 tours plus tard, ailleurs sur l'étage (le donjon ne se vide jamais)
     if (!m.boss && m.kind !== 'mimique' && m.kind !== 'ogre_dormeur') (f.respawns ??= []).push({ turn: this.state.turn + 5 * this.phases, kind: m.kind, roomId: m.roomId });
     // Un boss lâche toujours un objet, au moins rare, au sol de sa salle : premier arrivé (!pickup), premier servi
@@ -1248,6 +1261,7 @@ export class Game {
       }
       if (!f.stairsOpened && left > 0 && this.stairsOpen(f)) {
         f.stairsOpened = true;
+        if (f.n >= this.cfg.finalFloor) continue; // dernier étage : pas d'escalier, c'est le boss qui ferme la saison
         if (!Object.values(this.state.players).some((p) => p.alive && p.floor === f.n)) continue;
         const boss = f.monsters.some((m) => m.boss && m.hp > 0);
         const last = f.n >= this.cfg.finalFloor;
@@ -1258,11 +1272,15 @@ export class Game {
       }
       if (left <= 0) this.collapse(f);
     }
-    // Fin de saison à heure fixe (n × floorMinutes), même si personne n'a atteint le dernier étage
-    if (!this.state.seasonOver && this.state.seasonStart !== null && this.now >= this.waveEnd(this.cfg.finalFloor)) {
-      const last = this.state.floors[this.cfg.finalFloor];
-      if (last && !last.collapsed) this.collapse(last);
-      else this.endSeason(last ?? { n: this.cfg.finalFloor } as FloorState);
+    // Dernier étage : son boss tombe, la saison est finie ; tous ceux qui y sont encore debout sortent en Légendes
+    // (celui qui l'a abattu en premier)
+    const fin = this.state.floors[this.cfg.finalFloor];
+    if (!this.state.seasonOver && fin && !fin.collapsed && fin.bossDownAt !== undefined) {
+      const standing = Object.values(this.state.players)
+        .filter((p) => p.alive && p.floor === fin.n)
+        .sort((a, b) => Number(b.key === fin.bossKiller) - Number(a.key === fin.bossKiller));
+      for (const p of standing) this.finish(p);
+      this.endSeason(fin, 'boss');
     }
     if (this.state.seasonOver) return; // la saison vient de se terminer : plus rien ne bouge
     // Réapparitions
@@ -1768,7 +1786,8 @@ export class Game {
     p.alive = false; // la suite du tour l'ignore
   }
 
-  private endSeason(f: FloorState, emptied = false) {
+  private endSeason(f: FloorState, why: 'collapse' | 'emptied' | 'boss' = 'collapse') {
+    const emptied = why === 'emptied';
     this.state.seasonOver = true;
     for (const [key, x] of Object.entries(this.state.grandBet.stakes)) if (this.state.wallets[key]) this.state.wallets[key].pts += x.amount; // personne n'est sorti : remboursé
     this.state.grandBet.stakes = {};
@@ -1776,7 +1795,7 @@ export class Game {
     const champs = this.state.champions.map((c) => c.name);
     this.emit({
       floor: f.n, kind: 'systeme', scope: 'global', drama: 200, seasonEnd: true,
-      text: `END OF THE SEASON! ${emptied ? 'Nobody is left alive in the Dungeon, and the gates are sealed.' : `Floor ${f.n} collapses and the Dungeon shuts its doors.`}${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
+      text: `END OF THE SEASON! ${why === 'boss' ? `The boss of floor ${f.n} is dead, and the Dungeon opens its doors one last time.` : emptied ? 'Nobody is left alive in the Dungeon, and the gates are sealed.' : `Floor ${f.n} collapses and the Dungeon shuts its doors.`}${stuck.length ? ` ${stuck.join(', ')} stay locked inside forever (or until next season).` : ''} ${champs.length ? `Legends of the season: ${champs.join(', ')}.` : 'Nobody got out: the Dungeon wins.'}`,
     });
   }
 

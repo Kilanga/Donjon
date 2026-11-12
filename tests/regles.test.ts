@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, type GameConfig } from '../src/server/config.js';
 import { Game, TRAP_SHARE_MAX } from '../src/server/game/engine.js';
 import { makeItem } from '../src/server/game/items.js';
 
-const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, voteEveryMinutes: 0, seed: 7, ...over });
+const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, voteEveryMinutes: 0, seed: 7, ...over });
 const T0 = 1_000_000;
 
 /** Deux joueurs dans une salle normale vide de l'étage 1. */
@@ -106,7 +106,7 @@ describe('pièges et votes de la production', () => {
 describe('crypte et !resurrect', () => {
   /** ana reste sur l'étage 1 qui s'effondre ; bob est déjà à l'étage 2, dans la crypte. */
   function crypt() {
-    const g = new Game(cfg({ floorMinutes: 1 }));
+    const g = new Game(cfg({ firstFloorMinutes: 1, lastFloorMinutes: 1, firstLockMinutes: 0, lastLockMinutes: 0 }));
     g.submit('ana', '!join mage', T0);
     g.submit('bob', '!join knight', T0);
     const bob = g.player('bob')!;

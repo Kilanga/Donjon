@@ -6,10 +6,15 @@ import { DEFAULT_VOICE, type VoiceConfig } from './voice.js';
 export interface GameConfig {
   port: number;
   turnSeconds: number; // durée d'un tour
-  floorMinutes: number; // durée de vie d'un étage avant effondrement (l'étage n tombe n × floorMinutes après le début de la saison)
-  stairsOpenMinutes: number; // l'escalier n'est descellé que pendant les N dernières minutes de l'étage
+  // Chrono des étages, compté depuis l'ouverture de chaque étage (arrivée du premier crawler ; l'étage 1 : coup d'envoi).
+  // Durée et verrou de l'escalier dégressifs, de l'étage 1 à l'avant-dernier ; le dernier étage n'a pas de chrono :
+  // la saison s'y termine quand son boss tombe (finalFloorMaxMinutes : filet de sécurité si personne n'y arrive).
+  firstFloorMinutes: number; // étage 1 : il s'effondre au bout de N minutes
+  lastFloorMinutes: number; // avant-dernier étage : N minutes (les étages entre les deux : dégressif)
+  firstLockMinutes: number; // étage 1 : l'escalier reste scellé les N premières minutes
+  lastLockMinutes: number; // avant-dernier étage : scellé N minutes
+  finalFloorMaxMinutes: number; // dernier étage : effondrement (fin de saison) si le boss tient N minutes
   staggered: boolean;
-  firstFloorFactor: number; // l'étage 1 dure N fois plus longtemps (le temps que tout le monde arrive)
   lobbySeconds: number; // inscriptions : le premier !join ouvre N secondes d'attente, puis la partie repart à zéro pour tous (0 = pas de salon) // tours décalés : les étages pairs jouent une demi-durée de tour après les impairs (une action toutes les turnSeconds/2 sur le stream)
   respawnTurns: number; // tours avant réapparition
   immunitySeconds: number; // immunité JvJ après réapparition
@@ -33,10 +38,12 @@ export interface GameConfig {
 export const DEFAULT_CONFIG: GameConfig = {
   port: 3000,
   turnSeconds: 20,
-  floorMinutes: 15,
-  stairsOpenMinutes: 7.5,
+  firstFloorMinutes: 25,
+  lastFloorMinutes: 15,
+  firstLockMinutes: 10,
+  lastLockMinutes: 5,
+  finalFloorMaxMinutes: 30,
   staggered: true,
-  firstFloorFactor: 2,
   lobbySeconds: 300,
   respawnTurns: 5,
   immunitySeconds: 60,
@@ -71,8 +78,12 @@ export function loadConfig(root = process.cwd()): GameConfig {
   const num = (v: string | undefined) => (v !== undefined && v !== '' ? Number(v) : undefined);
   cfg.port = num(env.PORT) ?? cfg.port;
   cfg.turnSeconds = num(env.TURN_SECONDS) ?? cfg.turnSeconds;
-  cfg.floorMinutes = num(env.FLOOR_MINUTES) ?? cfg.floorMinutes;
-  cfg.stairsOpenMinutes = num(env.STAIRS_OPEN_MINUTES) ?? cfg.stairsOpenMinutes;
+  // Test rapide : FLOOR_MINUTES donne la même durée à tous les étages (verrou : un tiers)
+  const quick = num(env.FLOOR_MINUTES);
+  if (quick !== undefined) {
+    cfg.firstFloorMinutes = cfg.lastFloorMinutes = quick;
+    cfg.firstLockMinutes = cfg.lastLockMinutes = quick / 3;
+  }
   cfg.respawnTurns = num(env.RESPAWN_TURNS) ?? cfg.respawnTurns;
   cfg.immunitySeconds = num(env.IMMUNITY_SECONDS) ?? cfg.immunitySeconds;
   cfg.spectatorKey = env.SPECTATOR_KEY ?? cfg.spectatorKey;

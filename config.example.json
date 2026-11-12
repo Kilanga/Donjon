@@ -1,7 +1,11 @@
 {
   "port": 3000,
   "turnSeconds": 20,
-  "floorMinutes": 15,
+  "firstFloorMinutes": 25,
+  "lastFloorMinutes": 15,
+  "firstLockMinutes": 10,
+  "lastLockMinutes": 5,
+  "finalFloorMaxMinutes": 30,
   "respawnTurns": 5,
   "immunitySeconds": 60,
   "roomsPerPlayer": 2,

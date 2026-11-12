@@ -42,7 +42,7 @@ describe('tours décalés par étage', () => {
   });
 
   it('la saison se termine à heure fixe même si personne n\'atteint le dernier étage', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, seed: 21, staggered: true, floorMinutes: 1, finalFloor: 3, lobbySeconds: 0, firstFloorFactor: 1 });
+    const g = new Game({ ...DEFAULT_CONFIG, seed: 21, staggered: true, firstFloorMinutes: 1, lastFloorMinutes: 1, firstLockMinutes: 0, lastLockMinutes: 0, finalFloor: 3, lobbySeconds: 0 });
     g.submit('ana', '!join', T0);
     let t = T0;
     let over = false;

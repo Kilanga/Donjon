@@ -105,7 +105,8 @@ export interface FloorState {
   warned5?: boolean;
   warned1?: boolean;
   stairsOpened?: boolean;
-  bossDownAt?: number; // boss vaincu : l'escalier se descelle peu après (au lieu d'attendre la fin de l'étage)
+  bossDownAt?: number; // boss vaincu (au dernier étage : fin de la saison)
+  bossKiller?: string; // qui l'a abattu (premier sorti du donjon)
   respawns?: { turn: number; kind: string; roomId?: number }[]; // monstres tués, qui reviennent au tour indiqué // l'annonce « l'escalier se descelle » a été faite
   bossBackTurn?: number; // dernier étage : tour où le gardien de la sortie se relève
   cryptRoom?: number; // la crypte : les tombes des éliminés y attendent qu'un crawler les ressuscite
@@ -176,7 +177,7 @@ export interface GameState {
   grandBet: { open: boolean; stakes: Record<string, { target: string; targetName: string; amount: number }> };
   lobbyUntil: number | null; // salon d'attente : fin des inscriptions (la partie repart alors à zéro pour tous)
   lobbyWarned?: boolean;
-  seasonStart: number | null; // arrivée du premier vrai joueur : l'horloge de la saison (étage n tombe à seasonStart + n × floorMinutes)
+  seasonStart: number | null; // coup d'envoi de la saison (chaque étage a ensuite son propre chrono)
   bounty: { target: string; gold: number; untilTurn: number } | null;
 }
 

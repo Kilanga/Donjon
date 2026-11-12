@@ -132,8 +132,8 @@ export class Host {
     // Les règles, une fois la partie lancée
     if (now - s.seasonStart > RULES_AFTER_MS && this.once(`rules:${s.seasonStart}`)) {
       void this.narrator.announce(
-        'The rules in a nutshell: every floor collapses at a fixed time; a boss guards its stairs, which unseal ninety seconds after the boss falls, or in the last minutes anyway; whoever is still inside when it collapses is out; the chat can vote the dead back; type !help for the commands.',
-        "The rules, darlings: every floor collapses on schedule. A boss guards the stairs: kill it and they open ninety seconds later. Still inside when it falls? You're out, unless the chat votes you back. Lost? Type !help.",
+        'The rules in a nutshell: every floor has its own countdown and collapses when it runs out; its stairs stay sealed for the first minutes and a boss guards them; whoever is still inside when it collapses is out; the chat can vote the dead back; on the last floor, killing the boss ends the season; type !help for the commands.',
+        "The rules, darlings: every floor has a countdown. The stairs stay sealed for a few minutes, and a boss guards them. Still inside when it falls? You're out, unless the chat votes you back. Lost? Type !help.",
         { urgent: true, floor: 1, tone: 'crisp and theatrical, like the opening of a TV show' },
       );
     }
@@ -148,8 +148,9 @@ export class Host {
       if (f.n > 1 && this.once(`floor:${id}`)) {
         const theme = THEME_LABEL[f.theme] ?? f.theme;
         const effect = THEME_EFFECTS[f.theme];
+        const final = f.n >= this.game.cfg.finalFloor;
         void this.narrator.announce(
-          `${list(here.map((p) => p.name))} reached floor ${f.n}. Its theme: ${theme}${effect ? ` (${effect})` : ''}. It collapses in ${minutes(left)} minutes.`,
+          `${list(here.map((p) => p.name))} reached floor ${f.n}${final ? ', THE FINAL FLOOR: when its boss falls, the season ends and everyone still standing walks out a Legend' : ''}. Its theme: ${theme}${effect ? ` (${effect})` : ''}. ${final ? '' : `It collapses in ${minutes(left)} minutes.`}`,
           `Floor ${f.n}, everyone: ${theme}. ${list(here.map((p) => p.name))}, you have ${minutes(left)} minutes. Enjoy the view.`,
           { floor: f.n },
         );
@@ -168,7 +169,7 @@ export class Host {
           { floor: f.n, urgent: true, tone: 'breathless, the final seconds of a game show' },
         );
       }
-      if (f.stairsOpened && left > 0 && this.once(`stairs:${id}`)) {
+      if (f.stairsOpened && left > 0 && f.n < this.game.cfg.finalFloor && this.once(`stairs:${id}`)) {
         const boss = f.monsters.some((m) => m.boss && m.hp > 0);
         void this.narrator.announce(
           `The stairs of floor ${f.n} are unsealed. ${boss ? 'The boss still guards them.' : 'The boss is already down.'} ${minutes(left)} minutes before the collapse.`,

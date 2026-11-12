@@ -324,7 +324,7 @@ function sendState(c: Client) {
     ...game.socialView(c.spectator ? null : key, now),
     seasonOver: game.state.seasonOver,
     joinsClosed: !!game.state.joinsClosed,
-    seasonEndsInSec: game.state.seasonStart !== null && !game.state.seasonOver ? Math.max(0, Math.ceil((game.waveEnd(cfg.finalFloor) - now) / 1000)) : null,
+    seasonEndsInSec: game.state.seasonStart !== null && !game.state.seasonOver ? (game.seasonEndsAt() !== null ? Math.max(0, Math.ceil((game.seasonEndsAt()! - now) / 1000)) : null) : null,
     lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
     ...(c.spectator ? { floors: game.floorsSummary(now), champions: game.state.champions } : {}),
@@ -936,7 +936,7 @@ if (cfg.tunnel) {
 server.listen(cfg.port, cfg.tunnel ? '127.0.0.1' : undefined, () => {
   console.log(`\n  The Dungeon is running on http://localhost:${cfg.port}`);
   console.log(`  Control room (spectator view + game master, DO NOT SHARE): http://localhost:${cfg.port}/?spectateur=${cfg.spectatorKey}`);
-  console.log(`  Turn: ${cfg.turnSeconds} s · floor: ${cfg.floorMinutes} min · Twitch: ${cfg.twitchChannel || 'disabled'}`);
+  console.log(`  Turn: ${cfg.turnSeconds} s · floors: ${cfg.firstFloorMinutes} → ${cfg.lastFloorMinutes} min (stairs sealed ${cfg.firstLockMinutes} → ${cfg.lastLockMinutes} min), final floor: until its boss falls · Twitch: ${cfg.twitchChannel || 'disabled'}`);
   console.log(`  Dungeon AI: ${ai.describe()}`);
   voice.start();
   console.log(`  Victoria's voice: ${cfg.voice.enabled ? 'waiting for the voice service (voix\\demarrer-voix.bat); subtitles until then' : 'off'}`);

@@ -122,9 +122,11 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | Réglage | Défaut | Rôle |
 | --- | --- | --- |
 | `turnSeconds` | 20 | Durée d'un tour (s) ; modifiable aussi depuis la régie |
-| `floorMinutes` | 15 | Durée d'un étage (min) : l'étage n s'effondre (n + firstFloorFactor − 1) × floorMinutes après le coup d'envoi |
-| `firstFloorFactor` | 2 | L'étage 1 dure N fois plus longtemps (30 min par défaut) |
-| `stairsOpenMinutes` | 7.5 | L'escalier se descelle au plus tard ces dernières minutes de l'étage (étage 1 : × firstFloorFactor), ou 90 s après la chute du boss |
+| `firstFloorMinutes` | 25 | Étage 1 : il s'effondre au bout de N minutes (chaque étage a son chrono, lancé à son ouverture) |
+| `lastFloorMinutes` | 15 | Avant-dernier étage (le 7e) : N minutes ; les étages entre les deux sont dégressifs |
+| `firstLockMinutes` | 10 | Étage 1 : escalier scellé les N premières minutes |
+| `lastLockMinutes` | 5 | Avant-dernier étage : escalier scellé N minutes (dégressif entre les deux) |
+| `finalFloorMaxMinutes` | 30 | Dernier étage : pas d'escalier, la saison finit quand son boss tombe ; filet de sécurité au bout de N minutes |
 | `respawnTurns` | 5 | Tours avant réapparition |
 | `immunitySeconds` | 180 | Immunité JvJ après arrivée ou réapparition (s) |
 | `roomsPerPlayer` / `minRooms` | 2 / 20 | Taille des étages |
@@ -134,7 +136,7 @@ Copie `config.example.json` en `config.json` et modifie ce que tu veux :
 | `twitchChannel` | vide | Nom de ta chaîne Twitch pour lire les commandes du chat |
 | `ai` | désactivée | IA du donjon, voir plus bas |
 
-Pour tester vite seul : `"turnSeconds": 5`, `"floorMinutes": 5`, puis `npm run bots -- 6` dans un second terminal.
+Pour tester vite seul : `"turnSeconds": 5`, `"firstFloorMinutes": 5`, `"lastFloorMinutes": 5`, `"firstLockMinutes": 1`, `"lastLockMinutes": 1`, puis `npm run bots -- 6` dans un second terminal.
 
 ## Étages et profondeurs
 
@@ -192,16 +194,22 @@ profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dan
 2. **Salon d'attente** : le premier `!join` ouvre **5 min d'inscriptions** (décompte sur le stream et la page ; rappel à 1 min).
    On peut déjà jouer, mais c'est un échauffement : au coup d'envoi, **tout repart à zéro** (donjon neuf, niveau 1 pour
    tout le monde, PNJ compris, chacun garde sa classe). Réglage `lobbySeconds` (0 = pas de salon).
-3. **La saison** démarre au coup d'envoi, à heure fixe : **l'étage 1 dure 30 min** (le double, `firstFloorFactor`), puis
-   chaque étage tombe **15 min** après le précédent (`floorMinutes`) : fin de saison (étage 8) à 2 h 15. Sur chaque étage,
-   un boss garde l'escalier ; il se descelle **90 s après la chute du boss**, ou au plus tard pendant la seconde moitié
-   de l'étage (les 7 min 30 de la fin, 15 min pour l'étage 1).
+3. **La saison** démarre au coup d'envoi. Chaque étage a **son propre chrono**, lancé à son ouverture (le premier
+   arrivé ; l'étage 1 : le coup d'envoi), et un **escalier scellé** les premières minutes, gardé par un boss :
+
+   | Étage | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+   | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+   | Durée | 25 min | 23 min 30 | 21 min 30 | 20 min | 18 min 30 | 16 min 30 | 15 min | jusqu'à la mort du boss |
+   | Escalier scellé | 10 min | 9 min | 8 min 30 | 7 min 30 | 6 min 30 | 6 min | 5 min | pas d'escalier |
+
+   **Dernier étage** : quand son boss tombe, la saison est finie et tous ceux qui y sont encore debout sortent en
+   Légendes (celui qui l'a abattu en premier). Filet de sécurité : effondrement au bout de 30 min.
 4. **Effondrement** : ceux qui sont encore dans l'étage font **GAME OVER** (ils peuvent refaire `!join` à l'étage 1).
    Seuls les retardataires, l'équipe de fermeture, tombent à l'étage suivant.
 
 **Tours décalés** : chaque étage a des tours de 20 s, mais les étages pairs jouent 10 s après les impairs. Le stream a
 donc une action toutes les 10 s, et la caméra passe d'un étage à l'autre (les deux étages actifs restent chargés en 3D,
-la bascule est instantanée). Réglages : `floorMinutes`, `stairsOpenMinutes`, `staggered` (false pour revenir au tour unique).
+la bascule est instantanée). Réglages : `firstFloorMinutes`, `lastFloorMinutes`, `firstLockMinutes`, `lastLockMinutes`, `finalFloorMaxMinutes`, `staggered` (false pour revenir au tour unique).
 Les monstres tués reviennent 3 tours plus tard ailleurs sur l'étage ; tuer un crawler rapporte moins qu'un monstre.
 
 ## Fin du donjon et Légendes

@@ -4,7 +4,7 @@ import { Game } from '../src/server/game/engine.js';
 import { BotManager } from '../src/server/bots.js';
 
 function setup(target: number, humans: Set<string>, closers = 0, cfg: Partial<typeof DEFAULT_CONFIG> = {}) {
-  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 3, ...cfg });
+  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 3, ...cfg });
   const said: string[] = [];
   const bots = new BotManager(g, {
     submit: (name, text) => void g.submit(name, text),
@@ -75,7 +75,7 @@ describe('PNJ figurants', () => {
 
   it('les retardataires arrivent après le premier joueur, ne descendent jamais et ferment chaque étage jusqu\'à la fin de saison', () => {
     const humans = new Set<string>();
-    const { g, bots } = setup(0, humans, 4, { floorMinutes: 3, finalFloor: 4 });
+    const { g, bots } = setup(0, humans, 4, { firstFloorMinutes: 3, lastFloorMinutes: 3, firstLockMinutes: 0, lastLockMinutes: 0, finalFloor: 4 });
     let t = 1_000_000;
     for (let i = 0; i < 5; i++) {
       bots.afterTurn();

@@ -27,7 +27,7 @@ function fakeNarrator() {
 }
 
 function started() {
-  const g = new Game({ ...DEFAULT_CONFIG, lobbySeconds: 0, seed: 5, floorMinutes: 15 });
+  const g = new Game({ ...DEFAULT_CONFIG, lobbySeconds: 0, seed: 5, firstFloorMinutes: 15, lastFloorMinutes: 15, firstLockMinutes: 7.5, lastLockMinutes: 7.5 });
   g.submit('Kilak', '!join knight', Date.now());
   g.tick(Date.now());
   return g;

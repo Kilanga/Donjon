@@ -7,7 +7,7 @@ const T0 = 1_000_000;
 describe('forgeron', () => {
   it('chaque étage a une forge (safe room sans marchand), à distance de l\'entrée', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
-      const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed });
+      const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed });
       g.submit('ana', '!join', T0);
       for (const n of [1, 2, 3]) {
         const f = g.freshFloor(n);
@@ -22,7 +22,7 @@ describe('forgeron', () => {
   });
 
   it('!forge arme améliore l\'arme (+1 au jet, dé plus gros) contre de l\'or, jusqu\'à +3', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 7 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 7 });
     g.submit('ana', '!join barbare', T0);
     const ana = g.player('ana')!;
     const f = g.floor(1)!;
@@ -50,7 +50,7 @@ describe('forgeron', () => {
   });
 
   it('pas de forge hors de la forge, et pas d\'achat dans la forge', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 7 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 7 });
     g.submit('ana', '!join', T0);
     expect(g.submit('ana', '!forge', T0).ok).toBe(false); // dans la safe room d'entrée
   });

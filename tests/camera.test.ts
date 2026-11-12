@@ -4,7 +4,7 @@ import { Game } from '../src/server/game/engine.js';
 
 describe('prévision de la caméra', () => {
   it('désigne la salle où un vrai joueur va attaquer, et la salle d\'arrivée d\'un joueur qui entre chez le boss', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 5 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 5 });
     const T = 1_000_000;
     g.submit('ana', '!join barbare', T);
     g.submit('bob', '!join mage', T);
@@ -27,7 +27,7 @@ describe('prévision de la caméra', () => {
   });
 
   it('ne prévoit rien quand personne ne fait rien d\'intéressant', () => {
-    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 5 });
+    const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 5 });
     g.submit('ana', '!join', 1_000_000);
     const ana = g.player('ana')!;
     ana.roomId = g.floor(1)!.spawnRoom;

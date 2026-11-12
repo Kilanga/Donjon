@@ -12,7 +12,7 @@ let id = 0;
 const nid = () => `s${++id}`;
 
 function trial(cls: (typeof classes)[number], n: number, seed: number) {
-  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed, bots: 0 });
+  const g = new Game({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed, bots: 0 });
   let t = 1_000_000;
   g.submit('hero', `!join ${cls}`, t);
   const p = g.player('hero')!;

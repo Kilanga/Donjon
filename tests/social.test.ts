@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from '../src/server/config.js';
 import { Game } from '../src/server/game/engine.js';
 
 const T0 = 1_000_000;
-const cfg = { ...DEFAULT_CONFIG, seed: 41, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, floorMinutes: 1, stairsOpenMinutes: 0.5 };
+const cfg = { ...DEFAULT_CONFIG, seed: 41, staggered: false, lobbySeconds: 0, firstFloorMinutes: 1, lastFloorMinutes: 1, firstLockMinutes: 0.5, lastLockMinutes: 0.5 };
 
 function collapseFloor1(g: Game) {
   let t = T0;
@@ -81,7 +81,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
   });
 
   it('pari éclair sur un boss : les gagnants se partagent la cagnotte + 50 %', () => {
-    const g = new Game({ ...cfg, floorMinutes: 10, stairsOpenMinutes: 5 });
+    const g = new Game({ ...cfg, firstFloorMinutes: 10, lastFloorMinutes: 10, firstLockMinutes: 5, lastLockMinutes: 5 });
     g.submit('ana', '!join barbare', T0);
     const f = g.floor(1)!;
     const boss = f.monsters.find((m) => m.boss)!;
@@ -103,7 +103,7 @@ describe('cimetière, résurrection, paris et sponsors', () => {
   });
 
   it('grand pari : le premier à sortir rapporte la cagnotte + 100 points', () => {
-    const g = new Game({ ...cfg, finalFloor: 1, floorMinutes: 10, stairsOpenMinutes: 10 });
+    const g = new Game({ ...cfg, finalFloor: 1, firstFloorMinutes: 10, lastFloorMinutes: 10, firstLockMinutes: 0, lastLockMinutes: 0 });
     g.submit('ana', '!join', T0);
     g.submit('bob', '!join', T0);
     expect(g.submit('v1', '!parie ana 40', T0).ok).toBe(true);

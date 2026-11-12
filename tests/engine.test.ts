@@ -5,7 +5,7 @@ import { bfs, generateFloor } from '../src/server/game/dungeon.js';
 import { Game, xpNext } from '../src/server/game/engine.js';
 import { Rng } from '../src/server/game/rng.js';
 
-const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, firstFloorFactor: 1, seed: 42, ...over });
+const cfg = (over: Partial<GameConfig> = {}): GameConfig => ({ ...DEFAULT_CONFIG, staggered: false, lobbySeconds: 0, seed: 42, ...over });
 const T0 = 1_000_000;
 
 function setup(over: Partial<GameConfig> = {}) {
@@ -181,7 +181,7 @@ describe('progression', () => {
 
 describe('étages', () => {
   it('effondrement de l\'étage 1 : GAME OVER pour les joueurs restés, puis portes scellées (plus de !join, PNJ compris)', () => {
-    const g = setup({ floorMinutes: 1, respawnTurns: 1 });
+    const g = setup({ firstFloorMinutes: 1, lastFloorMinutes: 1, firstLockMinutes: 0, lastLockMinutes: 0, respawnTurns: 1 });
     g.submit('a', '!join', T0);
     const ev = g.tick(T0 + 61_000);
     expect(ev.some((e) => /COLLAPSES/.test(e.text) && /GAME OVER for a/.test(e.text) && /SEALED/.test(e.text))).toBe(true);
@@ -199,7 +199,7 @@ describe('étages', () => {
   });
 
   it('effondrement : un retardataire, lui, tombe vivant à l\'étage suivant (PV et or perdus, équipement gardé)', () => {
-    const g = setup({ floorMinutes: 1, respawnTurns: 1 });
+    const g = setup({ firstFloorMinutes: 1, lastFloorMinutes: 1, firstLockMinutes: 0, lastLockMinutes: 0, respawnTurns: 1 });
     g.submit('a', '!join', T0);
     g.joinBot('Firmin', 'barbare', true);
     const p = g.player('Firmin')!;
@@ -214,19 +214,24 @@ describe('étages', () => {
     expect(p.stunned).toBe(true);
   });
 
-  it('boss vaincu : l\'escalier se descelle 90 s plus tard, sans attendre la fin de l\'étage', () => {
-    const g = setup();
+  it('dernier étage : son boss tombe, la saison est finie et ceux qui sont debout sortent en Légendes', () => {
+    const g = setup({ finalFloor: 2 });
     g.submit('a', '!join', T0);
+    g.submit('b', '!join', T0);
+    const f2 = g.freshFloor(2);
+    for (const k of ['a', 'b']) {
+      const p = g.player(k)!;
+      p.floor = 2;
+      p.roomId = f2.spawnRoom;
+    }
     g.tick(T0 + 20_000);
-    const f = g.floor(1)!;
-    expect(g.stairsInMs(f)).toBeGreaterThan(5 * 60_000);
-    const boss = f.monsters.find((m) => m.boss)!;
-    boss.hp = 1;
-    (g as unknown as { killMonster: (m: unknown, n: number, k: null) => void }).killMonster(boss, 1, null);
-    expect(f.bossDownAt).toBeDefined();
-    expect(Math.round(g.stairsInMs(f)! / 1000)).toBe(90);
-    const ev = g.tick(T0 + 20_000 + 91_000);
-    expect(ev.some((e) => /UNSEALED/.test(e.text))).toBe(true);
+    expect(g.lockMs(2)).toBe(0);
+    const boss = f2.monsters.find((m) => m.boss)!;
+    (g as unknown as { killMonster: (m: unknown, n: number, k: unknown) => void }).killMonster(boss, 2, g.player('b'));
+    const ev = g.tick(T0 + 40_000);
+    expect(ev.some((e) => /END OF THE SEASON! The boss of floor 2 is dead/.test(e.text))).toBe(true);
+    expect(g.state.seasonOver).toBe(true);
+    expect(g.state.champions.map((c) => c.name)).toEqual(['b', 'a']); // celui qui l'a abattu d'abord
   });
 
   it('on ne descend pas tant que le boss est vivant', () => {
@@ -242,13 +247,13 @@ describe('étages', () => {
     p.alive = true;
     p.hp = p.maxHp;
     p.roomId = f.bossRoom;
-    // Boss vaincu, mais l'escalier est encore scellé (première moitié de l'étage)
+    // Boss vaincu, mais l'escalier est encore scellé (les 10 premières minutes de l'étage)
     g.submit('a', '!descendre', T0 + 20_000);
     g.tick(T0 + 40_000);
     expect(p.floor).toBe(1);
     expect(g.stairsInMs(f)).toBeGreaterThan(0);
-    // Il se descelle à mi-parcours (floorMinutes − stairsOpenMinutes), avec une annonce
-    const open = T0 + (DEFAULT_CONFIG.floorMinutes - DEFAULT_CONFIG.stairsOpenMinutes) * 60_000;
+    // Il se descelle au bout de firstLockMinutes, avec une annonce
+    const open = T0 + DEFAULT_CONFIG.firstLockMinutes * 60_000;
     const ev = g.tick(open + 1000);
     expect(ev.some((e) => /UNSEALED/.test(e.text))).toBe(true);
     p.alive = true;
@@ -259,13 +264,12 @@ describe('étages', () => {
     expect(p.floor).toBe(2);
   });
 
-  it('les étages tombent à heure fixe depuis le début de la saison, quel que soit le rythme', () => {
+  it('chaque étage a son propre chrono, compté depuis son ouverture', () => {
     const g = setup();
-    const F = DEFAULT_CONFIG.floorMinutes * 60_000;
     g.submit('a', '!join', T0);
     expect(g.state.seasonStart).toBe(T0);
-    expect(g.floor(1)!.collapseAt).toBe(T0 + F);
-    // Quelqu'un arrive très tôt à l'étage 3 : il tombe quand même à T0 + 3F
+    expect(g.floor(1)!.collapseAt).toBe(T0 + g.floorSpan(1));
+    // Quelqu'un ouvre l'étage 3 à T0 + 100 s : il tombe 21 min 30 plus tard
     const p = g.player('a')!;
     const f3 = g.freshFloor(3);
     p.floor = 3;
@@ -278,7 +282,7 @@ describe('étages', () => {
     p.respawnIn = 1;
     p.deathTurn = -1;
     g.tick(T0 + 100_000);
-    expect(g.floor(3)!.collapseAt).toBe(T0 + 3 * F);
+    expect(g.floor(3)!.collapseAt).toBe(T0 + 100_000 + g.floorSpan(3));
   });
 });
 
