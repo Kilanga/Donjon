@@ -397,7 +397,9 @@ function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
 }
 
 /** Étagère murale du marchand, remplie de fioles bien alignées. `along` : 'x' (mur nord) ou 'z' (mur ouest). */
-function shelf(g: THREE.Group, x: number, z: number, along: 'x' | 'z') {
+const BOOK_MATS = [0x7a2a24, 0x2c4a6e, 0x3d5a2a, 0x6b4a1e, 0x4a2c5a, 0x8a6a3a].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }));
+
+function shelf(g: THREE.Group, x: number, z: number, along: 'x' | 'z', books = false) {
   const L = 2.6;
   const D = 0.6;
   const sx = along === 'x' ? L : D;
@@ -410,6 +412,21 @@ function shelf(g: THREE.Group, x: number, z: number, along: 'x' | 'z') {
   const colors = [0xd23a3a, 0x3a6fd2, 0x3fae5f, 0xe0b030, 0xa060e0];
   [0.35, 1.1, 1.85].forEach((y, row) => {
     g.add(part(BOX, WOOD, x, y, z, sx, 0.09, sz));
+    if (books) {
+      // Une rangée de livres serrés, de hauteurs et de couleurs différentes (bibliothèque)
+      let t = -L / 2 + 0.2;
+      let i = row * 3;
+      while (t < L / 2 - 0.25) {
+        const w = 0.11 + ((i * 7) % 5) * 0.02;
+        const h = 0.45 + ((i * 3) % 4) * 0.06;
+        const bx = along === 'x' ? x + t + w / 2 : x;
+        const bz = along === 'z' ? z + t + w / 2 : z;
+        g.add(part(BOX, BOOK_MATS[i % BOOK_MATS.length], bx, y + 0.045 + h / 2, bz, along === 'x' ? w : D * 0.8, h, along === 'x' ? D * 0.8 : w));
+        t += w + 0.015;
+        i++;
+      }
+      return;
+    }
     const n = 5;
     for (let i = 0; i < n; i++) {
       const t = -L / 2 + 0.35 + (i * (L - 0.7)) / (n - 1);
@@ -617,8 +634,8 @@ export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: numbe
     }
     case 'bibliotheque': {
       // Deux étagères contre le mur nord, le pupitre et son grimoire ouvert au milieu (comme sur la carte 2D)
-      shelf(g, cx - 2.4, cz - HALF + 0.75, 'x');
-      shelf(g, cx + 2.4, cz - HALF + 0.75, 'x');
+      shelf(g, cx - 2.4, cz - HALF + 0.75, 'x', true);
+      shelf(g, cx + 2.4, cz - HALF + 0.75, 'x', true);
       g.add(part(BOX, WOOD_DARK, cx, 0.55, cz - 3.4, 0.25, 1.1, 0.25));
       g.add(part(BOX, WOOD, cx, 1.15, cz - 3.4, 1.1, 0.12, 0.7));
       g.add(part(BOX, PAPER, cx, 1.24, cz - 3.4, 0.9, 0.04, 0.55));
