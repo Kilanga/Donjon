@@ -227,6 +227,37 @@ describe('salles spéciales', () => {
     }
   });
 
+  it('tripot : 5 × l\'étage la partie, trois parties par crawler, on gagne le double ou on perd la mise', () => {
+    const { g, p } = featured('tripot');
+    p.gold = 100;
+    const golds: number[] = [];
+    for (let i = 1; i <= 4; i++) {
+      act(g, T0 + i * 20_000);
+      golds.push(p.gold);
+    }
+    const deltas = golds.map((x, i) => x - (i ? golds[i - 1] : 100));
+    for (const d of deltas.slice(0, 3)) expect([10, 0, -5]).toContain(d);
+    expect(deltas[3]).toBe(0); // quatrième partie refusée
+  });
+
+  it('bibliothèque : une lecture par crawler (XP, ou page maudite)', () => {
+    const { g, p } = featured('bibliotheque');
+    const xp = p.xp;
+    const hp = p.hp;
+    const ev = act(g, T0 + 20_000);
+    expect(ev.some((e) => /grimoire|cursed page/.test(e.text))).toBe(true);
+    expect(p.xp > xp || p.hp < hp || ev.some((e) => /Nothing sticks/.test(e.text))).toBe(true);
+    act(g, T0 + 40_000);
+  });
+
+  it('portail : il envoie ailleurs sur l\'étage (ou recrache)', () => {
+    const { g, p, r } = featured('portail');
+    const hp = p.hp;
+    const ev = act(g, T0 + 20_000);
+    expect(p.roomId !== r.id || p.hp < hp).toBe(true);
+    expect(ev.some((e) => /portal/.test(e.text))).toBe(true);
+  });
+
   it('le puits coûte 10 × l\'étage', () => {
     const { g, p } = featured('puits');
     p.gold = 25;

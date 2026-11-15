@@ -144,7 +144,12 @@ Chaque étage est généré au hasard quand le premier joueur y arrive : plan, s
 et boss. Il grandit avec le nombre de joueurs (20 salles minimum, 2 par joueur) et durcit à chaque niveau (PV, attaque,
 défense, nombre de monstres par salle), avec plus d'or et d'XP à la clé.
 
-- **Nouvelles créatures en profondeur :** orques (étage 2), chefs de guerre et nécromanciens (3), yétis et chamans (4),
+- **Salles à !search (2 ou 3 par étage) :** autel (bénédiction ou malédiction, Charisme), fontaine (soin, 1 fois sur 10
+  empoisonnée), puits à vœux (10 × l'étage, triple à chaque vœu), prisonnier (récompense, ou piège), ogre endormi (voler son
+  or, Agilité), tripot (le croupier squelette : 5 × l'étage la partie, trois parties, on double ou on perd, Charisme),
+  bibliothèque (le grimoire : XP, parfois le plan de l'étage, ou une page maudite, Intelligence), portail instable
+  (une salle au hasard de l'étage, parfois celle du boss, parfois il recrache).
+- **Nouvelles créatures en profondeur :** orques (étage 2), nécromanciens (2), guerriers orques (4), yétis et chamans (4),
   horreurs des marais et golems de boue (5), hommes-lézards assassins (6). Plus on descend, plus les monstres faibles disparaissent.
 - **Boss :** Grondak, Moragh et Baal-Zéphor aux étages 1 à 3, puis Grimfrost le Yéti Ancien (4), Vorthrax le dragon (5)
   Gorgoth le Crapaud-Roi (6), Malzeth la Liche (7) et Nyxareth, Dévoreuse d'Étages (8). Gargouilles et chevaliers déchus

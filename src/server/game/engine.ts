@@ -170,7 +170,7 @@ export class Game {
         crypt.desc = 'A crypt. Fresh graves line the walls, and some of them still seem to be waiting for someone.';
       }
       // Salles spéciales : 2 par étage (3 sur les grands), toutes différentes
-      const kinds = this.rng.shuffle<RoomFeature>(['autel', 'fontaine', 'puits', 'prisonnier', 'ogre']).slice(0, f.rooms.length >= 30 ? 3 : 2);
+      const kinds = this.rng.shuffle<RoomFeature>(['autel', 'fontaine', 'puits', 'prisonnier', 'ogre', 'tripot', 'bibliotheque', 'portail']).slice(0, f.rooms.length >= 30 ? 3 : 2);
       const spots = this.rng.shuffle(f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom && r.id !== f.cryptRoom));
       kinds.forEach((k, i) => {
         const r = spots[i];
@@ -1547,6 +1547,63 @@ export class Game {
         r.desc = 'Broken chains hang from the wall. It was a trap all along.';
         return ev(`${p.name} frees the prisoner… who drops the act: it's ${m.name}! It was a trap!`, 50, 'combat');
       }
+      case 'tripot': {
+        // Le croupier squelette : trois parties par crawler, d20 + Charisme contre d20 + l'étage
+        const plays = used.filter((k) => k === p.key).length;
+        if (plays >= 3) return this.say(p, 'The croupier taps the table: three games per crawler. The house always wins in the end.');
+        const stake = 5 * f.n;
+        if (p.gold < stake) return this.say(p, `A game costs ${stake} gold. You have ${p.gold}. The skeleton rattles with laughter.`);
+        used.push(p.key);
+        p.gold -= stake;
+        const me = this.check(p, 'cha', 0).total;
+        const him = this.rng.die(20) + f.n;
+        if (me > him) {
+          p.gold += stake * 3;
+          return ev(`${p.name} rolls ${me} against the skeleton croupier's ${him}: WIN! +${stake * 2} gold. The skeleton's jaw drops. Literally.`, 20, 'loot');
+        }
+        if (me === him) {
+          p.gold += stake;
+          return ev(`${p.name} and the skeleton croupier both roll ${me}. A draw: the stake goes back. Nobody is happy.`, 5);
+        }
+        return ev(`${p.name} rolls ${me} against the skeleton croupier's ${him} and loses ${stake} gold. The house wins. The house always wins.`, 10);
+      }
+      case 'bibliotheque': {
+        if (used.includes(p.key)) return this.say(p, 'You already read this grimoire. The rest is footnotes.');
+        used.push(p.key);
+        const dc = 11 + f.n;
+        const c = this.check(p, 'int', dc);
+        if (c.ok) {
+          const xp = 25 * f.n;
+          this.gainXp(p, xp);
+          // Bonne lecture : le plan de l'étage, dans la marge
+          if (c.total >= dc + 5) {
+            for (const room of f.rooms) (p.discovered[f.n] ??= []).includes(room.id) || p.discovered[f.n].push(room.id);
+            return ev(`${p.name} studies the grimoire (${c.total}) and finds a map of the whole floor scribbled in the margin! +${xp} XP.`, 30, 'niveau');
+          }
+          return ev(`${p.name} studies the grimoire (${c.total}) and actually learns something. +${xp} XP.`, 15, 'niveau');
+        }
+        if (c.total <= dc - 5) {
+          ev(`${p.name} reads a cursed page (${c.total}). The words bite back.`, 30, 'piege');
+          return this.damagePlayer(p, 2 + f.n, 'a cursed grimoire', null);
+        }
+        return ev(`${p.name} tries to read the grimoire (${c.total}). Nothing sticks. Pictures would have helped.`, 5);
+      }
+      case 'portail': {
+        // Un pas dans le portail : une salle au hasard de l'étage ; parfois la salle du boss, parfois il recrache
+        const roll = this.rng.next();
+        if (roll < 0.1) {
+          ev(`${p.name} steps into the portal… and gets spat back out, slightly inside out.`, 30, 'piege');
+          return this.damagePlayer(p, this.rng.die(4) + f.n, 'an unstable portal', null);
+        }
+        const boss = f.rooms[f.bossRoom];
+        const pool = f.rooms.filter((x) => x.id !== r.id && x.type !== 'boss');
+        const target = roll < 0.3 && boss ? boss : this.rng.pick(pool.length ? pool : f.rooms);
+        p.roomId = target.id;
+        this.discover(p);
+        this.emit({ floor: f.n, roomId: r.id, kind: 'drole', scope: 'etage', actors: [p.key], drama: target.type === 'boss' ? 45 : 15,
+          text: target.type === 'boss' ? `${p.name} steps into the portal and lands right in the BOSS ROOM. Oops.` : `${p.name} steps into the portal and vanishes… reappearing in room ${target.id}.` });
+        return;
+      }
       case 'ogre': {
         const ogre = f.monsters.find((m) => m.kind === 'ogre_dormeur' && m.roomId === r.id && m.hp > 0);
         if (!ogre) return this.say(p, 'Only crumbs and fleas are left on the pile.');
@@ -2222,7 +2279,7 @@ export class Game {
     if (r.feature) {
       v.feature = r.feature;
       const used = r.featureUsedBy ?? [];
-      v.featureDone = r.feature === 'prisonnier' ? used.length > 0 : r.feature === 'ogre' ? !f.monsters.some((m) => m.roomId === r.id && m.asleep) : r.feature === 'puits' ? false : !!viewer && used.includes(viewer.key);
+      v.featureDone = r.feature === 'prisonnier' ? used.length > 0 : r.feature === 'ogre' ? !f.monsters.some((m) => m.roomId === r.id && m.asleep) : r.feature === 'puits' || r.feature === 'portail' ? false : r.feature === 'tripot' ? !!viewer && used.filter((k) => k === viewer.key).length >= 3 : !!viewer && used.includes(viewer.key);
       if (r.feature === 'puits' && viewer) v.featureCost = this.wishCost(f, used, viewer.key);
     }
     if (f.cryptRoom === r.id) v.crypt = this.state.graveyard.filter((g) => g.cryptFloor === f.n).map((g) => ({ no: g.no, name: g.name, level: g.snap.level, cls: g.snap.cls }));

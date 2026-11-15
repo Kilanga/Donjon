@@ -66,7 +66,7 @@ export interface MonsterState {
   aggro: string | null; // dernier joueur qui l'a frappé
 }
 
-export type RoomFeature = 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre';
+export type RoomFeature = 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre' | 'tripot' | 'bibliotheque' | 'portail';
 
 export interface RoomState {
   id: number;

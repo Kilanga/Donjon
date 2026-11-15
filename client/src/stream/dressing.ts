@@ -572,6 +572,11 @@ const CLOTH = new THREE.MeshStandardMaterial({ color: 0x8a1c22, roughness: 0.9 }
 const GOLD = new THREE.MeshStandardMaterial({ color: 0xd8a830, roughness: 0.35, metalness: 0.7 });
 const GLOW_WATER = new THREE.MeshStandardMaterial({ color: 0x3ab0d0, emissive: 0x1a6a8a, emissiveIntensity: 0.9, roughness: 0.05 });
 const DARK_WATER = new THREE.MeshStandardMaterial({ color: 0x0c1c28, roughness: 0.05, metalness: 0.5 });
+const PAPER = new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.9 });
+const PORTAL_RING = new THREE.MeshStandardMaterial({ color: 0x8a5ad8, emissive: 0x7b3fe0, emissiveIntensity: 1.2, roughness: 0.3 });
+const PORTAL_VOID = new THREE.MeshBasicMaterial({ color: 0x9b5de5, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+const PORTAL_GEO = new THREE.TorusGeometry(1.3, 0.16, 10, 32);
+const PORTAL_DISC = new THREE.CircleGeometry(1.2, 32);
 
 /** Renvoie l'endroit où se tient le prisonnier (pour le personnage), sinon null. */
 export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: number): THREE.Vector3 | null {
@@ -610,6 +615,25 @@ export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: numbe
       g.add(part(CYL, WOOD, cx + 0.3, 1.7, wz, 0.22, 0.32, 0.22));
       return null;
     }
+    case 'bibliotheque': {
+      // Deux étagères contre le mur nord, le pupitre et son grimoire ouvert au milieu (comme sur la carte 2D)
+      shelf(g, cx - 2.4, cz - HALF + 0.75, 'x');
+      shelf(g, cx + 2.4, cz - HALF + 0.75, 'x');
+      g.add(part(BOX, WOOD_DARK, cx, 0.55, cz - 3.4, 0.25, 1.1, 0.25));
+      g.add(part(BOX, WOOD, cx, 1.15, cz - 3.4, 1.1, 0.12, 0.7));
+      g.add(part(BOX, PAPER, cx, 1.24, cz - 3.4, 0.9, 0.04, 0.55));
+      return null;
+    }
+    case 'portail': {
+      // Un anneau violet debout contre le mur nord, le vide qui tourbillonne dedans, deux pierres pour le caler
+      const ring = part(PORTAL_GEO, PORTAL_RING, cx, 1.75, cz - 4.5);
+      g.add(ring);
+      g.add(part(PORTAL_DISC, PORTAL_VOID, cx, 1.75, cz - 4.5));
+      for (const dx of [-1.2, 1.2]) g.add(part(BOX, F_STONE, cx + dx, 0.25, cz - 4.5, 0.6, 0.5, 0.6));
+      return null;
+    }
+    case 'tripot':
+      return new THREE.Vector3(cx, 0, cz - 4.7); // le croupier squelette, derrière sa table
     case 'prisonnier': {
       for (const dx of [-0.55, 0.55]) {
         for (let i = 0; i < 7; i++) {

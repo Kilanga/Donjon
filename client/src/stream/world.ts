@@ -416,7 +416,13 @@ export class World {
       // Salles spéciales : autel, fontaine, puits, prisonnier enchaîné, trésor de l'ogre
       if (r.feature) {
         const spot = buildFeature(extra, r.feature, c.x, c.z);
-        if (spot) keepers.push({ pos: spot, model: 'voleur', tint: 0x9a9088, prisonerRoom: r.id });
+        if (spot && r.feature === 'tripot') {
+          // Le tripot : la table de jeu, le croupier squelette derrière, un tabouret devant, un chandelier
+          b.add('table_long_decorated_A', c.x, 0, c.z - 3.3, Math.PI / 2);
+          b.add('stool', c.x, 0, c.z - 1.9);
+          b.add('candle_triple', c.x + 2.7, 0, c.z - 5.0);
+          keepers.push({ pos: spot, model: 'sk_minion' });
+        } else if (spot) keepers.push({ pos: spot, model: 'voleur', tint: 0x9a9088, prisonerRoom: r.id });
         if (r.feature === 'ogre') for (const [dx, s] of [[-1.2, 0.8], [0.3, 1], [1.4, 0.7]] as const) b.add('coin_stack_large', c.x + dx, 0, c.z - HALF + 1.6, dx, [s, s, s]);
         if (r.feature === 'autel') this.addFlame(new THREE.Vector3(c.x, 1.8, c.z - HALF + 1.6), 0.2, 0.5);
       }
@@ -1283,7 +1289,7 @@ export class World {
 export function roomLabel(r: RoomView): string {
   if (r.forge) return 'Forge';
   if (r.crypt) return `Crypt ${r.id}`;
-  if (r.feature) return `${{ autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', ogre: 'Ogre lair' }[r.feature]} ${r.id}`;
+  if (r.feature) return `${{ autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', tripot: 'Gambling den', bibliotheque: 'Library', portail: 'Unstable portal', ogre: 'Ogre lair' }[r.feature]} ${r.id}`;
   return { normale: 'Room', safe: 'Safe room', piege: 'Trapped room', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' }[r.type] + ` ${r.id}`;
 }
 

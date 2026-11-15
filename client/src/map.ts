@@ -645,6 +645,21 @@ export class MapRenderer {
       } else if (r.feature === 'prisonnier') {
         drawChains(ctx, X(0), wallY + PX, Y(-0.817));
         if (!r.featureDone) put('npc_prisoner', 0, -0.817);
+      } else if (r.feature === 'tripot') {
+        // Le tripot : la table de jeu au nord, le croupier squelette derrière, une chaise devant, l'or et les dés dessus
+        put('mon_squelette', 0, -0.783);
+        put('dec_table', 0, -0.55);
+        put('dec_chair', 0, -0.317);
+        put('dec_candelabra', 0.45, -0.833);
+      } else if (r.feature === 'bibliotheque') {
+        // La bibliothèque : deux étagères contre le mur nord, le pupitre au milieu avec le grimoire ouvert
+        put('dec_bookshelf', -0.4, -0.875);
+        put('dec_bookshelf', 0.4, -0.875);
+        drawLectern(ctx, X(0), Y(-0.567));
+        put('dec_candle', 0.183, -0.6);
+      } else if (r.feature === 'portail') {
+        // Le portail instable : un anneau violet contre le mur nord
+        drawPortal(ctx, X(0), Y(-0.75), t);
       } else if (r.feature === 'ogre') {
         put('gold_pile', -0.2, -0.733);
         put('gold_pile', 0.05, -0.733);
@@ -889,7 +904,7 @@ export class MapRenderer {
     if (r.feature) {
       // Salles spéciales : pastille turquoise (estompée une fois utilisée)
       color = '#3fa7a0';
-      icon = { autel: 'flask_big_red', fontaine: 'flask_big_blue', puits: 'coin_anim_f0', prisonnier: 'ui_heart_empty', ogre: 'ogre_idle_anim_f0' }[r.feature];
+      icon = { autel: 'flask_big_red', fontaine: 'flask_big_blue', puits: 'coin_anim_f0', prisonnier: 'ui_heart_empty', ogre: 'ogre_idle_anim_f0', tripot: 'mon_squelette', bibliotheque: 'it_parchemin', portail: 'dec_statue' }[r.feature] ?? null;
       dim = !!r.featureDone;
     }
     if (r.stairs) icon = null; // l'escalier a déjà son panneau
@@ -1174,3 +1189,42 @@ function drawChains(ctx: CanvasRenderingContext2D, x: number, y0: number, y1: nu
 }
 
 export type { MonsterView, PlayerPublic };
+
+/** Pupitre et grimoire ouvert (bibliothèque). */
+function drawLectern(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save();
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x - 2, y - 2, 4, 12); // pied
+  ctx.fillStyle = '#854c30';
+  ctx.fillRect(x - 9, y - 6, 18, 6); // plateau
+  ctx.fillStyle = '#deeed6';
+  ctx.fillRect(x - 8, y - 9, 7, 5); // pages
+  ctx.fillRect(x + 1, y - 9, 7, 5);
+  ctx.fillStyle = '#757161';
+  ctx.fillRect(x - 6, y - 8, 4, 1);
+  ctx.fillRect(x + 2, y - 8, 4, 1);
+  ctx.restore();
+}
+
+/** Portail instable : anneau violet qui pulse (même place qu'en 3D). */
+function drawPortal(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  const pulse = 0.75 + 0.25 * Math.sin(t / 300);
+  ctx.globalAlpha = 0.35 * pulse;
+  ctx.fillStyle = '#9b5de5';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 10, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#c38bff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 11, 16, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#4e4a4e';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 14, 19, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}

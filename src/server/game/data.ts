@@ -133,6 +133,9 @@ export const FEATURE_DESC: Record<string, string> = {
   puits: 'A wishing well. !search to throw in some gold (10 × the floor) and make a wish. Each extra wish costs you triple the last one.',
   prisonnier: 'Someone is chained to the wall, begging. !search to free them. Probably a good idea.',
   ogre: 'An ogre is snoring on a pile of loot. !search to steal some of it (Dexterity). Or wake him up the hard way.',
+  tripot: 'A skeleton croupier sits behind a dice table. !search to bet against him (Charisma): three games per crawler.',
+  bibliotheque: 'Dusty shelves, a lectern, an open grimoire. !search to study it (Intelligence): knowledge, or a cursed page.',
+  portail: 'An unstable portal hums against the wall. !search to step through: it sends you somewhere on this floor. Somewhere.',
 };
 export const SLEEPING_OGRE: MonsterTpl = { kind: 'ogre_dormeur', names: ['Snorlug, the Sleeping Ogre'], sprite: 'ogre_idle_anim', hp: 30, atk: 5, def: 2, dmg: 9, xp: 160, gold: [30, 60], minFloor: 1 };
 
