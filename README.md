@@ -193,7 +193,7 @@ enclume, forgeron nain). `!forge` donne les prix, `!forge arme` (+1 au jet et d�
 `!forge armure` (+1 défense) améliore l'équipement porté, jusqu'à +3. Le prix monte à chaque niveau et avec la
 profondeur (30 / 55 / 80 po à l'étage 1). Sur la page joueur, deux boutons dans la forge.
 
-## Rythme d'une saison (≈ 1 h 35 avec le salon)
+## Rythme d'une saison (≈ 1 h 15 à 2 h, selon les meneurs)
 
 1. **Échauffement** : tant qu'aucun vrai joueur n'est là, les PNJ font vivre le donjon.
 2. **Salon d'attente** : le premier `!join` ouvre **5 min d'inscriptions** (décompte sur le stream et la page ; rappel à 1 min).
@@ -217,253 +217,32 @@ donc une action toutes les 10 s, et la caméra passe d'un étage à l'autre (les
 la bascule est instantanée). Réglages : `firstFloorMinutes`, `lastFloorMinutes`, `firstLockMinutes`, `lastLockMinutes`, `finalFloorMaxMinutes`, `staggered` (false pour revenir au tour unique).
 Les monstres tués reviennent 3 tours plus tard ailleurs sur l'étage ; tuer un crawler rapporte moins qu'un monstre.
 
-## Fin du donjon et Légendes
+## Fin du donjon, champion et Légendes
 
-Le **dernier étage** (8 par défaut, réglable : `"finalFloor": 6` dans `config.json` ou `FINAL_FLOOR=6`) a son chrono
-comme les autres, mais **son effondrement termine la saison** : la partie se fige, le stream affiche « FIN DE LA SAISON »
-avec les Légendes, et les commandes répondent que la saison est finie (« Nouvelle partie » dans la régie pour recommencer).
-Son boss garde la **sortie** : une fois vaincu, la sortie reste ouverte **6 tours** — `!descendre` dans sa salle fait sortir
-du donjon et entrer dans la **Légende** (carton « VICTOIRE ! » sur le stream). Ensuite le gardien se relève : les suivants
-devront le battre à leur tour, pas de passage gratuit.
+Le **dernier étage** (8 par défaut, réglable : `"finalFloor": 6` dans `config.json` ou `FINAL_FLOOR=6`) n'a pas d'escalier :
+**15 min pour tuer son boss**. S'il tombe, la saison est finie et tous ceux qui y sont encore debout sortent en **Légendes**
+(celui qui l'a abattu en premier). S'il tient jusqu'au bout du chrono : **GAME OVER pour tous**, le donjon gagne.
 
-Les vainqueurs sont gardés dans `data/legendes.json` (d'une partie et d'une soirée à l'autre, même après « Nouvelle partie »)
-et affichés dans la page « Bilan de la soirée ». Les PNJ peuvent aussi gagner : ils sont marqués (PNJ).
+**Le champion** (le premier vrai joueur sorti en Légende) a ensuite **2 minutes à l'écran** (« Champion of the season »),
+et Victoria ne parle que de lui. Puis l'écran de fin de saison montre les Légendes, le **palmarès** et le compte à rebours :
+**une nouvelle saison démarre toute seule** 4 min après la fin (`autoNewSeasonMinutes`, 0 = bouton « New game » de la régie).
 
-**Les nouveaux venus entrent toujours à l'étage 1** : un étage effondré est recreusé à neuf quand quelqu'un doit y aller.
-**Effondrement** : ceux qui sont restés tombent à l'étage suivant (−30 % PV, −40 % or, équipement gardé, sonnés un tour).
+Le palmarès des saisons (`data/palmares.json` : saisons jouées, victoires, étage record de chaque vrai joueur) s'affiche
+aussi pendant les inscriptions ; Victoria s'en sert pour accueillir les habitués. Les Légendes sont aussi gardées dans
+`data/legendes.json`. Les PNJ peuvent sortir en Légendes, mais ne comptent pas au palmarès.
 
-## PNJ figurants
+## Branches
 
-Pour qu'il y ait toujours de la vie dans le donjon, le serveur fait jouer jusqu'à **10 PNJ** (Brunhilde, Gorim Barbe-Grise,
-Elwyn…). Ils suivent les mêmes règles que les joueurs : ils explorent, tapent les monstres, boivent leurs potions, fouillent,
-ramassent, votent, descendent, et lâchent une phrase de temps en temps. Ils sont **pacifiques** (jamais d'attaque contre un
-joueur, mais on peut les attaquer) et marqués **PNJ** partout.
-
-- Ils **restent** quand de vrais joueurs arrivent (le donjon ne se vide jamais).
-- Si un joueur choisit le pseudo d'un PNJ, le PNJ s'en va et lui laisse la place.
-- Réglage : `"bots": 10` dans `config.json`, variable `BOTS`, ou en direct dans la régie (0 pour les retirer).
-- Ils ne démarrent pas le chrono des étages : seul un vrai joueur (ou un retardataire) le lance.
-
-### Les retardataires
-
-En plus, **4 retardataires** (Gaspard le Traînard, Mamie Odette, Firmin, Hubert le Lent…) entrent juste après le premier
-vrai joueur. Ils ne prennent **jamais** l'escalier : ils explorent, tapent, et tombent avec chaque étage qui s'effondre.
-Ils assurent qu'il y a toujours du monde sur chaque étage jusqu'à son effondrement, et que la saison va jusqu'au bout
-même si le chat se vide.
-Réglage : `"closers": 4` dans `config.json` ou variable `CLOSERS`.
-- Ils sont exclus des statistiques de participation du rapport de session.
-
-## Vue stream 3D (bonus, à tester)
-
-Une deuxième page montre la partie en 3D, façon émission : caméra « réalisateur » qui va là où ça chauffe,
-plan large quand c'est calme, bandeau « EN DIRECT » sur les moments forts, classement, vote en cours, bulles du chat.
-
-- Adresse : `http://localhost:3000/stream.html?cle=<clé de la régie>` (lien « Vue stream 3D » dans la régie).
-- Pour suivre un seul crawler : ajoute `&suivre=Pseudo`.
-- Le bandeau « Commandes du chat » montre chaque commande avec ✓ ou ✗ (et la raison) : les joueurs Twitch voient
-  si leur commande est passée, puisque le jeu ne peut pas leur répondre dans le chat.
-- **Dans OBS** : Sources → « Navigateur », URL ci-dessus, largeur 1920, hauteur 1080. Le HUD est prévu pour ce format
-  et se réduit tout seul dans une fenêtre plus petite (partage d'écran Discord, par exemple).
-- C'est la page la plus gourmande : il faut une carte graphique correcte. Si elle saccade, reste sur la vue 2D de la régie.
-  Sa fluidité est notée dans le journal de session.
-- Modèles 3D : KayKit (Kay Lousberg, licence CC0) pour le donjon, les aventuriers et les squelettes ; Quaternius « Ultimate Monsters » (CC0) pour gobelins, diablotins, démons, orques, slimes et boss.
-
-## Brancher le vrai chat Twitch
-
-Mets ton nom de chaîne dans `config.json` (`"twitchChannel": "tachaine"`) et relance.
-Le serveur lit le chat en anonyme (aucun jeton nécessaire) : chaque message qui commence par `!` est une commande,
-avec le pseudo Twitch comme nom de joueur ; les autres messages s'affichent en bulle au-dessus du crawler.
-Un spectateur peut suivre son crawler sur la page web en entrant **le même pseudo** que sur Twitch.
-Le bot ne répond pas dans le chat (lecture seule) : les réponses s'affichent sur la page.
-
-
-Le jeu lit le chat sans compte (anonymement) : il ne peut pas y écrire. Pour qu'un spectateur reçoive la liste des commandes
-directement dans le chat, crée une commande `!commandes` dans **Cloudbot** (Streamlabs Desktop → Cloudbot → Commandes) avec
-ce texte :
-
-> ⚔️ Le Donjon : !join [barbare|chevalier|voleur|mage] pour entrer · !nord !sud !est !ouest · !attaque [cible] · !fouille ·
-> !ramasse · !utilise <objet> · !equipe <objet> · !repos (safe room) · !achete <n°> · !alliance <pseudo> ·
-> !monte <for|agi|int|cha> · !descendre (après le boss) · !vote <n°> · !bug <souci>. Une commande par tour, la dernière compte !
-
-## Commandes
-
-**Ordre d'un tour :** 1. potions et objets utilisés ou équipés ; 2. les attaques, par initiative (d20 + Agilité pour les
-joueurs, d20 + attaque pour les monstres ; égalité : la meilleure base, puis le hasard) ; 3. les ripostes des joueurs attaqués
-sans ordre ; 4. commerce, repos, ramassage ; 5. fouilles ; 6. déplacements. On peut boire avant d'être frappé, mais pas fuir avant.
-
-
-| Commande | Alias anglais | Effet |
-| --- | --- | --- |
-| `!join [classe]` | `!join` | Entrer dans le donjon (`barbare`, `chevalier`, `voleur`, `mage`) |
-| `!nord` `!sud` `!est` `!ouest` | `!north` `!south` `!east` `!west` | Changer de salle (fuir un monstre demande un jet d'Agilité) |
-| `!attaque [cible]` | `!attack` | Attaquer un monstre (nom ou numéro) ou un joueur (pseudo) ; un allié = trahison |
-| `!fouille` | `!search` | Fouiller, ouvrir un coffre, désarmer un piège |
-| `!ramasse [objet]` | `!pickup` | Ramasser l'or et les objets au sol |
-| `!utilise <objet>` / `!equipe <objet>` | `!use` / `!equip` | Utiliser ou équiper (nom ou numéro dans le sac) |
-| `!marchand`, `!achete <n°>`, `!vends <objet>` | `!shop`, `!buy`, `!sell` | Commerce en safe room |
-| `!parle <message>` | `!talk` | Parler au marchand (safe room) |
-| `!repos` | `!rest` | Récupérer des PV en safe room |
-| `!alliance <joueur>` / `!quitte` | `!ally` / `!leave` | Proposer/accepter une alliance, ou la quitter |
-| `!monte <for/agi/int/cha>` | `!levelup` | Dépenser un point de stat (immédiat) |
-| `!descendre` | `!down` | Prendre l'escalier une fois le boss vaincu |
-| `!vote <n°>` | `!vote` | Voter pour l'événement de la production (immédiat) |
-| `!statut`, `!aide`, `!commandes` | `!status`, `!help`, `!commands` | Infos ; `!commandes` ou `!aide` dans le chat affiche aussi le panneau des commandes 20 s sur le stream |
-| `!bug <description>` / `!avis <message>` | `!feedback` | Signaler un souci ou donner son avis (noté dans le journal, visible en régie) |
-| un message sans `!` ou `!dis …` | `!say` | Parler : bulle au-dessus de ton crawler |
-
-Sur la page joueur : ZQSD, flèches ou clic au sol pour marcher librement dans sa salle (visuel, vu par les autres) ;
-entrer dans une porte programme le changement de salle ; clic sur un monstre = `!attaque` sur lui. `F` fouiller, `A` attaquer, `?` aide,
-flèches haut/bas dans le champ de commande pour l'historique.
-
-## PNJ qui se souviennent
-
-Chaque PNJ figurant a une personnalité (Brunhilde la guerrière tonitruante, Gorim le nain bougon, Morgane la sorcière
-sarcastique…) et une **mémoire des joueurs**, gardée d'une soirée à l'autre dans `data/pnj-memoire.json` :
-qui l'a aidé contre un monstre, qui l'a attaqué, trahi ou tué, avec qui il a fait alliance, qu'il a vu mourir.
-
-- En croisant un joueur dont il se souvient, le PNJ le salue en conséquence (rancune ou amitié).
-- Pour lui parler : écris son nom dans un message (« Salut Brunhilde, on fait équipe ? ») ou `!parle Brunhilde …`.
-  Hors safe room, `!parle` s'adresse au PNJ s'il est seul dans la salle ; en safe room, au marchand.
-- `!alliance <PNJ>` : il accepte, sauf s'il t'en veut.
-- Avec l'IA locale, ils improvisent leurs répliques à partir de leur personnalité et de leurs souvenirs ;
-  sans IA, ils ont des répliques écrites qui tiennent compte de leur humeur.
-
-## IA du donjon (optionnel)
-
-Par défaut, le jeu n'appelle aucune IA : tous les textes drôles sont écrits à l'avance.
-Tu peux activer une « IA du donjon » qui commente les grands moments (morts, trahisons, boss vaincu)
-d'une phrase sarcastique dans le journal, et qui fait parler le marchand quand un joueur tape `!parle <message>` en safe room.
-Si l'IA ne répond pas (éteinte, trop lente, erreur), le jeu continue normalement avec ses textes habituels.
-
-> Non testé en conditions réelles : le réseau de l'environnement de développement bloquait Ollama et l'API.
-> Les appels sont couverts par des tests automatiques avec des réponses simulées.
-
-### Option 1 : ton IA locale avec Ollama (gratuit)
-
-```powershell
-ollama pull qwen2.5:14b
-```
-
-Puis dans `config.json` :
-
-```json
-"ai": { "provider": "ollama", "ollamaModel": "qwen2.5:14b" }
-```
-
-Prends un modèle **généraliste** (`qwen2.5:14b`, `mistral-nemo`…) plutôt que Qwen2.5-Coder : un modèle de code
-est bon pour programmer, beaucoup moins pour faire de l'humour en français. Un modèle d'environ 14B tient dans les 12 Go
-de ta RTX 4070 Ti. Si le serveur affiche « délai dépassé », augmente `timeoutMs` ou prends un modèle plus petit.
-
-L'application Ollama doit tourner. Au démarrage, la fenêtre du jeu affiche `[ia] Ollama prêt (qwen2.5:14b)`, ou te dit
-ce qui manque. La régie a un bouton « IA du donjon : allumer / éteindre » pour la couper en cours de partie si ta carte
-graphique peine. Sans réponse de l'IA, le jeu continue avec ses textes écrits.
-
-### Option 2 : l'API Claude
-
-Mets `"ai": { "provider": "anthropic" }` dans `config.json`, puis lance le serveur avec ta clé dans une variable
-d'environnement (**jamais dans config.json**, qui pourrait finir sur GitHub) :
-
-```powershell
-$env:ANTHROPIC_API_KEY="sk-ant-..."
-npm start
-```
-
-Le modèle par défaut est `claude-haiku-5-5` (rapide et peu cher), réglable avec `anthropicModel`.
-L'API est facturée à part de l'abonnement Claude : les crédits API inclus dans l'abonnement Max doivent d'abord être
-réclamés dans la Console (<https://platform.claude.com>, page Billing), en y liant une organisation. Le coût reste faible :
-l'IA n'est appelée que quelques dizaines de fois par heure (limite réglable avec `maxPerMinute`, 15 par défaut).
-
-### Réglages
-
-| Réglage (`ai`) | Défaut | Rôle |
-| --- | --- | --- |
-| `provider` | `off` | `off`, `ollama` ou `anthropic` |
-| `ollamaUrl` / `ollamaModel` | `http://localhost:11434` / `qwen2.5:14b` | Adresse et modèle Ollama |
-| `anthropicModel` | `claude-haiku-5-5` | Modèle de l'API Claude |
-| `timeoutMs` | 12000 | Au-delà, la réponse est abandonnée |
-| `maxPerMinute` | 15 | Nombre maximum d'appels par minute |
-| `fallback` | — | `"ollama"` : si la clé `ANTHROPIC_API_KEY` manque, Victoria passe sur Ollama au lieu de se taire |
-
-Les variables d'environnement `AI_PROVIDER` et `OLLAMA_MODEL` remplacent `config.json` le temps d'une session.
-Au démarrage, le serveur affiche la ligne « IA du donjon : … » pour confirmer ce qui est actif.
-
-## Musique
-
-Une bande-son originale, générée pour le jeu avec ACE-Step 1.5 (licence MIT, gratuit) : de la folktronica médiévale
-épique (luth, violon, vielle à roue, tambours sur cadre, pulsation électronique douce). Elle suit ce que montre la caméra :
-
-| Ambiance | Quand | Morceaux |
-|---|---|---|
-| Exploration | le reste du temps | 8 morceaux, environ 19 min, joués dans un ordre mélangé sans jamais en répéter un avant d'avoir tout joué |
-| Tension | dernière minute et demie avant l'effondrement, ou escalier ouvert à moins de 4 min de la fin | 1 |
-| Boss | la caméra filme un combat contre le boss | 1 |
-| Refuge | boutique ou forge | 1 |
-| Crypte | la crypte | 1 |
-| Inscriptions | salon d'attente, pas de partie en cours | 1 |
-| Finale | fin de saison | 1 |
-
-Fondus enchaînés de 3,5 s, une ambiance calme dure au moins 20 s, et la musique baisse quand Victoria parle.
-Après le boss, l'exploration reprend là où elle en était. `?sansmusique` sur l'adresse du stream la coupe,
-`?musique=0.3` règle son volume (0 à 1, 0,5 par défaut). Ajouter un morceau : le déposer dans `client/public/music/`
-et l'inscrire dans `manifest.json`.
-
-## Victoria Steele, l'animatrice (voix)
-
-L'IA du donjon a un visage et une voix : **Victoria Steele**, animatrice glamour et sadique du jeu télé.
-Ses répliques s'affichent en sous-titres sur le stream et elle les **dit à voix haute**, avec une voix créée pour elle
-(Qwen3-TTS, licence Apache 2.0, sur ta carte graphique, en local et gratuit).
-
-- **Quand elle parle :** à la fin d'un tour, sur le moment le plus fort (mort, trahison, boss tué, effondrement…),
-  une réplique de 15 s au plus. Avec l'IA éteinte, elle garde des répliques écrites pour les très grands moments.
-- **Le chat :** quand on l'interpelle (« Victoria », « Steele »), elle répond toujours (au plus toutes les 12 s) ;
-  sinon environ un message sur trois (une question deux fois plus souvent), au plus toutes les 40 s. Si elle parlait,
-  la réponse attend qu'elle ait fini. Dans ses rubriques, elle rebondit sur ce que dit le chat et lui pose des questions. Jamais aux
-  commandes (`!…`), aux bots (Streamlabs, WZBot, Nightbot…) ni aux PNJ. Elle ne lit **jamais** un message :
-  une réplique qui en recopie un morceau est jetée, et les pseudos refusés par la modération deviennent « a contestant ».
-- **Le son :** les effets et l'ambiance baissent pendant qu'elle parle. `?sansvoix` sur l'adresse du stream la coupe
-  (sous-titres seuls), `?muet` coupe tout.
-- **Elle anime :** inscriptions, règles au lancement, arrivée sur un nouvel étage (thème et danger), « 5 minutes »,
-  « dernière minute », escalier descellé, accueil des nouveaux (par petits groupes), et quand l'antenne est calme,
-  une rubrique (classement, course à la sortie, joueur à l'honneur, histoires de la soirée, comment rejoindre, enjeux).
-  Elle remercie les abonnements, cadeaux, bits et raids Twitch (le pseudo et le nombre, jamais le message).
-  Elle ne parle jamais par-dessus elle-même et pas plus d'un tiers du temps (hors annonces urgentes).
-- **Régie :** « Say this » (elle dit ta phrase), « Skip », « Mute », le volume de sa voix et « Talkative »
-  (calme / normale / bavarde). En « normale », elle reprend la parole après 25 s de silence (une réplique toutes les 40 s environ, soit tous les deux tours) : surtout l'action en direct, joueurs ou PNJ, et une rubrique de temps en temps. Elle reconnaît les habitués grâce au palmarès (`data/palmares.json` : saisons jouées, victoires, étage record) et annonce le gagnant de chaque saison. Gagnant : le premier vrai joueur sorti en Légende (boss de l'étage 8 abattu) ; boss vivant au bout du chrono : pas de gagnant.
-  La régie affiche combien de répliques l'IA a écrites et combien de phrases toutes faites sont parties, avec la
-  dernière erreur de l'IA ; la console les montre aussi (`[victoria] IA : …` ou `[victoria] phrase toute faite : …`).
-
-**Installation (une fois) :** double-clic sur `voix\installer-voix.bat`. Il installe un Python à part avec PyTorch
-(environ 3 Go) et le modèle de voix (environ 4,5 Go) dans `D:\DonjonVoix`. Ensuite, « Le Donjon » la lance tout seul,
-dans une fenêtre réduite « Victoria » ; elle met une minute ou deux à charger, et reste en sous-titres en attendant.
-Sa voix vient de `voix\victoria_ref.wav` (voix créée avec Qwen3-TTS VoiceDesign) : la changer, c'est remplacer ce fichier
-et son texte `voix\victoria_ref.txt`.
-
-| Réglage (`voice`) | Défaut | Rôle |
-| --- | --- | --- |
-| `enabled` | `true` | `false` : sous-titres seuls |
-| `url` | `http://127.0.0.1:3791` | Service de voix local (jamais ouvert sur le réseau) |
-
-## Journaux de session
-
-Le serveur note tout dans `logs/session-<date>_<heure>.jsonl` (un fichier par lancement, une ligne JSON par fait) :
-commandes et réponses du jeu, messages, tous les évènements (privés compris), connexions (téléphone ou ordinateur),
-résumé de chaque tour (durée de calcul, joueurs en vie, pages ouvertes), classement toutes les 10 tours,
-actions de la régie, `!bug` et `!avis` avec contexte, erreurs du serveur, erreurs JavaScript des pages
-et images/seconde de chaque page (toutes les 2 min).
-
-- **Régie → « Journaux pour Claude »** : télécharge le rapport Markdown (résumé lisible : retours des joueurs, erreurs
-  regroupées, commandes refusées, morts et causes, activité par tranche de 10 min, perfs) et le journal brut.
-  Les deux couvrent la dernière soirée, même si le serveur a été relancé plusieurs fois (une pause de plus de 2 h
-  sans serveur sépare deux soirées : les essais de l'après-midi ne sont pas mélangés).
-- **En ligne de commande** : `npm run rapport` écrit `logs/rapport-<date>.md` (ou `npm run rapport -- logs/session-x.jsonl`).
-- La clé de régie et la clé API ne sont jamais écrites dans les journaux. Les pseudos et messages du chat, si.
-- `LOGS=0` désactive le journal. Le dossier `logs/` n'est pas envoyé sur GitHub.
+`main` est la version que « Le Donjon.bat » installe à chaque lancement : elle ne reçoit que du travail testé.
+Le travail en cours est sur `dev`, fusionné dans `main` une fois les tests passés.
 
 ## Tests et outils
 
 ```powershell
 npm test               # tests (règles, génération, mort, alliances, effondrement, votes, régie, IA simulée)
 npm run simulate       # simule une session de 10 bots pendant 1 h de jeu et affiche un bilan
+npm run saison -- 4    # 4 saisons complètes avec les vrais PNJ : rythme, morts, niveaux et tueurs par étage
+npm run balance        # combat contre le boss de chaque étage, par classe (objectif ~80 % de victoires)
 npm run bots -- 6      # connecte 6 bots au serveur lancé, pour voir la page s'animer
 npm run typecheck      # vérification TypeScript
 npm run rapport        # rapport de la dernière soirée à partir de logs/
