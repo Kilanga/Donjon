@@ -17,7 +17,8 @@
     "bots": "tsx scripts/bots.ts",
     "typecheck": "tsc --noEmit",
     "rapport": "tsx scripts/rapport.ts",
-    "balance": "tsx scripts/balance.ts"
+    "balance": "tsx scripts/balance.ts",
+    "saison": "tsx scripts/saison.ts"
   },
   "dependencies": {
     "@fontsource/alegreya": "^5.3.0",

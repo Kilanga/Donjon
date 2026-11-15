@@ -16,8 +16,8 @@ export interface ClassDef {
 export const CLASSES: Record<ClassId, ClassDef> = {
   barbare: { id: 'barbare', label: 'Barbarian', stats: { for: 3, agi: 0, int: -1, cha: 1 }, hp: 14, hpPerLevel: 6, attackStat: 'for', sprite: 'dwarf_m', startWeapon: 'hache_rouillee', startArmor: null },
   chevalier: { id: 'chevalier', label: 'Knight', stats: { for: 2, agi: 0, int: 0, cha: 1 }, hp: 12, hpPerLevel: 5, attackStat: 'for', sprite: 'knight_m', startWeapon: 'epee_courte', startArmor: 'tunique' },
-  voleur: { id: 'voleur', label: 'Rogue', stats: { for: 0, agi: 3, int: 0, cha: 0 }, hp: 10, hpPerLevel: 4, attackStat: 'agi', sprite: 'elf_m', startWeapon: 'dague', startArmor: null },
-  mage: { id: 'mage', label: 'Mage', stats: { for: -1, agi: 1, int: 3, cha: 0 }, hp: 10, hpPerLevel: 5, attackStat: 'int', sprite: 'wizzard_m', startWeapon: 'baton', startArmor: null },
+  voleur: { id: 'voleur', label: 'Rogue', stats: { for: 0, agi: 3, int: 0, cha: 0 }, hp: 12, hpPerLevel: 4, attackStat: 'agi', sprite: 'elf_m', startWeapon: 'dague', startArmor: null },
+  mage: { id: 'mage', label: 'Mage', stats: { for: -1, agi: 1, int: 3, cha: 0 }, hp: 12, hpPerLevel: 5, attackStat: 'int', sprite: 'wizzard_m', startWeapon: 'baton', startArmor: null },
 };
 
 export const STAT_LABELS: Record<StatId, string> = { for: 'Strength', agi: 'Dexterity', int: 'Intelligence', cha: 'Charisma' };
@@ -99,7 +99,7 @@ export const MONSTERS: MonsterTpl[] = [
   { kind: 'demon', names: ['Horned demon', 'Ash demon'], sprite: 'chort_idle_anim', hp: 11, atk: 3, def: 2, dmg: 6, xp: 30, gold: [3, 9], minFloor: 1 },
   { kind: 'orque', names: ['Masked orc', 'Orc raider'], sprite: 'masked_orc_idle_anim', hp: 14, atk: 3, def: 2, dmg: 8, xp: 35, gold: [4, 12], minFloor: 2 },
   { kind: 'necromancien', names: ['Apprentice necromancer', 'Hooded necromancer'], sprite: 'necromancer_anim', hp: 10, atk: 4, def: 2, dmg: 6, xp: 40, gold: [5, 14], minFloor: 2 },
-  { kind: 'guerrier', names: ['Orc warrior', 'Orc warlord'], sprite: 'orc_warrior_idle_anim', hp: 16, atk: 4, def: 3, dmg: 8, xp: 45, gold: [5, 15], minFloor: 3, wanderer: true },
+  { kind: 'guerrier', names: ['Orc warrior', 'Orc warlord'], sprite: 'orc_warrior_idle_anim', hp: 16, atk: 4, def: 3, dmg: 8, xp: 45, gold: [5, 15], minFloor: 4, wanderer: true }, // étage 4 : l'étage 3 était un mur (2 × plus de morts)
   // Profondeurs (étage 4 et au-delà)
   { kind: 'yeti', names: ['Cave yeti', 'Grumpy yeti'], sprite: 'ice_zombie_anim', hp: 20, atk: 4, def: 3, dmg: 8, xp: 55, gold: [6, 16], minFloor: 4, wanderer: true },
   { kind: 'chaman', names: ['Orc shaman', 'Tribal witch doctor'], sprite: 'orc_shaman_idle_anim', hp: 14, atk: 6, def: 2, dmg: 8, xp: 60, gold: [8, 18], minFloor: 4 },
@@ -115,14 +115,14 @@ export const MIMIC: MonsterTpl = { kind: 'mimique', names: ['Mimic (that was not
 
 export const BOSSES: MonsterTpl[] = [
   { kind: 'ogre', names: ['Grondak, the Hero-Eating Ogre'], sprite: 'ogre_idle_anim', hp: 26, atk: 4, def: 2, dmg: 7, xp: 200, gold: [40, 80], minFloor: 1, boss: true },
-  { kind: 'gros_zombie', names: ['Moragh, the Putrid Matron'], sprite: 'big_zombie_idle_anim', hp: 30, atk: 3, def: 1, dmg: 7, xp: 200, gold: [40, 80], minFloor: 1, boss: true },
+  { kind: 'gros_zombie', names: ['Moragh, the Putrid Matron'], sprite: 'big_zombie_idle_anim', hp: 27, atk: 3, def: 1, dmg: 7, xp: 200, gold: [40, 80], minFloor: 1, boss: true },
   { kind: 'golem_ancien', names: ['Brakk, the Living Wall'], sprite: 'ogre_idle_anim', hp: 30, atk: 5, def: 3, dmg: 8, xp: 260, gold: [60, 110], minFloor: 2, boss: true },
   { kind: 'chef_orque', names: ['Warlord Gutrot'], sprite: 'orc_warrior_idle_anim', hp: 34, atk: 5, def: 3, dmg: 9, xp: 300, gold: [70, 120], minFloor: 3, boss: true },
   { kind: 'yeti_ancien', names: ['Grimfrost, the Ancient Yeti'], sprite: 'ogre_idle_anim', hp: 40, atk: 5, def: 4, dmg: 10, xp: 350, gold: [80, 140], minFloor: 4, boss: true },
   { kind: 'dragon', names: ['Vorthrax, Dragon of the Deep'], sprite: 'big_demon_idle_anim', hp: 44, atk: 6, def: 4, dmg: 10, xp: 450, gold: [100, 180], minFloor: 5, boss: true },
   { kind: 'crapaud_roi', names: ['Gorgoth, the Toad King'], sprite: 'big_zombie_idle_anim', hp: 48, atk: 6, def: 5, dmg: 11, xp: 500, gold: [120, 200], minFloor: 6, boss: true },
   { kind: 'liche', names: ['Malzeth, the Lich of a Thousand Names'], sprite: 'necromancer_anim', hp: 52, atk: 7, def: 5, dmg: 11, xp: 600, gold: [140, 220], minFloor: 7, boss: true },
-  { kind: 'dragon_ancien', names: ['Nyxareth, Devourer of Floors'], sprite: 'big_demon_idle_anim', hp: 50, atk: 7, def: 6, dmg: 12, xp: 800, gold: [180, 300], minFloor: 8, boss: true },
+  { kind: 'dragon_ancien', names: ['Nyxareth, Devourer of Floors'], sprite: 'big_demon_idle_anim', hp: 44, atk: 7, def: 6, dmg: 11, xp: 800, gold: [180, 300], minFloor: 8, boss: true },
   { kind: 'gros_demon', names: ['Baal-Zephor, Lord of the Abyss'], sprite: 'big_demon_idle_anim', hp: 26, atk: 4, def: 2, dmg: 7, xp: 220, gold: [50, 90], minFloor: 1, boss: true },
 ];
 
