@@ -211,6 +211,8 @@ export interface PlayerViewMsg {
   seasonOver?: boolean; // saison terminée (effondrement du dernier étage)
   joinsClosed?: boolean; // l'étage 1 est tombé : plus de !join, seulement des résurrections
   seasonEndsInSec?: number | null; // temps avant l'effondrement du dernier étage (fin de saison)
+  nextSeasonInSec?: number | null; // saison finie : nouvelle saison automatique dans N s (null : manuelle)
+  hall?: HallView | null; // palmarès des saisons passées
   publicUrl?: string; // adresse publique de la page joueur (tunnel), affichée sur le stream
   champions?: Legend[]; // vainqueurs de cette saison (vue stream)
 }
@@ -285,3 +287,10 @@ export type ClientMsg =
   | { type: 'pos'; x: number; y: number }; // déplacement libre dans la salle (0..1, purement visuel)
 
 export type AdminAction = 'pause' | 'resume' | 'next' | 'vote' | 'event' | 'collapse' | 'turnSeconds' | 'reset' | 'healAll' | 'kick' | 'bots' | 'ai' | 'voiceMute' | 'voiceSkip' | 'voiceSay' | 'voiceVolume' | 'voiceChatty';
+
+/** Palmarès des saisons passées (affiché sur le stream pendant les inscriptions et entre deux saisons). */
+export interface HallView {
+  seasons: number;
+  reigning: { name: string; n: number } | null;
+  top: { name: string; wins: number; bestFloor: number }[];
+}

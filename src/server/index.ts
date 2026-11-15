@@ -313,6 +313,8 @@ function floorTurnEnds(floorN: number | undefined, now: number): number {
   return base + phaseMs();
 }
 
+let seasonOverAt: number | null = null; // fin de la saison (pour la nouvelle saison automatique)
+
 function sendState(c: Client) {
   const now = Date.now();
   const key = c.name ? playerKey(c.name) : null;
@@ -324,6 +326,8 @@ function sendState(c: Client) {
     ...game.socialView(c.spectator ? null : key, now),
     seasonOver: game.state.seasonOver,
     joinsClosed: !!game.state.joinsClosed,
+    nextSeasonInSec: game.state.seasonOver && seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? Math.max(0, Math.ceil((seasonOverAt + cfg.autoNewSeasonMinutes * 60_000 - now) / 1000)) : null,
+    hall: hall.view(),
     seasonEndsInSec: game.state.seasonStart !== null && !game.state.seasonOver ? (game.seasonEndsAt() !== null ? Math.max(0, Math.ceil((game.seasonEndsAt()! - now) / 1000)) : null) : null,
     lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
@@ -332,7 +336,7 @@ function sendState(c: Client) {
   if (c.spectator) {
     const shown = game.spectatorView(c.floor, now);
     const standby = c.standby != null && c.standby !== shown?.n ? game.liveFloorView(c.standby, now) : null;
-    send(c, { ...base, voice: { status: `${voice.describe()}; lines by AI: ${narrator.stats.ai}, canned: ${narrator.stats.canned}${ai.enabled ? '' : ' (AI off)'}${ai.lastError ? `; last AI error: ${ai.lastError}` : ''}`, muted: voice.muted, volume: voice.volume, chatty: narrator.chatty }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
+    send(c, { ...base, voice: { status: `${voice.describe()}; lines by AI: ${narrator.stats.ai}, canned: ${narrator.stats.canned}${ai.enabled ? '' : ' (AI off)'}${ai.lastError ? `; last AI error: ${ai.lastError}` : ''}${ai.usage.calls ? `; Claude since launch: ${ai.usage.calls} calls, ${Math.round(ai.usage.input / 1000)}k tokens in, ${Math.round(ai.usage.output / 1000)}k out` : ''}`, muted: voice.muted, volume: voice.volume, chatty: narrator.chatty }, me: null, floor: shown, ...(standby ? { standby, standbyTurnEndsAt: floorTurnEnds(standby.n, now) } : {}), merchant: null, spectator: true });
   } else if (c.name) {
     const v = game.viewFor(c.name, now);
     send(c, { ...base, ...v, spectator: false });
@@ -739,10 +743,7 @@ function admin(c: Client, action: string, arg?: string | number) {
       msg = game.adminKick(String(arg)) ? `${arg} kicked.` : 'Player not found.';
       break;
     case 'reset':
-      game.reset();
-      pausedAt = null;
-      turnEndsAt = now + phaseMs();
-      for (const cl of clients) send(cl, { type: 'events', events: game.state.events.slice(-1) });
+      newGame();
       msg = 'New game!';
       break;
     default:
@@ -831,6 +832,28 @@ setInterval(() => {
 
 // Rafraîchit les chronos des pages toutes les 5 s (immunité, effondrement)
 setInterval(broadcastState, 5000);
+
+// Nouvelle partie : bouton de la régie, ou automatique quelques minutes après la fin d'une saison (le stream
+// enchaîne sans personne aux commandes ; le palmarès et le compte à rebours s'affichent en attendant)
+function newGame(auto = false) {
+  game.reset();
+  pausedAt = null;
+  seasonOverAt = null;
+  turnEndsAt = Date.now() + phaseMs();
+  for (const cl of clients) send(cl, { type: 'events', events: game.state.events.slice(-1) });
+  if (auto) console.log('[season] New season, automatically.');
+  broadcastState();
+}
+setInterval(() => {
+  const now = Date.now();
+  if (!game.state.seasonOver) {
+    seasonOverAt = null;
+    return;
+  }
+  seasonOverAt ??= now;
+  if (cfg.autoNewSeasonMinutes > 0 && pausedAt === null && now >= seasonOverAt + cfg.autoNewSeasonMinutes * 60_000) newGame(true);
+}, 1000).unref();
+host.nextSeasonInSec = () => (seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? Math.max(0, Math.round((seasonOverAt + cfg.autoNewSeasonMinutes * 60_000 - Date.now()) / 1000)) : null);
 
 // ------------------------------------------------------------ PNJ figurants
 /** Position libre d'un crawler dans sa salle (0..1), relayée aux pages de son étage et à la régie. */

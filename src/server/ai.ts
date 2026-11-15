@@ -80,6 +80,8 @@ export class DungeonAI {
   private busy = 0;
   /** Dernière erreur de l'IA (null si le dernier appel a abouti) : affichée en régie. */
   lastError: string | null = null;
+  /** Consommation de Claude depuis le lancement (affichée en régie) : appels et jetons. */
+  usage = { calls: 0, input: 0, output: 0 };
   private plainRequest = false; // le modèle refuse les réglages de réflexion : requête simple
 
   constructor(cfg: AiConfig, apiKey = '') {
@@ -242,7 +244,10 @@ export class DungeonAI {
       const err = ((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error;
       throw new Error(`Claude API HTTP ${res.status}${err?.message ? `: ${err.message.slice(0, 120)}` : ''}`);
     }
-    const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
+    const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
+    this.usage.calls++;
+    this.usage.input += data.usage?.input_tokens ?? 0;
+    this.usage.output += data.usage?.output_tokens ?? 0;
     const text = (data.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join(' ');
     if (!text.trim()) console.warn(`[ai] empty answer from Claude (stop: ${data.stop_reason ?? '?'}, blocks: ${(data.content ?? []).map((c) => c.type).join(',') || 'none'})`);
     return text;

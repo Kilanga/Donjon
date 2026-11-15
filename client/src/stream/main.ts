@@ -364,6 +364,14 @@ function shown(s: PlayerViewMsg): { floor: PlayerViewMsg['floor']; turnEndsAt: n
 
 // ------------------------------------------------------------------ habillage
 
+/** Le palmarès (saisons passées) : vide s'il n'y en a pas encore. */
+function hallHtml(s: PlayerViewMsg, title: string): string {
+  const h = s.hall;
+  if (!h || !h.top.length) return '';
+  const rows = h.top.map((r, i) => `<div class="h"><span class="k">${i + 1}</span><span class="nm">${esc(r.name)}${h.reigning?.name === r.name ? ' <small>👑</small>' : ''}</span><span class="s">${r.wins} win${r.wins === 1 ? '' : 's'} · best fl. ${r.bestFloor}</span></div>`).join('');
+  return `<h3>${title} <small>${h.seasons} season${h.seasons > 1 ? 's' : ''}</small></h3>${rows}`;
+}
+
 function renderHud(s: PlayerViewMsg) {
   const f = shown(s).floor;
   const alive = s.leaderboard.filter((r) => r.alive).length;
@@ -375,7 +383,14 @@ function renderHud(s: PlayerViewMsg) {
     $('season').classList.remove('hidden');
     $('season-sub').textContent = champs.length ? `${champs.length} legend${champs.length > 1 ? 's' : ''} this season` : 'Nobody got out: the Dungeon wins.';
     $('season-list').innerHTML = champs.slice(0, 10).map((c) => `<div class="lg"><b>${esc(c.name)}${c.bot ? ' <small>(NPC)</small>' : ''}</b><span>lvl ${c.level} · ${c.kills} monsters · ${c.deaths} deaths</span></div>`).join('');
+    $('season-hof').innerHTML = hallHtml(s, 'Hall of fame');
+    $('season-next').innerHTML = s.nextSeasonInSec != null ? `Next season in <b>${fmt(s.nextSeasonInSec)}</b>: type <b>!join</b> to be in it.` : 'Thanks for playing! See you next season.';
   } else $('season').classList.add('hidden');
+  // Avant le coup d'envoi : le palmarès des saisons passées, à la place des étages
+  const before = !s.seasonOver && (s.lobbyInSec != null || (f !== null && f.collapseInSec === null));
+  const hof = before ? hallHtml(s, 'Hall of fame') : '';
+  $('hof').classList.toggle('hidden', !hof);
+  if (hof) $('hof').innerHTML = hof;
   // Les étages : qui est où, et combien de temps avant l'effondrement
   if (s.floors && s.floors.length > 1) {
     $('floors').classList.remove('hidden');

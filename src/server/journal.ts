@@ -36,6 +36,18 @@ export function stamp(d = new Date()): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 
+/** On garde les 40 derniers journaux de session (environ deux mois de lives) : les plus anciens sont supprimés. */
+export const KEEP_JOURNALS = 40;
+export function pruneJournals(dir: string, keep = KEEP_JOURNALS): string[] {
+  try {
+    const old = fs.readdirSync(dir).filter((f) => /^session-[\d_-]+\.jsonl$/.test(f)).sort().slice(0, -keep);
+    for (const f of old) fs.rmSync(path.join(dir, f), { force: true });
+    return old;
+  } catch {
+    return []; // un journal qu'on ne peut pas supprimer n'empêche pas de jouer
+  }
+}
+
 export class Journal {
   readonly file: string;
   readonly dir: string;
@@ -57,6 +69,7 @@ export class Journal {
     } catch {
       this.broken = true;
     }
+    pruneJournals(dir);
     this.timer = setInterval(() => this.flush(), 1000);
     this.timer.unref();
   }

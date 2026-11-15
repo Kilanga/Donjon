@@ -15,6 +15,7 @@ export interface GameConfig {
   lastLockMinutes: number; // avant-dernier étage : scellé N minutes
   finalFloorMaxMinutes: number; // dernier étage : N minutes pour tuer le boss, sinon GAME OVER pour tous (fin de saison)
   staggered: boolean;
+  autoNewSeasonMinutes: number; // saison finie : nouvelle saison automatique au bout de N minutes (0 : bouton New game)
   lobbySeconds: number; // inscriptions : le premier !join ouvre N secondes d'attente, puis la partie repart à zéro pour tous (0 = pas de salon) // tours décalés : les étages pairs jouent une demi-durée de tour après les impairs (une action toutes les turnSeconds/2 sur le stream)
   respawnTurns: number; // tours avant réapparition
   immunitySeconds: number; // immunité JvJ après réapparition
@@ -44,6 +45,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   lastLockMinutes: 5,
   finalFloorMaxMinutes: 15,
   staggered: true,
+  autoNewSeasonMinutes: 4,
   lobbySeconds: 300,
   respawnTurns: 5,
   immunitySeconds: 60,
@@ -78,6 +80,7 @@ export function loadConfig(root = process.cwd()): GameConfig {
   const num = (v: string | undefined) => (v !== undefined && v !== '' ? Number(v) : undefined);
   cfg.port = num(env.PORT) ?? cfg.port;
   cfg.turnSeconds = num(env.TURN_SECONDS) ?? cfg.turnSeconds;
+  cfg.autoNewSeasonMinutes = num(env.AUTO_NEW_SEASON) ?? cfg.autoNewSeasonMinutes;
   // Test rapide : FLOOR_MINUTES donne la même durée à tous les étages (verrou : un tiers)
   const quick = num(env.FLOOR_MINUTES);
   if (quick !== undefined) {

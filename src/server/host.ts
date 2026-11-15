@@ -21,12 +21,12 @@ const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const list = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
 
-type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat' | 'pitch' | 'howto' | 'legends';
+type Segment = 'leaderboard' | 'race' | 'spotlight' | 'story' | 'join' | 'stakes' | 'roster' | 'chat' | 'pitch' | 'howto' | 'legends' | 'next';
 const SEGMENTS: Segment[] = ['leaderboard', 'chat', 'race', 'spotlight', 'join', 'stakes', 'chat', 'story'];
 // Avant la partie : elle fait venir les joueurs (présenter l'émission, comment jouer, inscrits, questions au chat)
 const LOBBY_SEGMENTS: Segment[] = ['pitch', 'join', 'legends', 'chat', 'howto', 'roster', 'pitch', 'chat', 'join'];
 // Saison finie : le palmarès, les histoires de la soirée, le chat
-const OVER_SEGMENTS: Segment[] = ['legends', 'chat', 'story'];
+const OVER_SEGMENTS: Segment[] = ['next', 'legends', 'chat', 'next', 'story'];
 /** Avant la partie, elle peut occuper l'antenne à 55 % au moins (elle fait venir les joueurs). */
 const LOBBY_AIR_MIN = 0.55;
 const PLAY_FRESH_MS = 45_000; // une action de jeu se commente tant qu'elle date de moins de 45 s
@@ -53,6 +53,8 @@ export class Host {
   private spotlit: string[] = [];
   private question = 0;
   private beat = 0;
+  /** Saison finie : secondes avant la nouvelle saison automatique (null : manuelle). */
+  nextSeasonInSec: () => number | null = () => null;
   private plays: { e: GameEvent; at: number }[] = [];
   private pitch = 0;
   private notes: string[] = []; // les petites histoires de la soirée (trahisons, morts, boss)
@@ -254,6 +256,12 @@ export class Host {
           this.narrator.chatSummary(now) ? 'Talk with the chat: react to one of the messages below, by name, then throw a question back at them.' : q,
           fallbacks[this.question % fallbacks.length],
         ];
+      }
+      case 'next': {
+        const sec = this.nextSeasonInSec();
+        if (sec === null || sec < 20) return null;
+        const m = Math.max(1, Math.round(sec / 60));
+        return [`Tease the next season: it starts in about ${m} minute${m > 1 ? 's' : ''}, with a brand-new dungeon; anyone can type !join to be in it, and the hall of fame is waiting for a new name.`, `New season in about ${m} minute${m > 1 ? 's' : ''}, darlings. Fresh dungeon, fresh victims. Type !join when it opens.`];
       }
       case 'legends': {
         const sum = this.hall?.summary();

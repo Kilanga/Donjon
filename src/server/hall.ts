@@ -2,7 +2,7 @@
 // Victoria s'en sert : « Kilak revient avec trois couronnes… ». Seuls les vrais joueurs comptent (jamais les PNJ).
 // Gagnant d'une saison : le premier vrai joueur sorti en Légende (boss du dernier étage abattu). Boss vivant au bout du
 // chrono : GAME OVER pour tous, pas de gagnant (l'étage record de chacun est quand même retenu).
-import type { GameEvent } from '../shared/types.js';
+import type { GameEvent, HallView } from '../shared/types.js';
 import { playerKey, type Game } from './game/engine.js';
 import { readJsonSafe, writeAtomic } from './fsutil.js';
 
@@ -128,6 +128,17 @@ export class Hall {
   /** Le dernier gagnant connu. */
   reigning(): HallSeason | undefined {
     return [...this.data.seasons].reverse().find((s) => s.winner);
+  }
+
+  /** Pour l'écran : les meilleurs (victoires, puis étage record) et le champion en titre. */
+  view(): HallView | null {
+    if (!this.data.seasons.length) return null;
+    const top = Object.values(this.data.players)
+      .sort((a, b) => b.wins - a.wins || b.bestFloor - a.bestFloor || b.seasons - a.seasons)
+      .slice(0, 5)
+      .map((h) => ({ name: h.name, wins: h.wins, bestFloor: h.bestFloor }));
+    const r = this.reigning();
+    return { seasons: this.data.seasons.length, reigning: r?.winner ? { name: r.winner, n: r.n } : null, top };
   }
 
   /** Le palmarès en une ligne (null s'il est vide). */
