@@ -1,9 +1,12 @@
 {
  "boss": [
-  "boss01.ogg"
+  "boss01.ogg",
+  "boss02.ogg",
+  "boss03.ogg"
  ],
  "crypt": [
-  "crypt01.ogg"
+  "crypt01.ogg",
+  "crypt02.ogg"
  ],
  "explore": [
   "explore01.ogg",
@@ -16,15 +19,20 @@
   "explore08.ogg"
  ],
  "finale": [
-  "finale01.ogg"
+  "finale01.ogg",
+  "finale02.ogg"
  ],
  "lobby": [
-  "lobby01.ogg"
+  "lobby01.ogg",
+  "lobby02.ogg"
  ],
  "safe": [
-  "safe01.ogg"
+  "safe01.ogg",
+  "safe02.ogg"
  ],
  "tension": [
-  "tension01.ogg"
+  "tension01.ogg",
+  "tension02.ogg",
+  "tension03.ogg"
  ]
 }
