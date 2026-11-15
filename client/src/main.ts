@@ -17,7 +17,7 @@ const CLASS_INFO: Record<string, { label: string; desc: string }> = {
   mage: { label: 'Mage', desc: 'Intelligence +3, 10 HP. Spells slip through monster armor. Proud.' },
 };
 const STAT_SHORT = { for: 'str', agi: 'dex', int: 'int', cha: 'cha' } as const;
-const FEATURE_LABEL: Record<string, string> = { autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', tripot: 'Gambling den', bibliotheque: 'Library', portail: 'Unstable portal', ogre: 'Ogre lair' };
+const FEATURE_LABEL: Record<string, string> = { autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', tripot: 'Gambling den', bibliotheque: 'Library', portail: 'Unstable portal', leviers: 'Lever room', ogre: 'Ogre lair' };
 const ROOM_LABEL: Record<string, string> = { normale: 'Room', safe: 'Safe room', piege: 'Room (traps?)', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' };
 
 const params = new URLSearchParams(location.search);
@@ -265,7 +265,7 @@ function renderRoom(room: RoomView, s: PlayerViewMsg) {
 
   const acts: string[] = [];
   if (room.feature) {
-    const label = { autel: 'Pray at the altar', fontaine: 'Drink from the fountain', puits: `Make a wish · ${room.featureCost ?? 10 * (s.floor?.n ?? 1)} gold`, prisonnier: 'Free the prisoner', ogre: 'Steal from the ogre', tripot: `Bet against the croupier · ${5 * (s.floor?.n ?? 1)} gold`, bibliotheque: 'Study the grimoire', portail: 'Step into the portal' }[room.feature];
+    const label = { autel: 'Pray at the altar', fontaine: 'Drink from the fountain', puits: `Make a wish · ${room.featureCost ?? 10 * (s.floor?.n ?? 1)} gold`, prisonnier: 'Free the prisoner', ogre: 'Steal from the ogre', tripot: `Bet against the croupier · ${5 * (s.floor?.n ?? 1)} gold`, bibliotheque: 'Study the grimoire', portail: 'Step into the portal', leviers: 'Pull a lever (the chat chooses)' }[room.feature];
     acts.push(`<button data-cmd="!search" ${room.featureDone || (room.featureCost ?? 0) > me.gold ? 'disabled' : ''}>${label}</button>`);
   } else if (room.chest === 'ferme') acts.push('<button data-cmd="!search">Open the chest</button>');
   else if (!room.searched && room.type !== 'safe') acts.push('<button data-cmd="!search">Search</button>');

@@ -64,9 +64,14 @@ export interface MonsterState {
   distracted: number; // tours de distraction (poulet)
   asleep?: boolean; // l'ogre endormi : n'attaque pas tant qu'on ne le réveille pas
   aggro: string | null; // dernier joueur qui l'a frappé
+  // Possédé par un viewer qui ne joue pas (!possess) : il le pilote quelques tours
+  possessedBy?: string; // clé du viewer
+  possessName?: string; // son pseudo (affiché à côté du monstre)
+  possessUntil?: number; // tour de fin
+  possessCmd?: { name: 'move' | 'attack'; arg: string } | null;
 }
 
-export type RoomFeature = 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre' | 'tripot' | 'bibliotheque' | 'portail';
+export type RoomFeature = 'autel' | 'fontaine' | 'puits' | 'prisonnier' | 'ogre' | 'tripot' | 'bibliotheque' | 'portail' | 'leviers';
 
 export interface RoomState {
   id: number;
@@ -116,6 +121,7 @@ export interface VoteState {
   options: string[]; // clés d'événements de la production
   votes: Record<string, string>; // joueur -> clé votée
   endTurn: number;
+  lever?: { key: string; name: string; floor: number; roomId: number }; // salle aux leviers : le chat choisit le levier tiré
 }
 
 /** Un vrai joueur éliminé : son perso est gardé tel quel, au cas où le chat le ressuscite. */
@@ -172,6 +178,8 @@ export interface GameState {
   graveNo: number; // dernier numéro attribué
   wallets: Record<string, Wallet>; // points de faveur des viewers (paris et sponsors)
   resurrection: { endTurn: number; floorTo: number; votes: Record<string, { no: number; voices: number }> } | null;
+  possessCooldown?: Record<string, number>; // viewer -> heure (ms) où il pourra reposséder
+  resurrectionIgnored?: number; // dernier vote de résurrection sans aucune voix : numéro de la dernière tombe à ce moment-là
   flashBet: FlashBet | null; // pari éclair en cours (lancé par la production)
   nextFlashAt: number; // pas de nouveau pari éclair avant (ms)
   grandBet: { open: boolean; stakes: Record<string, { target: string; targetName: string; amount: number }> };

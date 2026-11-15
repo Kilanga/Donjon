@@ -1289,7 +1289,7 @@ export class World {
 export function roomLabel(r: RoomView): string {
   if (r.forge) return 'Forge';
   if (r.crypt) return `Crypt ${r.id}`;
-  if (r.feature) return `${{ autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', tripot: 'Gambling den', bibliotheque: 'Library', portail: 'Unstable portal', ogre: 'Ogre lair' }[r.feature]} ${r.id}`;
+  if (r.feature) return `${{ autel: 'Altar', fontaine: 'Fountain', puits: 'Wishing well', prisonnier: 'Prisoner', tripot: 'Gambling den', bibliotheque: 'Library', portail: 'Unstable portal', leviers: 'Lever room', ogre: 'Ogre lair' }[r.feature]} ${r.id}`;
   return { normale: 'Room', safe: 'Safe room', piege: 'Trapped room', tresor: 'Treasure room', arene: 'Arena', boss: 'Boss room' }[r.type] + ` ${r.id}`;
 }
 

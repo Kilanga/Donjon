@@ -649,6 +649,17 @@ export function buildFeature(g: THREE.Group, kind: string, cx: number, cz: numbe
       for (const dx of [-1.2, 1.2]) g.add(part(BOX, F_STONE, cx + dx, 0.25, cz - 4.5, 0.6, 0.5, 0.6));
       return null;
     }
+    case 'leviers': {
+      // Trois leviers dans le mur nord : socle de pierre, manche incliné, pommeau doré / rouge / vert (comme en 2D)
+      [[0xd8a830, -1.2], [0xc0303a, 0], [0x5aa02c, 1.2]].forEach(([col, dx]) => {
+        g.add(part(BOX, F_STONE, cx + dx, 1.0, cz - HALF + 0.35, 0.45, 0.6, 0.3));
+        const stick = part(CYL, F_METAL, cx + dx + 0.18, 1.45, cz - HALF + 0.5, 0.05, 0.8, 0.05);
+        stick.rotation.z = -0.45;
+        g.add(stick);
+        g.add(part(SKULL_GEO, new THREE.MeshStandardMaterial({ color: col, roughness: 0.4, metalness: 0.5 }), cx + dx + 0.36, 1.82, cz - HALF + 0.5, 0.5, 0.5, 0.5));
+      });
+      return null;
+    }
     case 'tripot':
       return new THREE.Vector3(cx, 0, cz - 4.7); // le croupier squelette, derrière sa table
     case 'prisonnier': {

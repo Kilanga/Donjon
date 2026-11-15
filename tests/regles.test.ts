@@ -250,6 +250,22 @@ describe('salles spéciales', () => {
     act(g, T0 + 40_000);
   });
 
+  it('salle aux leviers : le chat vote le levier, et il agit sur celui qui tire', () => {
+    const { g, p, r } = featured('leviers');
+    act(g, T0 + 20_000);
+    const v = g.state.vote!;
+    expect(v.lever?.name).toBe('a');
+    const i = v.options.indexOf('or');
+    if (i < 0) return; // l'or n'est pas proposé cette fois
+    expect(g.submit('viewer', `!vote ${i + 1}`, T0 + 21_000).ok).toBe(true);
+    g.tick(T0 + 40_000);
+    g.tick(T0 + 60_000);
+    expect(g.state.vote).toBeNull();
+    expect(r.groundGold).toBeGreaterThan(0);
+    expect(g.voteView(null)).toBeNull();
+    void p;
+  });
+
   it('portail : il envoie ailleurs sur l\'étage (ou recrache)', () => {
     const { g, p, r } = featured('portail');
     const hp = p.hp;

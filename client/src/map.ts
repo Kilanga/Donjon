@@ -657,6 +657,9 @@ export class MapRenderer {
         put('dec_bookshelf', 0.4, -0.875);
         drawLectern(ctx, X(0), Y(-0.567));
         put('dec_candle', 0.183, -0.6);
+      } else if (r.feature === 'leviers') {
+        // Trois leviers dans le mur nord (or, rouge, vert), comme en 3D
+        drawLevers(ctx, X(0), wallY + PX * 1.4);
       } else if (r.feature === 'portail') {
         // Le portail instable : un anneau violet contre le mur nord
         drawPortal(ctx, X(0), Y(-0.75), t);
@@ -904,7 +907,7 @@ export class MapRenderer {
     if (r.feature) {
       // Salles spéciales : pastille turquoise (estompée une fois utilisée)
       color = '#3fa7a0';
-      icon = { autel: 'flask_big_red', fontaine: 'flask_big_blue', puits: 'coin_anim_f0', prisonnier: 'ui_heart_empty', ogre: 'ogre_idle_anim_f0', tripot: 'mon_squelette', bibliotheque: 'it_parchemin', portail: 'dec_statue' }[r.feature] ?? null;
+      icon = { autel: 'flask_big_red', fontaine: 'flask_big_blue', puits: 'coin_anim_f0', prisonnier: 'ui_heart_empty', ogre: 'ogre_idle_anim_f0', tripot: 'mon_squelette', bibliotheque: 'it_parchemin', portail: 'dec_statue', leviers: 'dec_weapons' }[r.feature] ?? null;
       dim = !!r.featureDone;
     }
     if (r.stairs) icon = null; // l'escalier a déjà son panneau
@@ -1226,5 +1229,26 @@ function drawPortal(ctx: CanvasRenderingContext2D, x: number, y: number, t: numb
   ctx.beginPath();
   ctx.ellipse(x, y, 14, 19, 0, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
+}
+
+/** Trois leviers (salle aux leviers) : socle de pierre, manche, pommeau doré / rouge / vert. */
+function drawLevers(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save();
+  [['#e0a826', -20], ['#d04648', 0], ['#6daa2c', 20]].forEach(([col, dx]) => {
+    const bx = x + (dx as number);
+    ctx.fillStyle = '#4e4a4e';
+    ctx.fillRect(bx - 4, y, 8, 6);
+    ctx.strokeStyle = '#757161';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx, y + 2);
+    ctx.lineTo(bx + 5, y - 8);
+    ctx.stroke();
+    ctx.fillStyle = col as string;
+    ctx.beginPath();
+    ctx.arc(bx + 5, y - 9, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
   ctx.restore();
 }

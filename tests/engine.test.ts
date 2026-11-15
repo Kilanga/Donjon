@@ -146,6 +146,7 @@ describe('alliances et trahisons', () => {
     b.gold = 100;
     b.hp = 500;
     b.maxHp = 500;
+    a.stats.agi += 20; // le coup en traître porte (le vol d'or n'a lieu qu'au moment de la trahison)
     let t = T0;
     let hit = false;
     for (let i = 0; i < 10 && !hit; i++) {

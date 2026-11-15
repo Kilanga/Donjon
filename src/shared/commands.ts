@@ -23,6 +23,7 @@ export type CommandName =
   | 'status'
   | 'help'
   | 'resurrect'
+  | 'possess'
   | 'vote';
 
 export interface ParsedCommand {
@@ -48,6 +49,7 @@ const ALIASES: Record<string, { name: CommandName; arg?: string }> = {
   buy: { name: 'buy' }, achete: { name: 'buy' }, acheter: { name: 'buy' },
   bet: { name: 'bet' }, wager: { name: 'bet' }, parie: { name: 'bet' }, parier: { name: 'bet' }, pari: { name: 'bet' }, mise: { name: 'bet' },
   sponsor: { name: 'sponsor' }, gift: { name: 'sponsor' }, sponsorise: { name: 'sponsor' }, offre: { name: 'sponsor' }, cadeau: { name: 'sponsor' },
+  possess: { name: 'possess' }, haunt: { name: 'possess' }, posseder: { name: 'possess' }, hante: { name: 'possess' },
   favor: { name: 'favor' }, favour: { name: 'favor' }, points: { name: 'favor' }, faveur: { name: 'favor' },
   forge: { name: 'forge' }, upgrade: { name: 'forge' }, forger: { name: 'forge' }, ameliore: { name: 'forge' }, ameliorer: { name: 'forge' },
   sell: { name: 'sell' }, vends: { name: 'sell' }, vendre: { name: 'sell' },
@@ -134,6 +136,7 @@ export const HELP_TEXT = [
   '!vote <#> — vote for the production\'s event (or to bring back a dead player after a collapse: one vote per name)',
   '!bet <name> <amount> — big bet: who gets out first? · !bet yes|no <amount> — current flash bet',
   '!sponsor <name> potion|gold|monster — send a gift (or a dirty trick) with your favor points · !favor — your points',
+  '!possess — not playing (or dead)? Take over a monster for 2 minutes: move it with !north/!south/!east/!west, strike with !attack [name]',
   '!bug <description> / !feedback <message> — report a problem or share your opinion',
   '!commands or !help — show this list',
 ];

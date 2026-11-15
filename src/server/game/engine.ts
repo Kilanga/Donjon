@@ -13,7 +13,7 @@ import { THEME_EFFECTS, THEME_LABEL } from '../../shared/themes.js';
 import { PRODUCTION_BY_KEY, PRODUCTION_EVENTS } from './production.js';
 import { itemEffect, makeItem, randomLoot } from './items.js';
 import { Rng } from './rng.js';
-import { emptyState, migrate, type FlashBet, type FloorState, type GameState, type Grave, type MonsterState, type PlayerState, type RoomFeature, type RoomState, type Wallet } from './state.js';
+import { emptyState, migrate, type FlashBet, type FloorState, type GameState, type Grave, type MonsterState, type PlayerState, type RoomFeature, type RoomState, type VoteState, type Wallet } from './state.js';
 
 export const INVENTORY_MAX = 8;
 export const ALLIANCE_MAX = 4;
@@ -36,6 +36,21 @@ function fmtWait(ms: number): string {
   return m ? `${m} min${s % 60 ? ` ${s % 60} s` : ''}` : `${s} s`;
 }
 
+
+/** Salle aux leviers : ce que le chat peut faire tirer. */
+const LEVERS: Record<string, { label: string; desc: string }> = {
+  or: { label: 'Gold rain', desc: 'Gold falls in the room' },
+  piege: { label: 'Spike trap', desc: 'Ouch, for the one pulling' },
+  monstre: { label: 'Release a monster', desc: 'A monster drops in' },
+  soin: { label: 'Healing light', desc: 'Full HP and a lucky roll' },
+};
+const voteLabel = (k: string) => LEVERS[k] ?? PRODUCTION_BY_KEY[k];
+
+/** Possession par un viewer : durée (tours de l'étage), délai avant la suivante, nombre maximum à la fois, récompense d'un kill. */
+const POSSESS_TURNS = 6;
+const POSSESS_COOLDOWN_MS = 4 * 60_000;
+const MAX_POSSESSED = 4;
+const POSSESS_KILL_PTS = 30;
 
 export class Game {
   state: GameState;
@@ -170,7 +185,7 @@ export class Game {
         crypt.desc = 'A crypt. Fresh graves line the walls, and some of them still seem to be waiting for someone.';
       }
       // Salles spéciales : 2 par étage (3 sur les grands), toutes différentes
-      const kinds = this.rng.shuffle<RoomFeature>(['autel', 'fontaine', 'puits', 'prisonnier', 'ogre', 'tripot', 'bibliotheque', 'portail']).slice(0, f.rooms.length >= 30 ? 3 : 2);
+      const kinds = this.rng.shuffle<RoomFeature>(['autel', 'fontaine', 'puits', 'prisonnier', 'ogre', 'tripot', 'bibliotheque', 'portail', 'leviers']).slice(0, f.rooms.length >= 30 ? 3 : 2);
       const spots = this.rng.shuffle(f.rooms.filter((r) => r.type === 'normale' && r.id !== f.spawnRoom && r.id !== f.cryptRoom));
       kinds.forEach((k, i) => {
         const r = spots[i];
@@ -334,7 +349,14 @@ export class Game {
     if (cmd.name === 'bet') return this.placeBet(name, cmd.arg);
     if (cmd.name === 'sponsor') return this.sponsor(name, cmd.arg);
     if (cmd.name === 'favor') return this.favorText(name);
+    if (cmd.name === 'possess') return this.possess(name);
     const p = this.player(name);
+    // Un viewer qui pilote un monstre : ses déplacements et ses coups vont au monstre
+    const owned = this.possessedBy(playerKey(name));
+    if (owned && (!p || !p.alive) && (cmd.name === 'move' || cmd.name === 'attack')) {
+      owned.possessCmd = { name: cmd.name, arg: cmd.arg };
+      return { ok: true, text: `${owned.name}: ${cmd.raw} at the end of the turn.` };
+    }
     if (cmd.name === 'join') return this.join(name, cmd.arg);
     if (!p) return { ok: false, text: 'You are not in the dungeon yet. Type !join [barbarian|knight|rogue|mage].' };
 
@@ -537,6 +559,7 @@ export class Game {
         const r = f.rooms[m.roomId];
         if (r.type === 'safe' || m.asleep) continue;
         if (this.playersIn(f.n, m.roomId).length === 0) continue;
+        if (m.possessCmd?.name === 'move') continue; // son pilote le fait partir : pas de coup ce tour
         intents.push({ init: this.rng.die(20) + m.atk, base: m.atk, tie: this.rng.next(), attacker: { kind: 'monster', m } });
       }
     }
@@ -560,7 +583,8 @@ export class Game {
         const floorN = this.floorOfMonster(m);
         const here = this.playersIn(floorN, m.roomId);
         if (!here.length) continue;
-        const target = here.find((p) => p.key === m.aggro) ?? this.rng.pick(here);
+        const wanted = m.possessCmd?.name === 'attack' && m.possessCmd.arg ? normalize(m.possessCmd.arg).replace(/^@/, '') : '';
+        const target = (wanted ? here.find((p) => normalize(p.name).startsWith(wanted)) : undefined) ?? here.find((p) => p.key === m.aggro) ?? this.rng.pick(here);
         this.attack(it.attacker, { kind: 'player', p: target }, attackedBy);
       }
     }
@@ -628,6 +652,10 @@ export class Game {
       if (f.collapsed || !this.plays(f.n)) continue;
       for (const m of f.monsters) {
         if (m.distracted > 0) m.distracted--;
+        if (m.possessedBy) {
+          this.possessedMove(f, m);
+          continue;
+        }
         if (!m.wanderer || m.hp <= 0 || this.playersIn(f.n, m.roomId).length) continue;
         if (!this.rng.chance(0.35)) continue;
         const cap = this.maxMonstersPerRoom(f.n);
@@ -639,6 +667,7 @@ export class Game {
     }
 
     // 7. Fin de tour : effets, réapparitions, effondrements, votes
+    this.endPossessions();
     this.endOfTurn(players);
     this.updateProduction();
     // Portes scellées et plus personne dedans (ni vote de résurrection en cours) : la saison s'arrête là
@@ -828,6 +857,11 @@ export class Game {
   private killPlayer(p: PlayerState, cause: string, killer: Fighter | null) {
     const f = this.state.floors[p.floor];
     const r = f.rooms[p.roomId];
+    // Tué par un monstre possédé : son pilote gagne des points de faveur
+    if (killer?.kind === 'monster' && killer.m.possessedBy && killer.m.possessName) {
+      this.wallet(killer.m.possessName).pts += POSSESS_KILL_PTS;
+      this.emit({ floor: p.floor, roomId: p.roomId, kind: 'drole', scope: 'global', drama: 60, actors: [p.key], text: `${killer.m.possessName}, from the chat, just took out ${p.name} with a possessed monster! +${POSSESS_KILL_PTS} favor points.` });
+    }
     p.alive = false;
     p.hp = 0;
     p.deaths++;
@@ -1393,6 +1427,8 @@ export class Game {
       if (Object.keys(st.grandBet.stakes).length) this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 30, text: `The BIG BET is closed: ${this.grandPot()} points riding on the first one out of the Dungeon.` });
     }
     if (!st.graveyard.length) return;
+    // Personne n'a voté la dernière fois, et pas de nouveau mort depuis : on ne relance pas le même vote dans le vide
+    if (st.resurrectionIgnored === st.graveNo && !st.resurrection) return;
     if (st.vote) {
       st.vote = null; // la résurrection passe avant
       st.nextVoteTurn = st.turn + this.voteEvery();
@@ -1428,6 +1464,7 @@ export class Game {
     const tally = new Map<number, number>();
     for (const v of Object.values(r.votes)) if (st.graveyard.some((g) => g.no === v.no)) tally.set(v.no, (tally.get(v.no) ?? 0) + v.voices);
     if (!tally.size) {
+      st.resurrectionIgnored = st.graveNo;
       this.emit({ floor: 0, kind: 'systeme', scope: 'global', drama: 40, text: 'Nobody voted: the dead stay dead. Chat has a heart of stone.' });
       return;
     }
@@ -1604,6 +1641,17 @@ export class Game {
           text: target.type === 'boss' ? `${p.name} steps into the portal and lands right in the BOSS ROOM. Oops.` : `${p.name} steps into the portal and vanishes… reappearing in room ${target.id}.` });
         return;
       }
+      case 'leviers': {
+        // La salle aux leviers : c'est le chat qui choisit le levier (vote de 2 tours, ouvert à tous)
+        if (used.includes(p.key)) return this.say(p, 'You already pulled a lever here. The others are stuck.');
+        if (this.state.vote || this.state.resurrection) return this.say(p, 'The chat is busy voting on something else. Try again in a moment.');
+        used.push(p.key);
+        const options = this.rng.shuffle(Object.keys(LEVERS)).slice(0, 3);
+        this.state.vote = { options, votes: {}, endTurn: this.state.turn + 2 * this.phases, lever: { key: p.key, name: p.name, floor: f.n, roomId: r.id } };
+        this.emit({ floor: f.n, roomId: r.id, kind: 'systeme', scope: 'global', drama: 50, actors: [p.key],
+          text: `THE LEVER ROOM: ${p.name} grabs a lever, and the chat decides which one (2 turns): ${options.map((k, i) => `!vote ${i + 1} ${LEVERS[k].label}`).join(' · ')}` });
+        return;
+      }
       case 'ogre': {
         const ogre = f.monsters.find((m) => m.kind === 'ogre_dormeur' && m.roomId === r.id && m.hp > 0);
         if (!ogre) return this.say(p, 'Only crumbs and fleas are left on the pile.');
@@ -1676,6 +1724,127 @@ export class Game {
     const w = this.wallet(name);
     const g = this.state.graveyard.find((x) => x.key === playerKey(name));
     return { ok: true, text: `${w.name}: ${w.pts} favor points · bets won ${w.won}/${w.bets}${g ? ` · you are #${g.no} in the resurrection vote` : ''}.` };
+  }
+
+  /** Salle aux leviers : le levier choisi par le chat. */
+  private pullLever(l: NonNullable<VoteState['lever']>, key: string, why: string) {
+    const p = this.state.players[l.key];
+    const f = this.state.floors[l.floor];
+    if (!p?.alive || p.floor !== l.floor || !f || f.collapsed) {
+      this.emit({ floor: l.floor, kind: 'systeme', scope: 'global', drama: 10, text: `The chat picked a lever, but ${l.name} is no longer there to pull it.` });
+      return;
+    }
+    const r = f.rooms[l.roomId];
+    const label = LEVERS[key]?.label ?? key;
+    const head = `${l.name} pulls the lever the chat chose (${label}, ${why}):`;
+    switch (key) {
+      case 'or': {
+        const gold = 15 * f.n * this.rng.int(1, 3);
+        r.groundGold += gold;
+        return this.roomEvent(p, f.n, r.id, 'loot', `${head} ${gold} gold pours from the ceiling! (!pickup)`, 35);
+      }
+      case 'piege':
+        this.roomEvent(p, f.n, r.id, 'piege', `${head} spikes shoot out of the floor. The chat laughs.`, 40);
+        return this.damagePlayer(p, 3 + f.n, 'a lever chosen by the chat', null);
+      case 'monstre': {
+        const pool = MONSTERS.filter((t) => t.minFloor <= f.n && !t.boss);
+        const m = spawnMonster(this.rng.pick(pool), f.n, r.id, this.rng, this.nextId);
+        m.aggro = p.key;
+        f.monsters.push(m);
+        return this.roomEvent(p, f.n, r.id, 'combat', `${head} a hatch opens and ${m.name} drops in. Thanks, chat.`, 45);
+      }
+      default: {
+        p.hp = p.maxHp;
+        p.buffs.mirror = true;
+        return this.roomEvent(p, f.n, r.id, 'niveau', `${head} warm light! Full HP and +3 on the next roll.`, 35);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------- possession
+  // Les viewers qui ne jouent pas (jamais inscrits, morts, arrivés après l'étage 1) prennent un monstre
+  // pendant 6 tours : !north/!south/!east/!west pour le déplacer, !attack [nom] pour frapper.
+
+  possessedBy(key: string): MonsterState | undefined {
+    for (const f of Object.values(this.state.floors)) {
+      if (f.collapsed) continue;
+      const m = f.monsters.find((x) => x.possessedBy === key && x.hp > 0);
+      if (m) return m;
+    }
+    return undefined;
+  }
+
+  private possess(name: string): SubmitResult {
+    const key = playerKey(name);
+    const st = this.state;
+    if (!key) return { ok: false, text: 'Invalid name.' };
+    if (st.seasonStart === null || st.seasonOver) return { ok: false, text: 'No season running: the monsters are on their break.' };
+    const p = st.players[key];
+    if (p?.bot) return { ok: false, text: 'NPCs don\'t possess monsters.' };
+    if (p?.alive) return { ok: false, text: 'You are still a crawler! Possessing monsters is for the dead and the spectators.' };
+    const mine = this.possessedBy(key);
+    if (mine) return { ok: true, text: `You already possess ${mine.name}: !north/!south/!east/!west to move it, !attack [name] to strike.` };
+    const cd = (st.possessCooldown ??= {})[key] ?? 0;
+    if (this.now < cd) return { ok: false, text: `Your ghost needs a rest: ${Math.ceil((cd - this.now) / 1000)} s before the next possession.` };
+    const all = Object.values(st.floors).filter((f) => !f.collapsed);
+    if (all.reduce((n, f) => n + f.monsters.filter((m) => m.possessedBy).length, 0) >= MAX_POSSESSED) return { ok: false, text: `${MAX_POSSESSED} monsters are already possessed. Try again in a minute.` };
+    // L'étage où il y a le plus de vrais joueurs vivants (sinon le plus peuplé, puis le plus profond)
+    const alive = Object.values(st.players).filter((x) => x.alive);
+    const score = (f: FloorState) => alive.filter((x) => x.floor === f.n && !x.bot).length * 100 + alive.filter((x) => x.floor === f.n).length * 10 + f.n;
+    const floors = [...all].sort((a, b) => score(b) - score(a));
+    for (const f of floors) {
+      const occupied = new Set(alive.filter((x) => x.floor === f.n).map((x) => x.roomId));
+      const near = (m: MonsterState) => (occupied.has(m.roomId) ? 3 : Object.values(f.rooms[m.roomId].doors).some((d) => d !== undefined && occupied.has(d)) ? 2 : 1);
+      const pool = f.monsters.filter((m) => m.hp > 0 && !m.boss && !m.asleep && !m.possessedBy && m.kind !== 'mimique' && f.rooms[m.roomId].type !== 'safe');
+      if (!pool.length) continue;
+      const best = Math.max(...pool.map(near));
+      const m = this.rng.pick(pool.filter((x) => near(x) === best));
+      m.possessedBy = key;
+      m.possessName = name;
+      m.possessUntil = st.turn + POSSESS_TURNS * this.phases;
+      m.possessCmd = null;
+      m.name = `${m.name} (${name})`;
+      this.emit({ floor: f.n, roomId: m.roomId, kind: 'drole', scope: 'global', drama: 45,
+        text: `${name} POSSESSES ${m.name.replace(` (${name})`, '')} on floor ${f.n} (room ${m.roomId})! For ${POSSESS_TURNS} turns, the chat is the monster.` });
+      return { ok: true, text: `You possess ${m.name} on floor ${f.n}, room ${m.roomId}, for ${POSSESS_TURNS} turns. !north/!south/!east/!west to move, !attack [name] to strike. A kill earns you ${POSSESS_KILL_PTS} favor points.` };
+    }
+    return { ok: false, text: 'No monster free to possess right now.' };
+  }
+
+  /** Déplacement commandé d'un monstre possédé (porte dans la direction demandée, jamais vers une safe room). */
+  private possessedMove(f: FloorState, m: MonsterState) {
+    const c = m.possessCmd;
+    if (!c || c.name !== 'move' || m.hp <= 0) return;
+    const to = f.rooms[m.roomId].doors[c.arg as Dir];
+    if (to === undefined) return;
+    const r = f.rooms[to];
+    if (r.type === 'safe' || r.type === 'boss') return;
+    m.roomId = to;
+    m.aggro = null;
+    if (this.playersIn(f.n, to).length) this.emit({ floor: f.n, roomId: to, kind: 'combat', scope: 'etage', drama: 15, text: `${m.name} barges in, steered by the chat.` });
+  }
+
+  /** Fin des possessions (durée écoulée ou monstre mort), et commandes du tour effacées. */
+  private endPossessions() {
+    for (const f of Object.values(this.state.floors)) {
+      for (const m of f.monsters) {
+        if (!m.possessedBy) continue;
+        m.possessCmd = null;
+        if (m.hp > 0 && this.state.turn < (m.possessUntil ?? 0) && !f.collapsed) continue;
+        this.releasePossession(m, f.n);
+      }
+    }
+  }
+
+  private releasePossession(m: MonsterState, floorN: number) {
+    const name = m.possessName ?? '';
+    (this.state.possessCooldown ??= {})[m.possessedBy!] = this.now + POSSESS_COOLDOWN_MS;
+    m.name = m.name.replace(` (${name})`, '');
+    m.possessedBy = undefined;
+    m.possessName = undefined;
+    m.possessUntil = undefined;
+    m.possessCmd = null;
+    if (m.hp > 0) this.emit({ floor: floorN, roomId: m.roomId, kind: 'drole', scope: 'etage', drama: 5, text: `${name}'s ghost lets go of ${m.name}. It shakes its head, confused.` });
   }
 
   // ------------------------------------------------------------- sponsors
@@ -1953,10 +2122,10 @@ export class Game {
     const a = normalize(arg);
     let key: string | undefined;
     if (/^\d+$/.test(a)) key = v.options[Number(a) - 1];
-    else key = v.options.find((k) => normalize(PRODUCTION_BY_KEY[k].label).includes(a) || k.includes(a));
-    if (!a || !key) return { ok: false, text: `Vote: ${v.options.map((k, i) => `!vote ${i + 1} = ${PRODUCTION_BY_KEY[k].label}`).join(' · ')}` };
+    else key = v.options.find((k) => normalize(voteLabel(k).label).includes(a) || k.includes(a));
+    if (!a || !key) return { ok: false, text: `Vote: ${v.options.map((k, i) => `!vote ${i + 1} = ${voteLabel(k).label}`).join(' · ')}` };
     v.votes[key0] = key;
-    return { ok: true, text: `Vote recorded: ${PRODUCTION_BY_KEY[key].label}.` };
+    return { ok: true, text: `Vote recorded: ${voteLabel(key).label}.` };
   }
 
   startVote() {
@@ -1994,7 +2163,9 @@ export class Game {
       const winners = st.vote.options.filter((k) => (tally.get(k) ?? 0) === best);
       const key = this.rng.pick(winners);
       const why = best === 0 ? 'nobody voted, production decides alone' : `${best} vote(s)`;
+      const lever = st.vote.lever;
       st.vote = null;
+      if (lever) return this.pullLever(lever, key, best === 0 ? 'nobody voted, the Dungeon picks' : `${best} vote(s)`);
       st.nextVoteTurn = st.turn + this.voteEvery();
       this.applyProduction(key, why);
       return;
@@ -2142,7 +2313,8 @@ export class Game {
     if (!v) return null;
     const count = (k: string) => Object.values(v.votes).filter((x) => x === k).length;
     return {
-      options: v.options.map((k, i) => ({ n: i + 1, key: k, label: PRODUCTION_BY_KEY[k].label, desc: PRODUCTION_BY_KEY[k].desc, votes: count(k) })),
+      ...(v.lever ? { title: `Lever room: which lever does ${v.lever.name} pull?` } : {}),
+      options: v.options.map((k, i) => ({ n: i + 1, key: k, label: voteLabel(k).label, desc: voteLabel(k).desc, votes: count(k) })),
       turnsLeft: Math.max(0, Math.ceil((v.endTurn - this.state.turn) / this.phases)),
       myVote: key ? v.votes[key] ?? null : null,
     };

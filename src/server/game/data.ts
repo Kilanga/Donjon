@@ -136,6 +136,7 @@ export const FEATURE_DESC: Record<string, string> = {
   tripot: 'A skeleton croupier sits behind a dice table. !search to bet against him (Charisma): three games per crawler.',
   bibliotheque: 'Dusty shelves, a lectern, an open grimoire. !search to study it (Intelligence): knowledge, or a cursed page.',
   portail: 'An unstable portal hums against the wall. !search to step through: it sends you somewhere on this floor. Somewhere.',
+  leviers: 'Three levers in the north wall. !search to pull one: the chat votes which (gold, trap, monster or healing).',
 };
 export const SLEEPING_OGRE: MonsterTpl = { kind: 'ogre_dormeur', names: ['Snorlug, the Sleeping Ogre'], sprite: 'ogre_idle_anim', hp: 30, atk: 5, def: 2, dmg: 9, xp: 160, gold: [30, 60], minFloor: 1 };
 

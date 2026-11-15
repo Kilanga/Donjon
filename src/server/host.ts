@@ -249,7 +249,7 @@ export class Host {
         return [`Callback to earlier tonight: ${picks.join(' Also: ')}`, `Let's not forget what happened earlier tonight. ${picks[picks.length - 1]}`];
       }
       case 'join': {
-        if (s.joinsClosed) return ['The gates are sealed for this season. Viewers can still bet with !bet, sponsor a contestant with !sponsor, and vote to bring the dead back.', 'The gates are sealed, but you can still play along: !bet, !sponsor, and your vote when the dead beg to come back.'];
+        if (s.joinsClosed) return ['The gates are sealed for this season, but viewers can still play: type !possess to take over a monster for two minutes and hunt the crawlers (a kill pays favor points), and the chat votes in the lever rooms. Also !bet and !sponsor.', 'Gates sealed? Not for you, chat: type !possess, take over a monster and go hunt. A kill pays thirty favor points.'];
         const f1 = this.game.floor(1);
         if (s.seasonStart === null && !s.lobbyUntil) return ['A brand-new season is waiting for its first contestant. Viewers type !join in the chat to open the sign-ups.', 'A fresh dungeon, and nobody in it yet. Type !join in the chat, darlings, and let the show begin.'];
         const left = s.lobbyUntil ? s.lobbyUntil - now : f1?.collapseAt ? f1.collapseAt - now : null;
@@ -280,7 +280,7 @@ export class Host {
           ['Pitch the show to viewers who just arrived: The Dungeon is a game played entirely from the Twitch chat. Each viewer controls a crawler, explores floors that collapse on a timer, fights monsters and a boss on every floor, and the deepest crawler wins the season. Type !join to enter.', 'Just arrived? This is The Dungeon: you play it from the chat. Your crawler, your floors, a boss on each, and the floors collapse on a timer. Type !join, darling.'],
           ['Tease what is waiting below: eight floors, each with its own theme, merchants and a blacksmith, a crypt where the dead can be brought back, strange rooms with altars and wishing wells, and a boss guarding every staircase. Only the bold should type !join.', 'Eight floors, a boss on each, wishing wells, a crypt, a merchant who smiles too much. Type !join if you dare.'],
           ['Tell lurkers they can play too, even without a Twitch account: the link at the bottom left of the stream opens the game in a browser. Or type !join in the chat.', 'Lurkers, I see you. No excuses: type !join, or open the link at the bottom left of the stream.'],
-          ['Say that even viewers who do not play take part: they bet on who falls first with !bet, sponsor a contestant with !sponsor, and vote to bring the dead back.', 'Not playing? You still matter: bet with !bet, sponsor with !sponsor, and vote the dead back in.'],
+          ['Say that even viewers who do not play take part: they bet on who falls first with !bet, sponsor a contestant with !sponsor, vote to bring the dead back, and once the game runs, type !possess to take over a monster for two minutes and hunt the crawlers.', 'Not playing? You still matter: bet with !bet, sponsor with !sponsor, and once the game runs, !possess a monster and hunt them down.'],
         ];
         return pitches[this.pitch++ % pitches.length];
       }
