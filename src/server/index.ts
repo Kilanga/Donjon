@@ -6,7 +6,7 @@ import path from 'node:path';
 import util from 'node:util';
 import { WebSocket, WebSocketServer } from 'ws';
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { ClientMsg, GameEvent, Legend, ServerMsg } from '../shared/types.js';
+import type { ClientMsg, GameEvent, Legend, ServerMsg, SpotlightView } from '../shared/types.js';
 import { loadConfig } from './config.js';
 import { Game, playerKey } from './game/engine.js';
 import type { GameState } from './game/state.js';
@@ -314,6 +314,17 @@ function floorTurnEnds(floorN: number | undefined, now: number): number {
 }
 
 let seasonOverAt: number | null = null; // fin de la saison (pour la nouvelle saison automatique)
+const SPOTLIGHT_MS = 120_000; // saison gagnée : 2 minutes pour le champion, avant le palmarès et la suite
+
+/** Le champion de la saison qui vient de finir (un vrai joueur sorti en Légende), pendant ses 2 minutes. */
+function spotlight(now = Date.now()): SpotlightView | null {
+  if (!game.state.seasonOver || seasonOverAt === null || now >= seasonOverAt + SPOTLIGHT_MS) return null;
+  const last = hall.last();
+  const c = last?.winner ? game.state.champions.find((x) => x.name === last.winner && !x.bot) : undefined;
+  if (!c) return null;
+  const h = hall.player(playerKey(c.name));
+  return { name: c.name, cls: c.cls, level: c.level, kills: c.kills, deaths: c.deaths, wins: h?.wins ?? 1, seasons: h?.seasons ?? 1, secLeft: Math.ceil((seasonOverAt + SPOTLIGHT_MS - now) / 1000) };
+}
 
 function sendState(c: Client) {
   const now = Date.now();
@@ -326,8 +337,9 @@ function sendState(c: Client) {
     ...game.socialView(c.spectator ? null : key, now),
     seasonOver: game.state.seasonOver,
     joinsClosed: !!game.state.joinsClosed,
-    nextSeasonInSec: game.state.seasonOver && seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? Math.max(0, Math.ceil((seasonOverAt + cfg.autoNewSeasonMinutes * 60_000 - now) / 1000)) : null,
+    nextSeasonInSec: game.state.seasonOver && seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? Math.max(0, Math.ceil((seasonOverAt + Math.max(cfg.autoNewSeasonMinutes * 60_000, SPOTLIGHT_MS + 60_000) - now) / 1000)) : null,
     hall: hall.view(),
+    spotlight: spotlight(now),
     seasonEndsInSec: game.state.seasonStart !== null && !game.state.seasonOver ? (game.seasonEndsAt() !== null ? Math.max(0, Math.ceil((game.seasonEndsAt()! - now) / 1000)) : null) : null,
     lobbyInSec: game.state.lobbyUntil !== null && game.state.seasonStart === null ? Math.max(0, Math.ceil((game.state.lobbyUntil - now) / 1000)) : null,
     ...(publicUrl ? { publicUrl } : {}),
@@ -851,9 +863,13 @@ setInterval(() => {
     return;
   }
   seasonOverAt ??= now;
-  if (cfg.autoNewSeasonMinutes > 0 && pausedAt === null && now >= seasonOverAt + cfg.autoNewSeasonMinutes * 60_000) newGame(true);
+  // (jamais avant la fin des 2 minutes du champion, plus une minute de palmarès)
+  const wait = Math.max(cfg.autoNewSeasonMinutes * 60_000, SPOTLIGHT_MS + 60_000);
+  if (cfg.autoNewSeasonMinutes > 0 && pausedAt === null && now >= seasonOverAt + wait) newGame(true);
 }, 1000).unref();
-host.nextSeasonInSec = () => (seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? Math.max(0, Math.round((seasonOverAt + cfg.autoNewSeasonMinutes * 60_000 - Date.now()) / 1000)) : null);
+const nextSeasonAt = () => (seasonOverAt !== null && cfg.autoNewSeasonMinutes > 0 ? seasonOverAt + Math.max(cfg.autoNewSeasonMinutes * 60_000, SPOTLIGHT_MS + 60_000) : null);
+host.nextSeasonInSec = () => { const at = nextSeasonAt(); return at === null ? null : Math.max(0, Math.round((at - Date.now()) / 1000)); };
+host.spotlight = () => spotlight();
 
 // ------------------------------------------------------------ PNJ figurants
 /** Position libre d'un crawler dans sa salle (0..1), relayée aux pages de son étage et à la régie. */

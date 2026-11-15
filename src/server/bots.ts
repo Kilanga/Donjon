@@ -143,12 +143,12 @@ export class BotManager {
     seen.add(`${f.n}:${r.id}`);
     this.visited.set(p.key, seen);
 
-    // Proposition d'alliance d'un joueur : un ami accepte toujours, un inconnu une fois sur deux, une rancune jamais
+    // Proposition d'alliance d'un joueur : ça dépend de qui demande. Un ami accepte presque toujours, un inconnu une fois
+    // sur trois (plus s'il est plus fort, moins s'il est bien plus faible), un traître récent ou une rancune : non
     for (const k of [...p.allyProposals]) {
       const o = g.state.players[k];
       if (!o || o.bot || p.allianceId) continue;
-      const mood = this.hooks.mood?.(p.name, o.key) ?? 0;
-      if (mood >= 3 || (mood >= 0 && Math.random() < 0.5)) return `!ally ${o.name}`;
+      if (Math.random() < allyChance(this.hooks.mood?.(p.name, o.key) ?? 0, o.level - p.level, o.traitorUntilTurn > g.state.turn)) return `!ally ${o.name}`;
       p.allyProposals = p.allyProposals.filter((x) => x !== k); // refusé : il faudra redemander plus tard
       this.lastSay.delete(p.key);
       this.talk(p, 'refuse', 1);
@@ -226,4 +226,12 @@ export class BotManager {
     }
     return best;
   }
+}
+
+/** Chance qu'un PNJ accepte une alliance : avis sur le joueur (−10 … +10), écart de niveau (joueur − PNJ), traître récent. */
+export function allyChance(mood: number, levelGap: number, traitor: boolean): number {
+  if (mood < 0) return 0; // rancune
+  if (traitor) return mood >= 6 ? 0.5 : 0; // il vient de trahir quelqu'un
+  if (mood >= 3) return 0.9; // un ami
+  return Math.max(0.1, Math.min(0.6, 0.35 + (levelGap >= 0 ? 0.15 : 0) - (levelGap <= -3 ? 0.2 : 0)));
 }

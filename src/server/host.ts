@@ -1,11 +1,12 @@
 // Victoria anime l'émission : déroulé (inscriptions, règles, étages, compte à rebours, escalier, fin), accueil des
 // nouveaux, rubriques quand l'antenne est trop calme, et réactions aux événements Twitch (abonnements, bits, raids).
 // Les grands moments eux-mêmes (morts, trahisons, effondrements…) restent commentés par Narrator.onTurn.
-import type { GameEvent } from '../shared/types.js';
+import type { GameEvent, SpotlightView } from '../shared/types.js';
 import type { Hall } from './hall.js';
 import { THEME_LABEL, THEME_EFFECTS } from '../shared/themes.js';
 import { playerKey, type Game } from './game/engine.js';
 import { CHATTY, type Narrator } from './narrator.js';
+import { CLASSES } from './game/data.js';
 
 export type TwitchEvent =
   | { kind: 'sub'; user: string; months: number }
@@ -55,6 +56,9 @@ export class Host {
   private beat = 0;
   /** Saison finie : secondes avant la nouvelle saison automatique (null : manuelle). */
   nextSeasonInSec: () => number | null = () => null;
+  /** Saison gagnée : le champion, pendant ses 2 minutes à l'écran (null sinon). */
+  spotlight: () => SpotlightView | null = () => null;
+  private cheer = 0;
   private plays: { e: GameEvent; at: number }[] = [];
   private pitch = 0;
   private notes: string[] = []; // les petites histoires de la soirée (trahisons, morts, boss)
@@ -102,6 +106,9 @@ export class Host {
         void this.narrator.announce(facts, fallback, { urgent: true, tone: 'grand finale, theatrical, acid' });
         return;
       }
+      // Les 2 minutes du champion : Victoria ne parle que de lui (félicitations, son parcours, défi au chat)
+      const champ = this.spotlight();
+      if (champ) return this.championSegment(now, champ);
       return this.deadAir(now, 'over');
     }
 
@@ -305,6 +312,24 @@ export class Host {
   }
 
   /** Les petites histoires de la soirée, pour y revenir pendant les rubriques. */
+  private championSegment(now: number, c: SpotlightView) {
+    const quiet = Math.min(CHATTY[this.narrator.chatty].quietMs, 20_000);
+    if (now - this.narrator.lastSpokeAt < quiet || now - this.lastSegmentAt < quiet || this.narrator.busy(now)) return;
+    this.lastSegmentAt = now;
+    const cls = CLASSES[c.cls]?.label ?? c.cls;
+    const record = this.hall?.describe(playerKey(c.name));
+    const story = this.notes.filter((n) => n.includes(c.name)).slice(-3).join(' ');
+    const stats = `${c.name}, ${cls}, finished level ${c.level} with ${c.kills} monsters slain and ${c.deaths} death${c.deaths === 1 ? '' : 's'}`;
+    const briefs: [string, string][] = [
+      [`Celebrate the season champion: ${stats}. That is win number ${c.wins} in ${c.seasons} season${c.seasons > 1 ? 's' : ''}. Make it grand, a real coronation.`, `All hail ${c.name}, champion of the season! Level ${c.level}, ${c.kills} monsters slain. Win number ${c.wins}.`],
+      [`Tell the story of how ${c.name} won tonight${story ? `: ${story}` : ''}. Keep the facts, add the drama.`, `${c.name} came, saw, and walked out the front door. The Dungeon is furious. I am delighted.`],
+      [`Pay ${c.name} a backhanded but genuinely impressed compliment, then ask the chat to flood the chat with GGs for ${c.name}.${record ? ` Their record: ${record}.` : ''}`, `Chat, give it up for ${c.name}! Flood that chat with GGs, darlings, they earned it. Barely.`],
+      [`Dare the chat: who will dethrone ${c.name} next season? ${c.name} has ${c.wins} season win${c.wins > 1 ? 's' : ''} now.`, `${c.name} wears the crown now. Who in this chat thinks they can take it next season?`],
+    ];
+    const [facts, fallback] = briefs[this.cheer++ % briefs.length];
+    void this.narrator.announce(facts, fallback, { tone: 'grand, festive, theatrical, with a touch of acid', maxAir: 0.85, context: this.notes.slice(-2).join(' ') });
+  }
+
   /** Commentaire en direct de l'action la plus forte des 45 dernières secondes (joueurs ou PNJ). */
   private playByPlay(now: number): boolean {
     this.plays = this.plays.filter((p) => now - p.at < PLAY_FRESH_MS);

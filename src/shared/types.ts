@@ -213,6 +213,7 @@ export interface PlayerViewMsg {
   seasonEndsInSec?: number | null; // temps avant l'effondrement du dernier étage (fin de saison)
   nextSeasonInSec?: number | null; // saison finie : nouvelle saison automatique dans N s (null : manuelle)
   hall?: HallView | null; // palmarès des saisons passées
+  spotlight?: SpotlightView | null; // saison gagnée : les 2 minutes du champion avant le palmarès
   publicUrl?: string; // adresse publique de la page joueur (tunnel), affichée sur le stream
   champions?: Legend[]; // vainqueurs de cette saison (vue stream)
 }
@@ -293,4 +294,16 @@ export interface HallView {
   seasons: number;
   reigning: { name: string; n: number } | null;
   top: { name: string; wins: number; bestFloor: number }[];
+}
+
+/** Le champion de la saison, mis à l'honneur pendant 2 minutes avant le palmarès et la saison suivante. */
+export interface SpotlightView {
+  name: string;
+  cls: ClassId;
+  level: number;
+  kills: number;
+  deaths: number;
+  wins: number; // victoires de saison au total (celle-ci comprise)
+  seasons: number;
+  secLeft: number;
 }

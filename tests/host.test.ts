@@ -137,4 +137,21 @@ describe('Victoria anime l\'émission', () => {
     h.tick(Date.now() + 60_000);
     expect(said.some((s) => /Mia \(1 season win/.test(s.facts))).toBe(true);
   });
+
+  it('saison gagnée : 2 minutes de félicitations pour le champion, avant le palmarès', () => {
+    const g = started();
+    const { n, said, asNarrator } = fakeNarrator();
+    const h = new Host(g, asNarrator, () => 0);
+    h.tick();
+    g.state.seasonOver = true;
+    h.spotlight = () => ({ name: 'Kilak', cls: 'barbare', level: 12, kills: 40, deaths: 2, wins: 3, seasons: 5, secLeft: 100 });
+    n.lastSpokeAt = Date.now() - 60_000;
+    h.tick(Date.now() + 60_000);
+    expect(said.at(-1)?.facts).toMatch(/Celebrate the season champion: Kilak, Barbarian, finished level 12.*win number 3 in 5 seasons/);
+    h.spotlight = () => null;
+    h.nextSeasonInSec = () => 90;
+    n.lastSpokeAt = Date.now() - 60_000;
+    h.tick(Date.now() + 120_000);
+    expect(said.at(-1)?.facts).not.toMatch(/champion/); // après ses 2 minutes : retour aux rubriques de fin de saison
+  });
 });

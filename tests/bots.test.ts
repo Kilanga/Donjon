@@ -104,3 +104,14 @@ describe('PNJ figurants', () => {
     expect(Object.values(g.state.floors).filter((f) => f.n > 1 && f.collapsed).length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('alliances avec les PNJ', async () => {
+  const { allyChance } = await import('../src/server/bots.js');
+  it('ça dépend de qui demande', () => {
+    expect(allyChance(-1, 5, false)).toBe(0); // rancune
+    expect(allyChance(0, 0, true)).toBe(0); // traître récent
+    expect(allyChance(4, -5, false)).toBe(0.9); // un ami
+    expect(allyChance(0, 2, false)).toBeCloseTo(0.5); // inconnu plus fort
+    expect(allyChance(0, -4, false)).toBeCloseTo(0.15); // inconnu bien plus faible
+  });
+});

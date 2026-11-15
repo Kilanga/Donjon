@@ -364,6 +364,9 @@ function shown(s: PlayerViewMsg): { floor: PlayerViewMsg['floor']; turnEndsAt: n
 
 // ------------------------------------------------------------------ habillage
 
+const CLASS_NAMES: Record<string, string> = { barbare: 'Barbarian', chevalier: 'Knight', voleur: 'Rogue', mage: 'Mage' };
+let champShown: string | null = null;
+
 /** Le palmarès (saisons passées) : vide s'il n'y en a pas encore. */
 function hallHtml(s: PlayerViewMsg, title: string): string {
   const h = s.hall;
@@ -377,8 +380,19 @@ function renderHud(s: PlayerViewMsg) {
   const alive = s.leaderboard.filter((r) => r.alive).length;
   $('meta').innerHTML = f ? `Floor <b>${f.n}</b> · ${esc(THEME_LABEL[f.theme] ?? f.theme)} · <b>${alive}</b> crawlers alive` : '—';
   $('pause').classList.toggle('hidden', !s.paused || !!s.seasonOver);
+  // Saison gagnée : d'abord 2 minutes pour le champion (Victoria le félicite), ensuite le palmarès
+  const sp = s.seasonOver ? s.spotlight : null;
+  $('champ').classList.toggle('hidden', !sp);
+  if (sp) {
+    $('champ-name').textContent = sp.name;
+    $('champ-cls').textContent = `${CLASS_NAMES[sp.cls] ?? sp.cls} · level ${sp.level}`;
+    $('champ-stats').textContent = `${sp.kills} monsters slain · ${sp.deaths} death${sp.deaths === 1 ? '' : 's'}`;
+    $('champ-wins').textContent = sp.wins > 1 ? `${sp.wins} season wins in ${sp.seasons} seasons` : sp.seasons > 1 ? `First crown after ${sp.seasons} seasons` : 'First crown';
+    if (champShown !== sp.name) cue('horn', 1);
+    champShown = sp.name;
+  } else champShown = null;
   // Fin de saison : écran final avec les Légendes de la saison
-  if (s.seasonOver) {
+  if (s.seasonOver && !sp) {
     const champs = s.champions ?? [];
     $('season').classList.remove('hidden');
     $('season-sub').textContent = champs.length ? `${champs.length} legend${champs.length > 1 ? 's' : ''} this season` : 'Nobody got out: the Dungeon wins.';

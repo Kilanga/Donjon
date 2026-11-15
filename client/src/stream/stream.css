@@ -163,6 +163,13 @@ canvas.off, #labels.off, #labels2.off { visibility: hidden; }
 #season .lg b { color: var(--light); font: 700 26px var(--serif); flex: 1; }
 #season .lg:first-of-type b { color: var(--or); }
 #season .lg span { color: var(--light-mut); }
+#champ { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 180px; background: radial-gradient(ellipse at center, rgba(60,40,10,.82), rgba(21,17,14,.94) 70%); color: var(--light); animation: cmdIn .8s ease-out; z-index: 4; text-align: center; }
+#champ .c0 { font: italic 400 30px var(--serif); color: var(--or); letter-spacing: .02em; }
+#champ .c1 { font: 800 150px/1.05 var(--gothic); color: var(--light); text-shadow: 0 0 40px rgba(216,168,48,.55), 0 4px 18px #000; margin: 8px 0 6px; }
+#champ .c2 { font: 700 30px var(--serif); color: #e9dfc8; }
+#champ .c3 { margin-top: 10px; font-size: 24px; color: var(--light-mut); }
+#champ .c4 { margin-top: 18px; font: 700 26px var(--serif); color: var(--or); }
+#ia { z-index: 5; }
 #card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,.72), rgba(0,0,0,.25) 60%, transparent 80%); animation: cardInOut 2.6s ease-in-out forwards; z-index: 3; }
 #card .c1 { font: 800 140px/1 var(--gothic); color: var(--light); text-shadow: 0 4px 24px rgba(0,0,0,.8); }
 #card .c2 { margin-top: 8px; font: italic 400 28px var(--serif); color: var(--light); text-shadow: 0 2px 8px #000; }

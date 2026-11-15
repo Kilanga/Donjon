@@ -125,6 +125,11 @@ export class Hall {
     return `${parts.join(', ')}${reigning && reigning.winner === h.name ? ', reigning champion' : ''}`;
   }
 
+  /** La dernière saison enregistrée. */
+  last(): HallSeason | undefined {
+    return this.data.seasons[this.data.seasons.length - 1];
+  }
+
   /** Le dernier gagnant connu. */
   reigning(): HallSeason | undefined {
     return [...this.data.seasons].reverse().find((s) => s.winner);
