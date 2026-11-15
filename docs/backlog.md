@@ -20,17 +20,28 @@ Mis de côté pendant le passage du jeu en anglais. À reprendre dans cet ordre.
 - Caméra : +1 au score d'action par étage, seuil plus bas pour changer d'étage (aujourd'hui elle reste collée à l'étage des vrais joueurs).
 - Alliances : OK. Les PNJ acceptent un peu trop vite, ils pourraient parfois refuser.
 
-## 3. Interface
+## 3. Interface — en grande partie FAIT (15/11)
 - Onglet « Mon journal » (uniquement ce qui me concerne).
 - Décor partagé entre 2D et 3D (tiré une fois, même place dans les deux vues) : la 2D paraît vide.
 - Carte 2D : l'écusson « piège » seulement si le piège a été vu ; corriger « scellé (saison pas commencée) » sur un étage recreusé.
-- Nouvelles salles possibles : autel (bénédiction/malédiction), fontaine (soin ou poison), tripot squelette, prisonnier à libérer, salle aux leviers (vote du chat), bibliothèque (parchemins), statue à énigme, puits à vœux, portail instable, ogre endormi, mini-boss errant, coffre du sponsor.
+- Nouvelles salles : FAIT autel, fontaine, puits à vœux, prisonnier, ogre endormi, tripot squelette, bibliothèque, portail instable. Restent : salle aux leviers (vote du chat), statue à énigme, coffre du sponsor.
 
 ## 4. Son et voix
 - ~~Voix pour l'IA du donjon~~ : fait — Victoria Steele, Qwen3-TTS en local (voix créée sur mesure), 15 s max en fin de tour, réagit parfois au chat (jamais aux commandes ni aux bots), baisse du reste du son, régie (Say this, Skip, Mute, volume).
-- Musique adaptative (exploration / combat / boss / dernière minute) à partir de morceaux sans risque sur Twitch (StreamBeats).
+- ~~Musique adaptative~~ : fait — bande-son originale générée avec ACE-Step (exploration 19 min sans répétition, deux à trois morceaux par ambiance).
 - Lien de la partie dans le chat : !lien est déjà pris (liaison de compte) et le jeu ne peut pas écrire dans le chat. Options : (a) adresse fixe via un tunnel Cloudflare sur un domaine à soi + commande Cloudbot !carte ; (b) compte bot Twitch autorisé à écrire.
 
 ## Décisions en attente
 - Lien : adresse fixe ou bot Twitch.
 - Quelles nouvelles salles garder.
+
+## 5. Fait le 15/11
+- Branche `dev` pour le travail en cours ; `main` = ce que « Le Donjon.bat » installe (fusion après les tests seulement).
+- Nouvelle saison automatique (4 min après la fin), 2 minutes pour le champion avec Victoria, palmarès à l'écran.
+- Consommation de Claude affichée en régie ; journaux limités aux 40 dernières sessions.
+- Équilibrage d'après des saisons simulées (`npm run saison`) : étage 3 adouci, voleur et mage 12 PV, boss final moins brutal.
+- Alliances : les PNJ refusent selon qui demande (traître récent, rancune, bien plus faible).
+
+## À décider avec Kilak
+- Lien de la partie : adresse fixe (nom de domaine) ou compte bot Twitch (qui pourrait aussi répondre dans le chat).
+- Spectateurs arrivés après l'étage 1 : leur donner un rôle (monstre du chat, salle aux leviers…).
