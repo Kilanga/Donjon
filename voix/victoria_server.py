@@ -57,8 +57,22 @@ def gpu_info() -> str:
     return f'{torch.cuda.get_device_name(0)}, VRAM free {free / 2**30:.1f} / {total / 2**30:.1f} GB (torch {torch.__version__})'
 
 
-state = {'ready': False, 'model': None, 'prompt': None, 'engine': ''}
+state = {'ready': False, 'model': None, 'prompt': None, 'engine': '', 'busy_since': 0.0}
 lock = threading.Lock()  # une seule génération à la fois sur la carte graphique
+STUCK_S = float(os.environ.get('VOIX_BLOQUEE', '90'))  # génération bloquée au-delà : on redémarre le service
+WAIT_S = 12.0  # une réplique qui a attendu son tour plus longtemps : le jeu ne l'attend plus, on la saute
+SLOW_S = 15.0  # une réplique plus lente : on note la mémoire de la carte (une autre appli la prend ?)
+
+
+def watchdog():
+    """Une génération bloquée (carte graphique saturée, pilote) ne doit pas rendre Victoria muette toute la soirée :
+    au-delà de STUCK_S, le service s'arrête avec le code 3 et demarrer-voix.bat le relance."""
+    while True:
+        time.sleep(5)
+        since = state['busy_since']
+        if state['ready'] and since and time.time() - since > STUCK_S:
+            log(f'generation bloquee depuis {time.time() - since:.0f} s ({gpu_info()}) : redemarrage du service de voix')
+            os._exit(3)
 
 
 def load():
@@ -84,14 +98,23 @@ def load():
     log(f'Victoria est prete (moteur {state["engine"]}, {DEVICE}, {time.time() - t0:.0f} s) ; {gpu_info()}')
 
 
-def synth(text: str) -> bytes:
+def generate(text: str):
+    if state['engine'] == 'rapide':
+        return state['model'].generate_voice_clone(
+            text=text, language='English', ref_audio=REF_WAV, ref_text=REF_TEXT, max_new_tokens=MAX_TOKENS)
+    return state['model'].generate_voice_clone(
+        text=text, language='English', voice_clone_prompt=state['prompt'], max_new_tokens=MAX_TOKENS)
+
+
+def synth(text: str, asked: float | None = None) -> bytes | None:
     with lock:
-        if state['engine'] == 'rapide':
-            wavs, sr = state['model'].generate_voice_clone(
-                text=text, language='English', ref_audio=REF_WAV, ref_text=REF_TEXT, max_new_tokens=MAX_TOKENS)
-        else:
-            wavs, sr = state['model'].generate_voice_clone(
-                text=text, language='English', voice_clone_prompt=state['prompt'], max_new_tokens=MAX_TOKENS)
+        if asked is not None and time.time() - asked > WAIT_S:
+            return None  # trop attendu derrière une autre réplique : le jeu est déjà passé à autre chose
+        state['busy_since'] = time.time()
+        try:
+            wavs, sr = generate(text)
+        finally:
+            state['busy_since'] = 0.0
     audio = np.asarray(wavs[0], dtype=np.float32)
     if audio.size and USE_STUDIO:
         audio = studio(audio, sr)  # micro et pièce réels ; normalisé à -1 dBFS
@@ -119,7 +142,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/health':
-            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready'], 'device': f"{DEVICE} ({state['engine'] or 'loading'})"}).encode(), 'application/json')
+            busy = round(time.time() - state['busy_since']) if state['busy_since'] else 0
+            return self.reply(200, json.dumps({'ok': True, 'ready': state['ready'], 'busy': busy, 'device': f"{DEVICE} ({state['engine'] or 'loading'})"}).encode(), 'application/json')
         self.reply(404, b'{}', 'application/json')
 
     def do_POST(self):
@@ -139,9 +163,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(400, b'{"error":"bad request"}', 'application/json')
         try:
             t0 = time.time()
-            wav = synth(text)
+            wav = synth(text, t0)
+            if wav is None:
+                log('replique sautee : elle a trop attendu derriere une autre')
+                return self.safe_reply(503, b'{"error":"busy"}', 'application/json')
             secs = (len(wav) - 44) / 2 / 24000
-            log(f'{len(text)} caracteres -> {secs:.1f} s de voix en {time.time() - t0:.1f} s')
+            took = time.time() - t0
+            log(f'{len(text)} caracteres -> {secs:.1f} s de voix en {took:.1f} s' + (f' : LENT ({gpu_info()}) ; une autre appli utilise-t-elle la carte graphique ?' if took > SLOW_S else ''))
         except Exception as e:  # une réplique ratée ne doit pas arrêter le service
             log(f'erreur : {e}')
             return self.safe_reply(500, b'{"error":"synthesis failed"}', 'application/json')
@@ -157,5 +185,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     httpd = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)  # jamais accessible depuis le réseau
     threading.Thread(target=load, daemon=True).start()
+    threading.Thread(target=watchdog, daemon=True).start()
     log(f'chargement de Victoria sur {DEVICE}... (http://127.0.0.1:{PORT})')
     httpd.serve_forever()

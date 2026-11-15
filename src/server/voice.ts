@@ -54,10 +54,14 @@ export function wavMs(buf: Buffer): number {
   return 0;
 }
 
+/** Une génération plus longue que ça : le service est bloqué, on n'empile plus de répliques derrière. */
+const STUCK_S = 25;
+
 export class Voice {
   muted = false;
   volume = 1;
   private ready = false;
+  private stuck = 0; // secondes passées sur la génération en cours (service bloqué au-delà de 25 s)
   private misses = 0;
   private device = ''; // contrôles de santé ratés d'affilée (le service peut être occupé à générer)
   private clips = new Map<string, Buffer>();
@@ -77,10 +81,14 @@ export class Voice {
       const was = this.ready;
       try {
         const res = await fetch(`${this.cfg.url}/health`, { signal: AbortSignal.timeout(5000) });
-        const h = (await res.json()) as { ready?: boolean; device?: string };
+        const h = (await res.json()) as { ready?: boolean; device?: string; busy?: number };
         this.ready = res.ok && h.ready === true;
         this.device = h.device ?? '';
         this.misses = 0;
+        const stuck = (h.busy ?? 0) > STUCK_S ? h.busy! : 0;
+        if (stuck && !this.stuck) console.warn(`[voice] the voice service has been stuck on one line for ${stuck} s: subtitles only (it restarts itself after 90 s; is another app using the graphics card?)`);
+        if (!stuck && this.stuck) console.log('  Victoria (voice): unstuck, voice back.');
+        this.stuck = stuck;
       } catch {
         if (++this.misses >= 2) this.ready = false;
       }
@@ -100,6 +108,7 @@ export class Voice {
   describe(): string {
     if (!this.cfg.enabled) return 'off (config)';
     if (this.muted) return 'muted';
+    if (this.ready && this.stuck) return `stuck on one line for ${this.stuck} s (subtitles only; restarts itself)`;
     return this.ready ? 'on air' : 'not running (subtitles only)';
   }
 
@@ -122,7 +131,7 @@ export class Voice {
       this.broadcast({ id: null, text: line, ms: estimate }); // jamais deux répliques l'une sur l'autre : celle-ci en sous-titre, après
       return;
     }
-    if (this.muted || !this.cfg.enabled || !this.ready) {
+    if (this.muted || !this.cfg.enabled || !this.ready || this.stuck) {
       this.busyUntil = now + estimate;
       this.broadcast({ id: null, text: line, ms: estimate });
       return;

@@ -18,4 +18,10 @@ if errorlevel 1 (
   "%BASE%\venv\Scripts\python.exe" -m pip install --quiet "faster-qwen3-tts==0.5.4" "transformers==5.15.1" "torch==2.11.0"
 )
 set "VOIX_MODELE=%BASE%\models\Qwen3-TTS-12Hz-1.7B-Base"
+:demarrer
 "%BASE%\venv\Scripts\python.exe" victoria_server.py
+rem Code 3 : une génération est restée bloquée (carte graphique saturée ?) ; le service se relance tout seul
+if "%errorlevel%"=="3" (
+  echo Victoria etait bloquee : redemarrage de la voix...
+  goto demarrer
+)
